@@ -19,3 +19,5 @@ services:
     docker:
       path: ./Dockerfile.frontend
       context: .
+      buildArgs:
+        VITE_API_URL: ${BACKEND_URI}
