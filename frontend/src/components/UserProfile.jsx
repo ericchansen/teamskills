@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import ProficiencyBadge from './ProficiencyBadge';
 import AddSkillModal from './AddSkillModal';
 import apiFetch from '../api';
@@ -8,39 +9,48 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
   const [user, setUser] = useState(null);
   const [userSkills, setUserSkills] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [updating, setUpdating] = useState(null); // Track which skill is being updated
 
-  useEffect(() => {
-    if (userId) {
-      fetchUserData();
-      fetchUserSkills();
-    }
-  }, [userId]);
-
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
+    if (!userId) return;
     try {
       const response = await apiFetch(`/api/users/${userId}`);
+      if (!response.ok) throw new Error('Failed to fetch user');
       const data = await response.json();
       setUser(data);
     } catch (err) {
       console.error('Failed to fetch user:', err);
+      setError(err.message);
     }
-  };
+  }, [userId]);
 
-  const fetchUserSkills = async () => {
+  const fetchUserSkills = useCallback(async () => {
+    if (!userId) return;
     try {
       const response = await apiFetch(`/api/user-skills/${userId}`);
+      if (!response.ok) throw new Error('Failed to fetch skills');
       const data = await response.json();
       setUserSkills(data);
-      setLoading(false);
     } catch (err) {
       console.error('Failed to fetch user skills:', err);
-      setLoading(false);
+      setError(err.message);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) {
+      setLoading(true);
+      setError(null);
+      Promise.all([fetchUserData(), fetchUserSkills()])
+        .finally(() => setLoading(false));
+    }
+  }, [userId, fetchUserData, fetchUserSkills]);
 
   const handleUpdateProficiency = async (skillId, newLevel) => {
     if (!isOwnProfile) return;
+    setUpdating(skillId);
     try {
       const response = await apiFetch('/api/user-skills', {
         method: 'PUT',
@@ -52,17 +62,24 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
         }),
       });
       if (response.ok) {
-        fetchUserSkills();
+        await fetchUserSkills();
+        toast.success('Proficiency updated');
         onSkillsUpdated?.();
+      } else {
+        toast.error('Failed to update proficiency');
       }
     } catch (err) {
       console.error('Failed to update proficiency:', err);
+      toast.error('Failed to update proficiency');
+    } finally {
+      setUpdating(null);
     }
   };
 
   const handleDeleteSkill = async (skillId) => {
     if (!isOwnProfile) return;
     if (!confirm('Remove this skill?')) return;
+    setUpdating(skillId);
     try {
       const response = await apiFetch('/api/user-skills', {
         method: 'DELETE',
@@ -70,22 +87,30 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
         body: JSON.stringify({ user_id: userId, skill_id: skillId }),
       });
       if (response.ok) {
-        fetchUserSkills();
+        await fetchUserSkills();
+        toast.success('Skill removed');
         onSkillsUpdated?.();
+      } else {
+        toast.error('Failed to remove skill');
       }
     } catch (err) {
       console.error('Failed to delete skill:', err);
+      toast.error('Failed to remove skill');
+    } finally {
+      setUpdating(null);
     }
   };
 
-  const handleSkillAdded = () => {
+  const handleSkillAdded = async () => {
     setShowAddModal(false);
-    fetchUserSkills();
+    await fetchUserSkills();
+    toast.success('Skill added');
     onSkillsUpdated?.();
   };
 
   if (!userId) return <div className="no-user">Select a user to view their profile</div>;
   if (loading) return <div className="loading">Loading profile...</div>;
+  if (error) return <div className="error">Error: {error}</div>;
   if (!user) return <div className="error">User not found</div>;
 
   // Group skills by category

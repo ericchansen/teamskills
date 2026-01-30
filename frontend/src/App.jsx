@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
 import SkillMatrix from './components/SkillMatrix';
 import SkillGraph from './components/SkillGraph';
 import UserProfile from './components/UserProfile';
+import ErrorBoundary from './components/ErrorBoundary';
 import apiFetch from './api';
 import './App.css';
 
@@ -119,16 +121,26 @@ function App() {
       )}
 
       <main className={`app-main ${view === 'graph' ? 'graph-view' : ''}`}>
-        {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} />}
-        {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
-        {view === 'profile' && (
-          <UserProfile 
-            userId={selectedUserId} 
-            isOwnProfile={currentUser?.id === selectedUserId}
-            onSkillsUpdated={() => {}} 
-          />
-        )}
+        <ErrorBoundary>
+          {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} />}
+          {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
+          {view === 'profile' && (
+            <UserProfile 
+              userId={selectedUserId} 
+              isOwnProfile={currentUser?.id === selectedUserId}
+              onSkillsUpdated={() => {}} 
+            />
+          )}
+        </ErrorBoundary>
       </main>
+      <Toaster 
+        position="bottom-right"
+        toastOptions={{
+          style: { background: '#333', color: '#fff' },
+          success: { duration: 3000 },
+          error: { duration: 5000 },
+        }}
+      />
     </div>
   );
 }
