@@ -271,6 +271,49 @@
   border-color: #107c10;
 }
 
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #a0a0a0;
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.empty-state h3 {
+  margin: 0 0 0.5rem;
+  color: #e0e0e0;
+  font-size: 1.25rem;
+}
+
+.empty-state p {
+  margin: 0 0 1.5rem;
+  color: #888888;
+}
+
+.clear-search-btn {
+  background: #404040;
+  color: #e0e0e0;
+  border: none;
+  padding: 0.6rem 1.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s ease;
+}
+
+.clear-search-btn:hover {
+  background: #505050;
+}
+
 .legend {
   border-top: 1px solid #444444;
   padding-top: 1rem;

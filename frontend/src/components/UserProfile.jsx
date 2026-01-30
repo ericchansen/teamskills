@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import ProficiencyBadge from './ProficiencyBadge';
 import AddSkillModal from './AddSkillModal';
+import ConfirmModal from './ConfirmModal';
 import apiFetch from '../api';
 import './UserProfile.css';
 
@@ -11,7 +12,8 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [updating, setUpdating] = useState(null); // Track which skill is being updated
+  const [updating, setUpdating] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, skillId: null, skillName: '' });
 
   const fetchUserData = useCallback(async () => {
     if (!userId) return;
@@ -76,9 +78,14 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
     }
   };
 
-  const handleDeleteSkill = async (skillId) => {
+  const handleDeleteClick = (skillId, skillName) => {
     if (!isOwnProfile) return;
-    if (!confirm('Remove this skill?')) return;
+    setDeleteConfirm({ isOpen: true, skillId, skillName });
+  };
+
+  const handleDeleteConfirm = async () => {
+    const { skillId } = deleteConfirm;
+    setDeleteConfirm({ isOpen: false, skillId: null, skillName: '' });
     setUpdating(skillId);
     try {
       const response = await apiFetch('/api/user-skills', {
@@ -180,7 +187,7 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
                           </select>
                           <button 
                             className="delete-btn"
-                            onClick={() => handleDeleteSkill(skill.skill_id)}
+                            onClick={() => handleDeleteClick(skill.skill_id, skill.skill_name)}
                             title="Remove skill"
                           >
                             ✕
@@ -205,6 +212,17 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
           onSkillAdded={handleSkillAdded}
         />
       )}
+
+      <ConfirmModal
+        isOpen={deleteConfirm.isOpen}
+        title="Remove Skill"
+        message={`Are you sure you want to remove "${deleteConfirm.skillName}" from your profile?`}
+        confirmText="Remove"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteConfirm({ isOpen: false, skillId: null, skillName: '' })}
+      />
     </div>
   );
 }

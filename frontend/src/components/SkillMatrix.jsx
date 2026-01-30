@@ -247,6 +247,22 @@ function SkillMatrix({ onUserSelect }) {
       </div>
 
       <div className="matrix-container">
+        {filteredUsers.length === 0 && searchQuery ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">🔍</div>
+            <h3>No results found</h3>
+            <p>No people or skills match "{searchQuery}"</p>
+            <button className="clear-search-btn" onClick={() => setSearchQuery('')}>
+              Clear search
+            </button>
+          </div>
+        ) : columns.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">📋</div>
+            <h3>No skills to display</h3>
+            <p>Try adjusting your filters or category selection.</p>
+          </div>
+        ) : (
         <table className="matrix-table">
           <thead>
             <tr>
@@ -312,6 +328,7 @@ function SkillMatrix({ onUserSelect }) {
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       <div className="legend">
