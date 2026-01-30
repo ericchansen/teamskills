@@ -40,6 +40,9 @@ function App() {
 
   return (
     <div className="app">
+      <div className="data-disclaimer">
+        📋 Data shown is guesstimates from Work IQ — not verified skill levels. Help improve accuracy by updating your own profile!
+      </div>
       <header className="app-header">
         <div className="header-left">
           <h1>Team Skills Tracker</h1>
@@ -105,7 +108,7 @@ function App() {
         <div className="login-modal-overlay" onClick={() => setShowLogin(false)}>
           <div className="login-modal" onClick={e => e.stopPropagation()}>
             <h2>Login</h2>
-            <p>Select your name to log in and edit your skills:</p>
+            <p className="login-disclaimer">⚠️ This is a demo — no real authentication. Just pick a name to simulate being logged in.</p>
             <select 
               onChange={(e) => e.target.value && handleLogin(e.target.value)}
               defaultValue=""

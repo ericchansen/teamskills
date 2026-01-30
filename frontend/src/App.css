@@ -5,6 +5,16 @@
   background: #0f0f1a;
 }
 
+/* Data disclaimer banner */
+.data-disclaimer {
+  background: #2d2a1a;
+  color: #d4c896;
+  padding: 0.6rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #4a4530;
+}
+
 .app-header {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   color: white;
@@ -157,6 +167,15 @@
   color: #8a8aaa;
   margin: 0 0 1.5rem 0;
   font-size: 0.9rem;
+}
+
+.login-modal .login-disclaimer {
+  background: #2d2a1a;
+  color: #d4c896;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .login-modal select {
