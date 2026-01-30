@@ -125,11 +125,19 @@ function App() {
           {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} />}
           {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
           {view === 'profile' && (
-            <UserProfile 
-              userId={selectedUserId} 
-              isOwnProfile={currentUser?.id === selectedUserId}
-              onSkillsUpdated={() => {}} 
-            />
+            <>
+              <button 
+                className="back-btn"
+                onClick={() => setView('matrix')}
+              >
+                ← Back to Matrix
+              </button>
+              <UserProfile 
+                userId={selectedUserId} 
+                isOwnProfile={currentUser?.id === selectedUserId}
+                onSkillsUpdated={() => {}} 
+              />
+            </>
           )}
         </ErrorBoundary>
       </main>
