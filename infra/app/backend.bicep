@@ -41,9 +41,9 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
         targetPort: 3001
         transport: 'http'
         corsPolicy: {
-          allowedOrigins: ['*']
+          allowedOrigins: ['https://ca-frontend-teamskills.greenwater-c5983efd.centralus.azurecontainerapps.io']
           allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-          allowedHeaders: ['*']
+          allowedHeaders: ['Content-Type', 'Authorization']
         }
       }
       registries: [
