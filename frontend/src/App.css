@@ -1,0 +1,206 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0f0f1a;
+}
+
+.app-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  color: white;
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.header-subtitle {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: help;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* View toggle group */
+.view-toggle {
+  display: flex;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.view-toggle button,
+.profile-btn,
+.login-btn,
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.view-toggle button:hover:not(.active),
+.profile-btn:hover:not(:disabled):not(.active),
+.login-btn:hover,
+.logout-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.view-toggle button.active {
+  background-color: white;
+  color: #0078d4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.profile-btn,
+.login-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.profile-btn.active {
+  background-color: white;
+  color: #0078d4;
+  border-color: white;
+}
+
+.profile-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  font-size: 1rem;
+}
+
+/* User menu */
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logout-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.logout-btn:hover {
+  opacity: 1;
+}
+
+/* Login Modal */
+.login-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.login-modal {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 2rem;
+  min-width: 320px;
+  max-width: 400px;
+  border: 1px solid #2a2a4a;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.login-modal h2 {
+  margin: 0 0 0.5rem 0;
+  color: #ffffff;
+  font-size: 1.5rem;
+}
+
+.login-modal p {
+  color: #8a8aaa;
+  margin: 0 0 1.5rem 0;
+  font-size: 0.9rem;
+}
+
+.login-modal select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #3a3a5c;
+  border-radius: 8px;
+  background: #252542;
+  color: #ffffff;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-bottom: 1rem;
+}
+
+.login-modal select:focus {
+  outline: none;
+  border-color: #00d4ff;
+}
+
+.login-modal .cancel-btn {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid #3a3a5c;
+  border-radius: 8px;
+  background: transparent;
+  color: #8a8aaa;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-modal .cancel-btn:hover {
+  background: #252542;
+  color: #ffffff;
+}
+
+.app-main {
+  flex: 1;
+  padding: 2rem;
+  overflow: auto;
+  background: #0f0f1a;
+}
+
+.app-main.graph-view {
+  padding: 0;
+  background: #0a0a0f;
+}

@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # Test Database
+  test-db:
+    image: postgres:15-alpine
+    container_name: teamskills-test-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: teamskills_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/2-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend for Testing
+  test-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: teamskills-test-backend
+    environment:
+      DB_USER: postgres
+      DB_HOST: test-db
+      DB_NAME: teamskills_test
+      DB_PASSWORD: postgres
+      DB_PORT: 5432
+      PORT: 3001
+      NODE_ENV: test
+    ports:
+      - "3002:3001"
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command: npm run test:backend
+
+  # Frontend for Testing
+  test-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: teamskills-test-frontend
+    environment:
+      - VITE_API_URL=http://test-backend:3001
+    ports:
+      - "3001:3000"
+    depends_on:
+      - test-backend
+    command: npm run test
+
+  # Playwright E2E Tests
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.40.0-jammy
+    container_name: teamskills-playwright
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - CI=true
+    command: npx playwright test
+    depends_on:
+      - test-frontend
+      - test-backend

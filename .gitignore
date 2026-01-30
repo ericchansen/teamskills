@@ -1,0 +1,9 @@
+node_modules/
+.env
+.DS_Store
+*.log
+dist/
+build/
+
+# Team data (real names/emails - not for source control)
+database/seed-team.sql

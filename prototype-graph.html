@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Skills Graph - Prototype</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-deep: #0a0a0f;
+            --bg-surface: #12121a;
+            --bg-elevated: #1a1a25;
+            --text-primary: #f0f0f5;
+            --text-secondary: #8888a0;
+            --accent-cyan: #00d4ff;
+            --accent-magenta: #ff00aa;
+            --accent-orange: #ff6b35;
+            --l100: #ff4757;
+            --l200: #ffa502;
+            --l300: #3742fa;
+            --l400: #2ed573;
+            --glow-cyan: 0 0 30px rgba(0, 212, 255, 0.4);
+            --glow-magenta: 0 0 30px rgba(255, 0, 170, 0.4);
+        }
+
+        body {
+            font-family: 'Space Grotesk', -apple-system, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Animated gradient background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(255, 0, 170, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(255, 107, 53, 0.04) 0%, transparent 60%);
+            animation: bgPulse 15s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.1); }
+        }
+
+        /* Header */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, var(--bg-deep) 0%, transparent 100%);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo span {
+            font-weight: 300;
+            opacity: 0.7;
+        }
+
+        /* Search */
+        .search-container {
+            position: relative;
+        }
+
+        .search-input {
+            width: 320px;
+            padding: 12px 20px 12px 44px;
+            background: var(--bg-elevated);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        /* Mode toggle */
+        .mode-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-elevated);
+            padding: 4px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .mode-btn {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+            color: white;
+        }
+
+        .mode-btn:hover:not(.active) {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Graph container */
+        #graph-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: fixed;
+            padding: 16px 20px;
+            background: var(--bg-elevated);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 1000;
+            max-width: 300px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .tooltip-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 12px;
+        }
+
+        .tooltip-people {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tooltip-person {
+            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tooltip-person .level {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Side panel */
+        .side-panel {
+            position: fixed;
+            right: 0;
+            top: 80px;
+            bottom: 0;
+            width: 360px;
+            background: linear-gradient(to left, var(--bg-surface) 0%, transparent 100%);
+            padding: 30px;
+            transform: translateX(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 90;
+            overflow-y: auto;
+        }
+
+        .side-panel.visible {
+            transform: translateX(0);
+        }
+
+        .panel-header {
+            margin-bottom: 24px;
+        }
+
+        .panel-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .panel-category {
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .panel-section {
+            margin-bottom: 24px;
+        }
+
+        .panel-section-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+
+        .person-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .person-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateX(-4px);
+        }
+
+        .person-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .person-info {
+            flex: 1;
+        }
+
+        .person-name {
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+
+        .person-role {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .proficiency-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .proficiency-badge.L100 { background: var(--l100); color: white; }
+        .proficiency-badge.L200 { background: var(--l200); color: #1a1a25; }
+        .proficiency-badge.L300 { background: var(--l300); color: white; }
+        .proficiency-badge.L400 { background: var(--l400); color: #1a1a25; }
+
+        /* Legend */
+        .legend {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            background: var(--bg-elevated);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 80;
+        }
+
+        .legend-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.person {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+        }
+
+        .legend-dot.skill {
+            background: var(--bg-elevated);
+            border: 2px solid var(--accent-orange);
+        }
+
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--bg-elevated);
+            padding: 16px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 80;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            max-width: 280px;
+        }
+
+        .instructions strong {
+            color: var(--accent-cyan);
+        }
+
+        /* Node styles (applied via D3) */
+        .node-person {
+            cursor: pointer;
+        }
+
+        .node-skill {
+            cursor: pointer;
+        }
+
+        .link {
+            stroke-linecap: round;
+        }
+
+        /* Highlight states */
+        .dimmed {
+            opacity: 0.15;
+        }
+
+        .highlighted {
+            opacity: 1;
+        }
+
+        /* Close button */
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    
+    <header class="header">
+        <div class="logo">TeamSkills<span>.graph</span></div>
+        
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" placeholder="Search skills or people..." id="search">
+        </div>
+        
+        <div class="mode-toggle">
+            <button class="mode-btn active" data-mode="network">Network</button>
+            <button class="mode-btn" data-mode="skills">Skills Only</button>
+            <button class="mode-btn" data-mode="people">People Only</button>
+        </div>
+    </header>
+
+    <div id="graph-container"></div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <div class="side-panel" id="sidePanel">
+        <button class="close-btn" onclick="closeSidePanel()">×</button>
+        <div id="panelContent"></div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-title">Node Types</div>
+        <div class="legend-items">
+            <div class="legend-item">
+                <div class="legend-dot person"></div>
+                <span>Team Member</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot skill"></div>
+                <span>Skill</span>
+            </div>
+        </div>
+        <div class="legend-title" style="margin-top: 16px;">Proficiency</div>
+        <div class="legend-items">
+            <div class="legend-item">
+                <div class="legend-dot" style="background: var(--l100)"></div>
+                <span>L100 Awareness</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background: var(--l200)"></div>
+                <span>L200 Understanding</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background: var(--l300)"></div>
+                <span>L300 Practitioner</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background: var(--l400)"></div>
+                <span>L400 Expert</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <strong>Click a skill</strong> to see who has it<br>
+        <strong>Click a person</strong> to see their skills<br>
+        <strong>Drag nodes</strong> to rearrange<br>
+        <strong>Search</strong> to filter the graph
+    </div>
+
+    <script>
+        // Sample data based on your seed.sql
+        const categories = [
+            { id: 1, name: 'Azure Compute', color: '#00d4ff' },
+            { id: 2, name: 'Azure Data', color: '#ff6b35' },
+            { id: 3, name: 'Azure AI', color: '#ff00aa' },
+            { id: 4, name: 'Azure Security', color: '#2ed573' },
+            { id: 5, name: 'Azure Networking', color: '#ffa502' },
+            { id: 6, name: 'Azure DevOps', color: '#3742fa' },
+            { id: 7, name: 'Soft Skills', color: '#a55eea' },
+            { id: 8, name: 'Use Cases', color: '#ff4757' }
+        ];
+
+        const skills = [
+            { id: 1, name: 'Azure VMs', category: 1 },
+            { id: 2, name: 'AKS', category: 1 },
+            { id: 3, name: 'Azure Functions', category: 1 },
+            { id: 4, name: 'App Service', category: 1 },
+            { id: 5, name: 'Container Instances', category: 1 },
+            { id: 6, name: 'Azure SQL', category: 2 },
+            { id: 7, name: 'Cosmos DB', category: 2 },
+            { id: 8, name: 'Synapse', category: 2 },
+            { id: 9, name: 'Data Factory', category: 2 },
+            { id: 10, name: 'PostgreSQL', category: 2 },
+            { id: 11, name: 'MySQL', category: 2 },
+            { id: 12, name: 'Azure OpenAI', category: 3 },
+            { id: 13, name: 'Azure ML', category: 3 },
+            { id: 14, name: 'Cognitive Services', category: 3 },
+            { id: 15, name: 'AI Search', category: 3 },
+            { id: 16, name: 'Entra ID', category: 4 },
+            { id: 17, name: 'Key Vault', category: 4 },
+            { id: 18, name: 'Security Center', category: 4 },
+            { id: 19, name: 'Sentinel', category: 4 },
+            { id: 21, name: 'Virtual Network', category: 5 },
+            { id: 22, name: 'Load Balancer', category: 5 },
+            { id: 23, name: 'App Gateway', category: 5 },
+            { id: 24, name: 'VPN Gateway', category: 5 },
+            { id: 25, name: 'DevOps Pipelines', category: 6 },
+            { id: 26, name: 'GitHub Actions', category: 6 },
+            { id: 27, name: 'IaC', category: 6 },
+            { id: 28, name: 'Whiteboarding', category: 7 },
+            { id: 29, name: 'Tech Presentations', category: 7 },
+            { id: 30, name: 'Customer Discovery', category: 7 },
+            { id: 31, name: 'Solution Architecture', category: 7 },
+            { id: 32, name: 'POC Delivery', category: 7 },
+            { id: 33, name: 'Retail Solutions', category: 8 },
+            { id: 34, name: 'Healthcare', category: 8 },
+            { id: 35, name: 'Financial Services', category: 8 },
+            { id: 36, name: 'Manufacturing', category: 8 },
+            { id: 37, name: 'AI Applications', category: 8 }
+        ];
+
+        const people = [
+            { id: 'p1', name: 'Sarah Chen', role: 'Senior Solution Engineer', team: 'Enterprise', initials: 'SC' },
+            { id: 'p2', name: 'Marcus Johnson', role: 'Solution Engineer', team: 'SMB', initials: 'MJ' },
+            { id: 'p3', name: 'Priya Patel', role: 'Principal Solution Engineer', team: 'Enterprise', initials: 'PP' },
+            { id: 'p4', name: 'Alex Rodriguez', role: 'Solution Engineer', team: 'Enterprise', initials: 'AR' },
+            { id: 'p5', name: 'Emily Watson', role: 'Senior Solution Engineer', team: 'SMB', initials: 'EW' },
+            { id: 'p6', name: 'David Kim', role: 'Solution Engineer', team: 'Enterprise', initials: 'DK' },
+            { id: 'p7', name: 'Olivia Martinez', role: 'Solution Engineer', team: 'SMB', initials: 'OM' },
+            { id: 'p8', name: 'James Taylor', role: 'Senior Solution Engineer', team: 'Enterprise', initials: 'JT' }
+        ];
+
+        // User skills mapping (from seed.sql)
+        const userSkills = [
+            // Sarah Chen
+            { person: 'p1', skill: 12, level: 'L400' },
+            { person: 'p1', skill: 13, level: 'L400' },
+            { person: 'p1', skill: 14, level: 'L300' },
+            { person: 'p1', skill: 7, level: 'L300' },
+            { person: 'p1', skill: 9, level: 'L300' },
+            { person: 'p1', skill: 29, level: 'L400' },
+            { person: 'p1', skill: 37, level: 'L400' },
+            // Marcus Johnson
+            { person: 'p2', skill: 2, level: 'L300' },
+            { person: 'p2', skill: 3, level: 'L300' },
+            { person: 'p2', skill: 4, level: 'L200' },
+            { person: 'p2', skill: 25, level: 'L300' },
+            { person: 'p2', skill: 26, level: 'L200' },
+            { person: 'p2', skill: 27, level: 'L200' },
+            { person: 'p2', skill: 32, level: 'L200' },
+            // Priya Patel
+            { person: 'p3', skill: 16, level: 'L400' },
+            { person: 'p3', skill: 17, level: 'L400' },
+            { person: 'p3', skill: 18, level: 'L300' },
+            { person: 'p3', skill: 19, level: 'L300' },
+            { person: 'p3', skill: 6, level: 'L300' },
+            { person: 'p3', skill: 21, level: 'L300' },
+            { person: 'p3', skill: 29, level: 'L400' },
+            { person: 'p3', skill: 31, level: 'L400' },
+            { person: 'p3', skill: 35, level: 'L300' },
+            // Alex Rodriguez
+            { person: 'p4', skill: 6, level: 'L300' },
+            { person: 'p4', skill: 8, level: 'L300' },
+            { person: 'p4', skill: 9, level: 'L200' },
+            { person: 'p4', skill: 10, level: 'L200' },
+            { person: 'p4', skill: 11, level: 'L200' },
+            { person: 'p4', skill: 28, level: 'L200' },
+            { person: 'p4', skill: 34, level: 'L200' },
+            // Emily Watson
+            { person: 'p5', skill: 1, level: 'L300' },
+            { person: 'p5', skill: 4, level: 'L300' },
+            { person: 'p5', skill: 6, level: 'L300' },
+            { person: 'p5', skill: 16, level: 'L300' },
+            { person: 'p5', skill: 21, level: 'L200' },
+            { person: 'p5', skill: 25, level: 'L300' },
+            { person: 'p5', skill: 29, level: 'L300' },
+            { person: 'p5', skill: 33, level: 'L200' },
+            // David Kim
+            { person: 'p6', skill: 21, level: 'L400' },
+            { person: 'p6', skill: 22, level: 'L300' },
+            { person: 'p6', skill: 23, level: 'L300' },
+            { person: 'p6', skill: 24, level: 'L300' },
+            { person: 'p6', skill: 1, level: 'L300' },
+            { person: 'p6', skill: 17, level: 'L200' },
+            { person: 'p6', skill: 27, level: 'L300' },
+            // Olivia Martinez
+            { person: 'p7', skill: 2, level: 'L400' },
+            { person: 'p7', skill: 5, level: 'L300' },
+            { person: 'p7', skill: 3, level: 'L300' },
+            { person: 'p7', skill: 26, level: 'L300' },
+            { person: 'p7', skill: 27, level: 'L200' },
+            { person: 'p7', skill: 32, level: 'L300' },
+            { person: 'p7', skill: 36, level: 'L200' },
+            // James Taylor
+            { person: 'p8', skill: 12, level: 'L400' },
+            { person: 'p8', skill: 15, level: 'L300' },
+            { person: 'p8', skill: 14, level: 'L300' },
+            { person: 'p8', skill: 7, level: 'L300' },
+            { person: 'p8', skill: 29, level: 'L400' },
+            { person: 'p8', skill: 31, level: 'L400' },
+            { person: 'p8', skill: 37, level: 'L400' },
+            { person: 'p8', skill: 34, level: 'L300' }
+        ];
+
+        // Skill relationships
+        const skillRelationships = [
+            { source: 6, target: 10 },
+            { source: 6, target: 11 },
+            { source: 13, target: 12 },
+            { source: 13, target: 14 }
+        ];
+
+        // Build graph data
+        function buildGraphData(mode = 'network') {
+            const nodes = [];
+            const links = [];
+            const levelColors = {
+                'L100': '#ff4757',
+                'L200': '#ffa502',
+                'L300': '#3742fa',
+                'L400': '#2ed573'
+            };
+
+            if (mode === 'network' || mode === 'people') {
+                // Add people nodes
+                people.forEach(p => {
+                    nodes.push({
+                        id: p.id,
+                        name: p.name,
+                        type: 'person',
+                        role: p.role,
+                        team: p.team,
+                        initials: p.initials,
+                        radius: 28
+                    });
+                });
+            }
+
+            if (mode === 'network' || mode === 'skills') {
+                // Add skill nodes
+                skills.forEach(s => {
+                    const cat = categories.find(c => c.id === s.category);
+                    const peopleWithSkill = userSkills.filter(us => us.skill === s.id);
+                    nodes.push({
+                        id: `s${s.id}`,
+                        skillId: s.id,
+                        name: s.name,
+                        type: 'skill',
+                        category: cat.name,
+                        categoryColor: cat.color,
+                        peopleCount: peopleWithSkill.length,
+                        radius: 12 + peopleWithSkill.length * 3
+                    });
+                });
+            }
+
+            if (mode === 'network') {
+                // Add person-skill links
+                userSkills.forEach(us => {
+                    links.push({
+                        source: us.person,
+                        target: `s${us.skill}`,
+                        level: us.level,
+                        color: levelColors[us.level],
+                        strength: us.level === 'L400' ? 0.8 : us.level === 'L300' ? 0.5 : 0.3
+                    });
+                });
+            }
+
+            if (mode === 'skills') {
+                // Add skill relationship links
+                skillRelationships.forEach(sr => {
+                    links.push({
+                        source: `s${sr.source}`,
+                        target: `s${sr.target}`,
+                        level: 'relation',
+                        color: '#ffffff33',
+                        strength: 0.3
+                    });
+                });
+            }
+
+            return { nodes, links };
+        }
+
+        // D3 Force Graph
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        const svg = d3.select('#graph-container')
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height);
+
+        // Add zoom behavior
+        const g = svg.append('g');
+        
+        svg.call(d3.zoom()
+            .scaleExtent([0.3, 3])
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            }));
+
+        // Create gradient definitions
+        const defs = svg.append('defs');
+        
+        const personGradient = defs.append('linearGradient')
+            .attr('id', 'personGradient')
+            .attr('x1', '0%').attr('y1', '0%')
+            .attr('x2', '100%').attr('y2', '100%');
+        personGradient.append('stop').attr('offset', '0%').attr('stop-color', '#00d4ff');
+        personGradient.append('stop').attr('offset', '100%').attr('stop-color', '#ff00aa');
+
+        // Glow filter
+        const glowFilter = defs.append('filter')
+            .attr('id', 'glow')
+            .attr('x', '-50%').attr('y', '-50%')
+            .attr('width', '200%').attr('height', '200%');
+        glowFilter.append('feGaussianBlur')
+            .attr('stdDeviation', '4')
+            .attr('result', 'coloredBlur');
+        const glowMerge = glowFilter.append('feMerge');
+        glowMerge.append('feMergeNode').attr('in', 'coloredBlur');
+        glowMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+        let simulation, link, node, labels;
+        let currentMode = 'network';
+
+        function initGraph(mode = 'network') {
+            currentMode = mode;
+            const data = buildGraphData(mode);
+            
+            // Clear existing elements
+            g.selectAll('*').remove();
+
+            // Create simulation
+            simulation = d3.forceSimulation(data.nodes)
+                .force('link', d3.forceLink(data.links).id(d => d.id).distance(120).strength(d => d.strength || 0.3))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(d => d.radius + 10));
+
+            // Create links
+            link = g.append('g')
+                .selectAll('line')
+                .data(data.links)
+                .join('line')
+                .attr('class', 'link')
+                .attr('stroke', d => d.color)
+                .attr('stroke-width', d => d.level === 'L400' ? 3 : d.level === 'L300' ? 2 : 1.5)
+                .attr('stroke-opacity', 0.6);
+
+            // Create node groups
+            node = g.append('g')
+                .selectAll('g')
+                .data(data.nodes)
+                .join('g')
+                .attr('class', d => d.type === 'person' ? 'node-person' : 'node-skill')
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended))
+                .on('click', nodeClicked)
+                .on('mouseenter', nodeHover)
+                .on('mouseleave', nodeLeave);
+
+            // Person nodes - gradient circles with initials
+            node.filter(d => d.type === 'person')
+                .append('circle')
+                .attr('r', d => d.radius)
+                .attr('fill', 'url(#personGradient)')
+                .attr('filter', 'url(#glow)');
+
+            node.filter(d => d.type === 'person')
+                .append('text')
+                .text(d => d.initials)
+                .attr('text-anchor', 'middle')
+                .attr('dy', '0.35em')
+                .attr('fill', 'white')
+                .attr('font-size', '12px')
+                .attr('font-weight', '600')
+                .style('pointer-events', 'none');
+
+            // Skill nodes - category colored circles
+            node.filter(d => d.type === 'skill')
+                .append('circle')
+                .attr('r', d => d.radius)
+                .attr('fill', d => d.categoryColor + '33')
+                .attr('stroke', d => d.categoryColor)
+                .attr('stroke-width', 2);
+
+            // Skill labels
+            node.filter(d => d.type === 'skill')
+                .append('text')
+                .text(d => d.name)
+                .attr('text-anchor', 'middle')
+                .attr('dy', d => d.radius + 14)
+                .attr('fill', '#8888a0')
+                .attr('font-size', '10px')
+                .style('pointer-events', 'none');
+
+            // Person name labels (below)
+            node.filter(d => d.type === 'person')
+                .append('text')
+                .text(d => d.name.split(' ')[0])
+                .attr('text-anchor', 'middle')
+                .attr('dy', d => d.radius + 14)
+                .attr('fill', '#f0f0f5')
+                .attr('font-size', '11px')
+                .attr('font-weight', '500')
+                .style('pointer-events', 'none');
+
+            // Update positions on tick
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        function nodeClicked(event, d) {
+            event.stopPropagation();
+            
+            if (d.type === 'skill') {
+                showSkillPanel(d);
+                highlightSkillConnections(d);
+            } else {
+                showPersonPanel(d);
+                highlightPersonConnections(d);
+            }
+        }
+
+        function nodeHover(event, d) {
+            const tooltip = document.getElementById('tooltip');
+            
+            if (d.type === 'skill') {
+                const peopleWithSkill = userSkills.filter(us => us.skill === d.skillId);
+                let html = `
+                    <div class="tooltip-title">${d.name}</div>
+                    <div class="tooltip-subtitle">${d.category}</div>
+                `;
+                
+                if (peopleWithSkill.length > 0) {
+                    html += '<div class="tooltip-people">';
+                    peopleWithSkill.forEach(us => {
+                        const person = people.find(p => p.id === us.person);
+                        html += `<div class="tooltip-person">
+                            <div class="level" style="background: ${getLevelColor(us.level)}"></div>
+                            ${person.name.split(' ')[0]}
+                        </div>`;
+                    });
+                    html += '</div>';
+                }
+                
+                tooltip.innerHTML = html;
+            } else {
+                const personSkills = userSkills.filter(us => us.person === d.id);
+                const expertSkills = personSkills.filter(us => us.level === 'L400');
+                
+                tooltip.innerHTML = `
+                    <div class="tooltip-title">${d.name}</div>
+                    <div class="tooltip-subtitle">${d.role}</div>
+                    <div style="color: #8888a0; font-size: 0.8rem;">
+                        ${personSkills.length} skills • ${expertSkills.length} expert level
+                    </div>
+                `;
+            }
+            
+            tooltip.style.left = (event.pageX + 15) + 'px';
+            tooltip.style.top = (event.pageY - 10) + 'px';
+            tooltip.classList.add('visible');
+        }
+
+        function nodeLeave() {
+            document.getElementById('tooltip').classList.remove('visible');
+        }
+
+        function getLevelColor(level) {
+            const colors = { 'L100': '#ff4757', 'L200': '#ffa502', 'L300': '#3742fa', 'L400': '#2ed573' };
+            return colors[level];
+        }
+
+        function highlightSkillConnections(skillNode) {
+            const connectedPeople = userSkills
+                .filter(us => us.skill === skillNode.skillId)
+                .map(us => us.person);
+
+            node.classed('dimmed', d => {
+                if (d.id === skillNode.id) return false;
+                if (d.type === 'person' && connectedPeople.includes(d.id)) return false;
+                return true;
+            });
+
+            link.classed('dimmed', d => {
+                return d.target.id !== skillNode.id && d.source.id !== skillNode.id;
+            });
+        }
+
+        function highlightPersonConnections(personNode) {
+            const connectedSkills = userSkills
+                .filter(us => us.person === personNode.id)
+                .map(us => `s${us.skill}`);
+
+            node.classed('dimmed', d => {
+                if (d.id === personNode.id) return false;
+                if (d.type === 'skill' && connectedSkills.includes(d.id)) return false;
+                return true;
+            });
+
+            link.classed('dimmed', d => {
+                return d.target.id !== personNode.id && d.source.id !== personNode.id;
+            });
+        }
+
+        function clearHighlights() {
+            node.classed('dimmed', false);
+            link.classed('dimmed', false);
+        }
+
+        function showSkillPanel(skillNode) {
+            const panel = document.getElementById('sidePanel');
+            const content = document.getElementById('panelContent');
+            
+            const peopleWithSkill = userSkills.filter(us => us.skill === skillNode.skillId);
+            
+            // Sort by proficiency level
+            const levelOrder = { 'L400': 0, 'L300': 1, 'L200': 2, 'L100': 3 };
+            peopleWithSkill.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
+            
+            let html = `
+                <div class="panel-header">
+                    <div class="panel-title">${skillNode.name}</div>
+                    <div class="panel-category">${skillNode.category}</div>
+                </div>
+                <div class="panel-section">
+                    <div class="panel-section-title">Team Members with this Skill (${peopleWithSkill.length})</div>
+            `;
+            
+            peopleWithSkill.forEach(us => {
+                const person = people.find(p => p.id === us.person);
+                const colors = ['#00d4ff', '#ff00aa', '#ff6b35', '#2ed573', '#ffa502', '#3742fa', '#a55eea', '#ff4757'];
+                const colorIndex = people.indexOf(person) % colors.length;
+                
+                html += `
+                    <div class="person-card">
+                        <div class="person-avatar" style="background: ${colors[colorIndex]}33; color: ${colors[colorIndex]};">
+                            ${person.initials}
+                        </div>
+                        <div class="person-info">
+                            <div class="person-name">${person.name}</div>
+                            <div class="person-role">${person.role}</div>
+                        </div>
+                        <div class="proficiency-badge ${us.level}">${us.level}</div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            content.innerHTML = html;
+            panel.classList.add('visible');
+        }
+
+        function showPersonPanel(personNode) {
+            const panel = document.getElementById('sidePanel');
+            const content = document.getElementById('panelContent');
+            
+            const personSkills = userSkills.filter(us => us.person === personNode.id);
+            
+            // Group by level
+            const byLevel = { 'L400': [], 'L300': [], 'L200': [], 'L100': [] };
+            personSkills.forEach(us => {
+                const skill = skills.find(s => s.id === us.skill);
+                if (skill) byLevel[us.level].push(skill);
+            });
+            
+            let html = `
+                <div class="panel-header">
+                    <div class="panel-title">${personNode.name}</div>
+                    <div class="panel-category">${personNode.role} • ${personNode.team}</div>
+                </div>
+            `;
+            
+            ['L400', 'L300', 'L200', 'L100'].forEach(level => {
+                if (byLevel[level].length > 0) {
+                    const levelNames = { 'L400': 'Expert', 'L300': 'Practitioner', 'L200': 'Understanding', 'L100': 'Awareness' };
+                    html += `
+                        <div class="panel-section">
+                            <div class="panel-section-title">${level} ${levelNames[level]} (${byLevel[level].length})</div>
+                    `;
+                    
+                    byLevel[level].forEach(skill => {
+                        const cat = categories.find(c => c.id === skill.category);
+                        html += `
+                            <div class="person-card" style="border-left: 3px solid ${cat.color};">
+                                <div class="person-info">
+                                    <div class="person-name">${skill.name}</div>
+                                    <div class="person-role">${cat.name}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                }
+            });
+            
+            content.innerHTML = html;
+            panel.classList.add('visible');
+        }
+
+        function closeSidePanel() {
+            document.getElementById('sidePanel').classList.remove('visible');
+            clearHighlights();
+        }
+
+        // Mode toggle
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                closeSidePanel();
+                initGraph(btn.dataset.mode);
+            });
+        });
+
+        // Search
+        document.getElementById('search').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            
+            if (!query) {
+                clearHighlights();
+                return;
+            }
+            
+            node.classed('dimmed', d => {
+                return !d.name.toLowerCase().includes(query);
+            });
+            
+            link.classed('dimmed', true);
+        });
+
+        // Click outside to clear
+        svg.on('click', () => {
+            closeSidePanel();
+        });
+
+        // Initialize
+        initGraph('network');
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            svg.attr('width', window.innerWidth).attr('height', window.innerHeight);
+            simulation.force('center', d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2));
+            simulation.alpha(0.3).restart();
+        });
+    </script>
+</body>
+</html>
