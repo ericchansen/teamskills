@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SkillMatrix from './components/SkillMatrix';
 import SkillGraph from './components/SkillGraph';
 import UserProfile from './components/UserProfile';
+import apiFetch from './api';
 import './App.css';
 
 function App() {
@@ -13,7 +14,7 @@ function App() {
 
   // Fetch users for login dropdown
   useEffect(() => {
-    fetch('/api/users')
+    apiFetch('/api/users')
       .then(res => res.json())
       .then(data => setUsers(data))
       .catch(err => console.error('Failed to fetch users:', err));

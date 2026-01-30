@@ -1,14 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
+import apiFetch from '../api';
 import './SkillGraph.css';
 
-// Use same colors as matrix proficiency levels
-const LEVEL_COLORS = {
-  L100: '#d13438',  // red
-  L200: '#ca5010',  // orange
-  L300: '#0078d4',  // blue
-  L400: '#107c10'   // green
-};
+// Link color - uniform medium grey
+const LINK_COLOR = '#999999';
 
 // Coverage-based colors for skill nodes (matching matrix)
 const COVERAGE_COLORS = {
@@ -19,8 +15,11 @@ const COVERAGE_COLORS = {
   none: '#6b7280'        // gray (score = 0)
 };
 
-// Person node color
-const PERSON_COLOR = '#0078d4';  // blue (same as L300)
+// Person node color - neutral grey
+const PERSON_COLOR = '#a0a0a0';
+
+// Universal stroke color
+const STROKE_COLOR = '#000000';
 
 function SkillGraph({ onUserSelect }) {
   const containerRef = useRef(null);
@@ -72,10 +71,10 @@ function SkillGraph({ onUserSelect }) {
         setLoading(true);
         
         const [usersRes, skillsRes, categoriesRes, matrixRes] = await Promise.all([
-          fetch('/api/users'),
-          fetch('/api/skills'),
-          fetch('/api/categories'),
-          fetch('/api/matrix')
+          apiFetch('/api/users'),
+          apiFetch('/api/skills'),
+          apiFetch('/api/categories'),
+          apiFetch('/api/matrix')
         ]);
 
         if (!usersRes.ok || !skillsRes.ok || !categoriesRes.ok || !matrixRes.ok) {
@@ -184,7 +183,7 @@ function SkillGraph({ onUserSelect }) {
               source: `p${user.id}`,
               target: `g${catName}`,
               level: level,
-              color: LEVEL_COLORS[level] || '#666',
+              color: LINK_COLOR,
               strength: level === 'L400' ? 0.8 : level === 'L300' ? 0.5 : 0.3
             });
           }
@@ -233,7 +232,7 @@ function SkillGraph({ onUserSelect }) {
               source: `p${user.id}`,
               target: `s${skill.id}`,
               level: userSkill.proficiency_level,
-              color: LEVEL_COLORS[userSkill.proficiency_level] || '#888',
+              color: LINK_COLOR,
               strength: userSkill.proficiency_level === 'L400' ? 0.8 : 
                         userSkill.proficiency_level === 'L300' ? 0.5 : 0.3
             });
@@ -284,14 +283,14 @@ function SkillGraph({ onUserSelect }) {
 
     simulationRef.current = simulation;
 
-    // Create links - all solid, color conveys level
+    // Create links - uniform grey
     const link = g.append('g')
       .selectAll('line')
       .data(links)
       .join('line')
       .attr('class', 'graph-link')
-      .attr('stroke', d => d.color)
-      .attr('stroke-width', d => d.level === 'L400' ? 2.5 : d.level === 'L300' ? 2 : 1.5);
+      .attr('stroke', LINK_COLOR)
+      .attr('stroke-width', 1);
 
     // Create node groups
     const node = g.append('g')
@@ -325,48 +324,49 @@ function SkillGraph({ onUserSelect }) {
       });
 
     // Person nodes - solid blue
+    // Person nodes - grey with black stroke
     node.filter(d => d.type === 'person')
       .append('circle')
       .attr('r', d => d.radius)
       .attr('fill', PERSON_COLOR)
-      .attr('stroke', '#005a9e')
-      .attr('stroke-width', 2);
+      .attr('stroke', STROKE_COLOR)
+      .attr('stroke-width', 1.5);
 
     node.filter(d => d.type === 'person')
       .append('text')
       .text(d => d.initials)
       .attr('text-anchor', 'middle')
       .attr('dy', '0.35em')
-      .attr('fill', '#ffffff')
+      .attr('fill', '#000000')
       .attr('font-size', '12px')
       .attr('font-weight', '600')
       .style('pointer-events', 'none');
 
-    // Skill nodes - solid coverage-based coloring
+    // Skill nodes - coverage-based coloring with black stroke
     node.filter(d => d.type === 'skill')
       .append('circle')
       .attr('r', d => d.radius)
       .attr('fill', d => d.coverageColor)
-      .attr('stroke', '#1a1a2e')
-      .attr('stroke-width', 2);
+      .attr('stroke', STROKE_COLOR)
+      .attr('stroke-width', 1.5);
 
-    // Labels
+    // Labels - light colored for dark background
     node.filter(d => d.type === 'skill')
       .append('text')
       .text(d => d.name)
       .attr('text-anchor', 'middle')
       .attr('dy', d => d.radius + 14)
-      .attr('fill', '#c0c0d0')
+      .attr('fill', '#e0e0e0')
       .attr('font-size', '10px')
       .style('pointer-events', 'none');
 
     node.filter(d => d.type === 'person')
       .append('text')
-      .text(d => d.name.split(' ')[0])
+      .text(d => d.name)
       .attr('text-anchor', 'middle')
       .attr('dy', d => d.radius + 14)
-      .attr('fill', '#c0c0d0')
-      .attr('font-size', '11px')
+      .attr('fill', '#e0e0e0')
+      .attr('font-size', '10px')
       .attr('font-weight', '500')
       .style('pointer-events', 'none');
 

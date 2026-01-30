@@ -1,0 +1,21 @@
+# Azure Developer CLI configuration
+name: teamskills
+metadata:
+  template: teamskills@0.0.1
+
+services:
+  backend:
+    project: ./backend
+    language: js
+    host: containerapp
+    docker:
+      path: ./Dockerfile.backend
+      context: .
+
+  frontend:
+    project: ./frontend
+    language: js
+    host: containerapp
+    docker:
+      path: ./Dockerfile.frontend
+      context: .

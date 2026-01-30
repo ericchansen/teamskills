@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ProficiencyBadge from './ProficiencyBadge';
+import apiFetch from '../api';
 import './SkillMatrix.css';
 
 // Convert level to numeric value
@@ -24,7 +25,6 @@ function SkillMatrix({ onUserSelect }) {
   const [filterCategory, setFilterCategory] = useState('all');
   const [viewBy, setViewBy] = useState('skill'); // 'skill' or 'group'
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchIn, setSearchIn] = useState('all'); // 'all', 'people', 'skills'
   const [minLevel, setMinLevel] = useState('any'); // 'any', 'L100', 'L200', 'L300', 'L400'
   const [selectedSkill, setSelectedSkill] = useState(null); // For "Find Expert" popup
 
@@ -34,7 +34,7 @@ function SkillMatrix({ onUserSelect }) {
 
   const fetchMatrixData = async () => {
     try {
-      const response = await fetch('/api/matrix');
+      const response = await apiFetch('/api/matrix');
       if (!response.ok) throw new Error('Failed to fetch matrix data');
       const data = await response.json();
       setMatrixData(data);
@@ -58,13 +58,36 @@ function SkillMatrix({ onUserSelect }) {
 
     const query = searchQuery.trim().toLowerCase();
     
-    // Filter users based on searchIn setting
+    // Smart search: filter BOTH users and skills that match
     let users = matrixData.users;
-    if (query && (searchIn === 'all' || searchIn === 'people')) {
-      users = users.filter(u => 
-        u.name.toLowerCase().includes(query) ||
-        u.role?.toLowerCase().includes(query)
-      );
+    let matchedUsers = new Set();
+    let matchedSkillIds = new Set();
+    
+    if (query) {
+      // Find matching users
+      users.forEach(u => {
+        if (u.name.toLowerCase().includes(query) || u.role?.toLowerCase().includes(query)) {
+          matchedUsers.add(u.id);
+        }
+      });
+      
+      // Find matching skills
+      matrixData.skills.forEach(s => {
+        if (s.name.toLowerCase().includes(query) || s.category_name?.toLowerCase().includes(query)) {
+          matchedSkillIds.add(s.id);
+        }
+      });
+      
+      // Filter users: show if user matches OR if they have any matching skill
+      users = users.filter(u => {
+        if (matchedUsers.has(u.id)) return true;
+        // Also show users who have any of the matched skills
+        for (const skillId of matchedSkillIds) {
+          const key = `${u.id}-${skillId}`;
+          if (matrixData.userSkills[key]?.proficiency_level) return true;
+        }
+        return false;
+      });
     }
 
     if (viewBy === 'group') {
@@ -76,8 +99,8 @@ function SkillMatrix({ onUserSelect }) {
         skills: matrixData.skills.filter(s => s.category_name === cat)
       }));
 
-      // Filter columns by search if searching for skills (or all)
-      if (query && (searchIn === 'all' || searchIn === 'skills')) {
+      // Filter columns by search (category names)
+      if (query) {
         cols = cols.filter(c => c.name.toLowerCase().includes(query));
       }
 
@@ -97,7 +120,7 @@ function SkillMatrix({ onUserSelect }) {
         categories: cats, 
         columns: cols, 
         getUserColumnLevel: (userId, col) => getGroupLevel(userId, col),
-        filteredUsers: query && searchIn === 'skills' ? matrixData.users : users
+        filteredUsers: users
       };
     } else {
       // Skill view: one column per skill
@@ -112,19 +135,22 @@ function SkillMatrix({ onUserSelect }) {
         cols = cols.filter(c => c.category === filterCategory);
       }
 
-      // Filter columns by search query (skill names) if searching skills or all
-      if (query && (searchIn === 'all' || searchIn === 'skills')) {
-        cols = cols.filter(c => c.name.toLowerCase().includes(query));
+      // Filter columns by search query (skill names)
+      if (query) {
+        cols = cols.filter(c => 
+          c.name.toLowerCase().includes(query) || 
+          c.category?.toLowerCase().includes(query)
+        );
       }
 
       return { 
         categories: cats, 
         columns: cols, 
         getUserColumnLevel: (userId, col) => getUserSkillLevel(userId, col.id),
-        filteredUsers: query && searchIn === 'skills' ? matrixData.users : users
+        filteredUsers: users
       };
     }
-  }, [matrixData, viewBy, filterCategory, searchQuery, searchIn]);
+  }, [matrixData, viewBy, filterCategory, searchQuery]);
 
   // Get experts for a skill (for "Find Expert" modal)
   const getExpertsForSkill = (skillId) => {
@@ -159,21 +185,11 @@ function SkillMatrix({ onUserSelect }) {
           <div className="search-bar">
             <input
               type="text"
-              placeholder={searchIn === 'people' ? 'Search people...' : searchIn === 'skills' ? 'Search skills...' : 'Search...'}
+              placeholder="Search people or skills..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="search-input"
             />
-            <select 
-              value={searchIn} 
-              onChange={(e) => setSearchIn(e.target.value)}
-              className="search-filter"
-              title="Search in"
-            >
-              <option value="all">All</option>
-              <option value="people">People</option>
-              <option value="skills">Skills</option>
-            </select>
             {searchQuery && (
               <button 
                 className="clear-search" 

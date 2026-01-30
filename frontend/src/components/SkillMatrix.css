@@ -1,6 +1,6 @@
 .skill-matrix {
-  background: #1a1a2e;
-  border-radius: 12px;
+  background: #2a2a2a;
+  border-radius: 8px;
   padding: 1.5rem;
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
@@ -15,7 +15,7 @@
 }
 
 .matrix-header h2 {
-  color: #ffffff;
+  color: #e0e0e0;
   margin: 0;
 }
 
@@ -36,44 +36,28 @@
 
 .search-input {
   padding: 0.5rem 1rem;
-  border: 1px solid #3a3a5c;
-  border-radius: 6px 0 0 6px;
+  border: 1px solid #555555;
+  border-radius: 6px;
   font-size: 0.9rem;
-  background: #252542;
-  color: #ffffff;
-  width: 180px;
+  background: #4a4a4a;
+  color: #e0e0e0;
+  width: 220px;
   transition: border-color 0.2s ease;
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #00d4ff;
+  border-color: #888888;
 }
 
 .search-input::placeholder {
-  color: #6a6a8a;
-}
-
-.search-filter {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #3a3a5c;
-  border-left: none;
-  border-radius: 0 6px 6px 0;
-  font-size: 0.85rem;
-  background: #252542;
-  color: #b0b0b0;
-  cursor: pointer;
-}
-
-.search-filter:focus {
-  outline: none;
-  border-color: #00d4ff;
+  color: #999999;
 }
 
 .clear-search {
   background: none;
   border: none;
-  color: #8a8aaa;
+  color: #aaaaaa;
   font-size: 1.2rem;
   cursor: pointer;
   padding: 0 4px;
@@ -87,7 +71,7 @@
 
 .view-by-toggle {
   display: flex;
-  background: #252542;
+  background: #3a3a3a;
   border-radius: 6px;
   padding: 3px;
   gap: 3px;
@@ -96,7 +80,7 @@
 .view-by-toggle button {
   background: transparent;
   border: none;
-  color: #b0b0b0;
+  color: #aaaaaa;
   padding: 6px 14px;
   border-radius: 4px;
   cursor: pointer;
@@ -106,35 +90,35 @@
 }
 
 .view-by-toggle button:hover:not(.active) {
-  background: #3a3a5c;
+  background: #444444;
   color: #ffffff;
 }
 
 .view-by-toggle button.active {
-  background: #00d4ff;
-  color: #1a1a2e;
+  background: #555555;
+  color: #ffffff;
 }
 
 .filters label {
-  color: #b0b0b0;
+  color: #aaaaaa;
 }
 
 .filters select {
   margin-left: 0.5rem;
   padding: 0.5rem 1rem;
-  border: 1px solid #3a3a5c;
+  border: 1px solid #555555;
   border-radius: 6px;
   font-size: 0.9rem;
-  background: #252542;
-  color: #ffffff;
+  background: #3a3a3a;
+  color: #e0e0e0;
 }
 
 .group-header {
-  background: #2a2a4a !important;
+  background: #333333 !important;
 }
 
 .group-header .skill-name {
-  color: #00d4ff;
+  color: #e0e0e0;
   font-size: 0.8rem;
 }
 
@@ -150,17 +134,17 @@
 }
 
 .matrix-container::-webkit-scrollbar-track {
-  background: #1a1a2e;
+  background: #2a2a2a;
   border-radius: 5px;
 }
 
 .matrix-container::-webkit-scrollbar-thumb {
-  background: #3a3a5c;
+  background: #555555;
   border-radius: 5px;
 }
 
 .matrix-container::-webkit-scrollbar-thumb:hover {
-  background: #4a4a6c;
+  background: #666666;
 }
 
 .matrix-table {
@@ -172,15 +156,15 @@
 
 .matrix-table th,
 .matrix-table td {
-  border: 1px solid #2a2a4a;
+  border: 1px solid #444444;
   padding: 0.6rem;
   text-align: center;
 }
 
 .matrix-table th {
-  background: #252542;
+  background: #333333;
   font-weight: 600;
-  color: #ffffff;
+  color: #e0e0e0;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -189,14 +173,14 @@
 .sticky-col {
   position: sticky;
   left: 0;
-  background: #1e1e36;
+  background: #2a2a2a;
   z-index: 11;
   text-align: left !important;
   min-width: 180px;
 }
 
 .matrix-table thead .sticky-col {
-  background: #252542;
+  background: #333333;
   z-index: 12;
 }
 
@@ -210,14 +194,14 @@
 .skill-name {
   font-weight: 600;
   font-size: 0.75rem;
-  color: #ffffff;
+  color: #e0e0e0;
   line-height: 1.3;
   word-wrap: break-word;
 }
 
 .skill-category {
   font-size: 0.6rem;
-  color: #7a7a9a;
+  color: #888888;
   font-weight: 400;
   margin-top: 0.2rem;
 }
@@ -233,22 +217,22 @@
 .user-name {
   font-weight: 600;
   margin-bottom: 0.15rem;
-  color: #00d4ff;
+  color: #e0e0e0;
   cursor: pointer;
 }
 
 .user-name:hover {
   text-decoration: underline;
-  color: #4de8ff;
+  color: #ffffff;
 }
 
 .user-role {
   font-size: 0.7rem;
-  color: #8a8aaa;
+  color: #888888;
 }
 
 .skill-cell {
-  background: #1e1e36;
+  background: #2a2a2a;
 }
 
 /* Average badge for group view */
@@ -264,38 +248,38 @@
 }
 
 .avg-badge.avg-l100 {
-  background-color: #ffe5e6;
-  color: #d13438;
+  background-color: #d13438;
+  color: #ffffff;
   border-color: #d13438;
 }
 
 .avg-badge.avg-l200 {
-  background-color: #fff4ce;
-  color: #ca5010;
+  background-color: #ca5010;
+  color: #ffffff;
   border-color: #ca5010;
 }
 
 .avg-badge.avg-l300 {
-  background-color: #deecf9;
-  color: #0078d4;
+  background-color: #0078d4;
+  color: #ffffff;
   border-color: #0078d4;
 }
 
 .avg-badge.avg-l400 {
-  background-color: #dff6dd;
-  color: #107c10;
+  background-color: #107c10;
+  color: #ffffff;
   border-color: #107c10;
 }
 
 .legend {
-  border-top: 1px solid #3a3a5c;
+  border-top: 1px solid #444444;
   padding-top: 1rem;
 }
 
 .legend h3 {
   font-size: 0.9rem;
   margin-bottom: 0.75rem;
-  color: #ffffff;
+  color: #e0e0e0;
 }
 
 .legend-items {
@@ -307,7 +291,7 @@
 .legend-note {
   margin-top: 0.75rem;
   font-size: 0.8rem;
-  color: #8a8aaa;
+  color: #888888;
   font-style: italic;
 }
 
@@ -315,7 +299,7 @@
   text-align: center;
   padding: 3rem;
   font-size: 1.1rem;
-  color: #ffffff;
+  color: #e0e0e0;
 }
 
 .error {

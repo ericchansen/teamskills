@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import apiFetch from '../api';
 import './AddSkillModal.css';
 
 function AddSkillModal({ userId, onClose, onSkillAdded }) {
@@ -15,7 +16,7 @@ function AddSkillModal({ userId, onClose, onSkillAdded }) {
 
   const fetchSkills = async () => {
     try {
-      const response = await fetch('/api/skills');
+      const response = await apiFetch('/api/skills');
       const data = await response.json();
       setAllSkills(data);
       setLoading(false);
@@ -34,7 +35,7 @@ function AddSkillModal({ userId, onClose, onSkillAdded }) {
     if (!selectedSkill) return;
 
     try {
-      const response = await fetch('/api/user-skills', {
+      const response = await apiFetch('/api/user-skills', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -5,28 +5,28 @@ const PROFICIENCY_CONFIG = {
   L100: { 
     label: 'L100 - Awareness', 
     shortLabel: 'L100',
-    description: 'Knows basics; would need support for deeper work',
+    description: 'Aware of the technology; needs support for deeper work',
     color: '#d13438', 
     bgColor: '#ffe5e6' 
   },
   L200: { 
-    label: 'L200 - Understanding', 
+    label: 'L200 - Conversant', 
     shortLabel: 'L200',
-    description: 'Could host a discovery session',
+    description: 'Can discuss potential and use cases',
     color: '#ca5010', 
     bgColor: '#fff4ce' 
   },
   L300: { 
     label: 'L300 - Practitioner', 
     shortLabel: 'L300',
-    description: 'Could speak competently about it',
+    description: 'Hands-on experience; can speak competently',
     color: '#0078d4', 
     bgColor: '#deecf9' 
   },
   L400: { 
     label: 'L400 - Expert', 
     shortLabel: 'L400',
-    description: 'Could teach or lead a workshop',
+    description: 'Deep expertise; can lead workshops',
     color: '#107c10', 
     bgColor: '#dff6dd' 
   }

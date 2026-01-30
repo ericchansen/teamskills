@@ -1,27 +1,12 @@
-/* Skill Graph - Sketch Style Dark Theme */
+/* Skill Graph - Minimal Clean Style */
 
 .skill-graph-container {
   position: relative;
   width: 100%;
   height: calc(100vh - 120px);
-  background: #12121a;
-  border-radius: 12px;
+  background: #2a2a2a;
+  border-radius: 8px;
   overflow: hidden;
-}
-
-/* Subtle paper texture background */
-.skill-graph-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(ellipse at 30% 30%, rgba(74, 156, 109, 0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 70% 70%, rgba(91, 123, 154, 0.04) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
 }
 
 /* Graph canvas */
@@ -66,10 +51,10 @@
 .graph-search input {
   width: 100%;
   padding: 12px 16px 12px 40px;
-  background: rgba(26, 26, 37, 0.95);
-  border: 1px solid #3a3a4a;
-  border-radius: 8px;
-  color: #e0e0e8;
+  background: #3a3a3a;
+  border: 1px solid #555555;
+  border-radius: 6px;
+  color: #e0e0e0;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-size: 0.9rem;
   transition: all 0.2s ease;
@@ -77,11 +62,11 @@
 
 .graph-search input:focus {
   outline: none;
-  border-color: #5b7b9a;
+  border-color: #888888;
 }
 
 .graph-search input::placeholder {
-  color: #6b6b80;
+  color: #888888;
 }
 
 /* Mode toggle */
@@ -89,10 +74,10 @@
 .graph-mode-toggle {
   display: flex;
   gap: 4px;
-  background: rgba(26, 26, 37, 0.95);
+  background: #3a3a3a;
   padding: 4px;
-  border-radius: 8px;
-  border: 1px solid #3a3a4a;
+  border-radius: 6px;
+  border: 1px solid #555555;
 }
 
 .skill-view-toggle button,
@@ -100,25 +85,25 @@
   padding: 10px 18px;
   background: transparent;
   border: none;
-  color: #8888a0;
+  color: #aaaaaa;
   font-family: inherit;
   font-size: 0.85rem;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .skill-view-toggle button.active,
 .graph-mode-toggle button.active {
-  background: #5b7b9a;
-  color: #f0f0f5;
+  background: #555555;
+  color: #ffffff;
 }
 
 .skill-view-toggle button:hover:not(.active),
 .graph-mode-toggle button:hover:not(.active) {
-  color: #f0f0f5;
-  background: rgba(91, 123, 154, 0.2);
+  color: #ffffff;
+  background: #444444;
 }
 
 /* Legend */
@@ -126,10 +111,10 @@
   position: absolute;
   bottom: 20px;
   left: 20px;
-  background: rgba(26, 26, 37, 0.95);
+  background: #3a3a3a;
   padding: 16px 20px;
-  border-radius: 10px;
-  border: 1px solid #3a3a4a;
+  border-radius: 8px;
+  border: 1px solid #555555;
   z-index: 10;
 }
 
@@ -143,7 +128,7 @@
 
 .legend-title {
   font-size: 0.7rem;
-  color: #6b6b80;
+  color: #aaaaaa;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 8px;
@@ -154,7 +139,7 @@
   align-items: center;
   gap: 8px;
   font-size: 0.8rem;
-  color: #a0a0b0;
+  color: #cccccc;
   margin-bottom: 4px;
 }
 
@@ -162,6 +147,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
+  border: 1px solid #000000;
 }
 
 /* Instructions */
@@ -169,18 +155,18 @@
   position: absolute;
   bottom: 20px;
   right: 20px;
-  background: rgba(26, 26, 37, 0.95);
+  background: #3a3a3a;
   padding: 14px 18px;
-  border-radius: 10px;
-  border: 1px solid #3a3a4a;
+  border-radius: 8px;
+  border: 1px solid #555555;
   z-index: 10;
   font-size: 0.8rem;
-  color: #8888a0;
+  color: #aaaaaa;
   line-height: 1.6;
 }
 
 .graph-instructions strong {
-  color: #0078d4;
+  color: #e0e0e0;
 }
 
 /* Side Panel */
@@ -190,8 +176,8 @@
   top: 0;
   bottom: 0;
   width: 340px;
-  background: rgba(18, 18, 26, 0.98);
-  border-left: 1px solid #3a3a4a;
+  background: #333333;
+  border-left: 1px solid #555555;
   padding: 24px;
   z-index: 20;
   overflow-y: auto;
@@ -215,10 +201,10 @@
   right: 16px;
   width: 32px;
   height: 32px;
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
+  background: #444444;
+  border: 1px solid #555555;
   border-radius: 6px;
-  color: #8888a0;
+  color: #aaaaaa;
   font-size: 1.4rem;
   cursor: pointer;
   display: flex;
@@ -228,8 +214,8 @@
 }
 
 .panel-close:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #f0f0f5;
+  background: #555555;
+  color: #ffffff;
 }
 
 .panel-header {
@@ -240,13 +226,13 @@
 .panel-header h3 {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: #e0e0e0;
   margin: 0 0 6px 0;
 }
 
 .panel-category {
   font-size: 0.85rem;
-  color: #5b7b9a;
+  color: #aaaaaa;
 }
 
 .panel-section {
@@ -255,7 +241,7 @@
 
 .panel-section-title {
   font-size: 0.7rem;
-  color: #6b6b80;
+  color: #aaaaaa;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 12px;
@@ -267,30 +253,30 @@
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: #3a3a3a;
   border-radius: 8px;
   margin-bottom: 8px;
-  border: 1px solid transparent;
+  border: 1px solid #444444;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .person-card:hover {
-  border-color: #5b7b9a;
-  background: rgba(91, 123, 154, 0.1);
+  border-color: #666666;
+  background: #444444;
 }
 
 .person-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #5b7b9a;
+  background: #888888;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
   font-size: 0.85rem;
-  color: #f0f0f5;
+  color: #000000;
 }
 
 .person-info {
@@ -300,13 +286,13 @@
 
 .person-name {
   font-weight: 500;
-  color: #f0f0f5;
+  color: #e0e0e0;
   margin-bottom: 2px;
 }
 
 .person-role {
   font-size: 0.75rem;
-  color: #6b6b80;
+  color: #aaaaaa;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -327,21 +313,21 @@
 /* Skill Card */
 .skill-card {
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: #3a3a3a;
   border-radius: 6px;
   margin-bottom: 6px;
-  border-left: 3px solid #5b7b9a;
+  border-left: 3px solid #888888;
 }
 
 .skill-name {
   font-weight: 500;
-  color: #f0f0f5;
+  color: #e0e0e0;
   font-size: 0.9rem;
 }
 
 .skill-category {
   font-size: 0.75rem;
-  color: #6b6b80;
+  color: #aaaaaa;
   margin-top: 2px;
 }
 
@@ -352,12 +338,12 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #8888a0;
+  color: #aaaaaa;
   font-size: 1rem;
 }
 
 .graph-error {
-  color: #c45c5c;
+  color: #d13438;
 }
 
 /* Graph node styles */

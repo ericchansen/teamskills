@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ProficiencyBadge from './ProficiencyBadge';
 import AddSkillModal from './AddSkillModal';
+import apiFetch from '../api';
 import './UserProfile.css';
 
 function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
@@ -18,7 +19,7 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
 
   const fetchUserData = async () => {
     try {
-      const response = await fetch(`/api/users/${userId}`);
+      const response = await apiFetch(`/api/users/${userId}`);
       const data = await response.json();
       setUser(data);
     } catch (err) {
@@ -28,7 +29,7 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
 
   const fetchUserSkills = async () => {
     try {
-      const response = await fetch(`/api/user-skills/${userId}`);
+      const response = await apiFetch(`/api/user-skills/${userId}`);
       const data = await response.json();
       setUserSkills(data);
       setLoading(false);
@@ -41,7 +42,7 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
   const handleUpdateProficiency = async (skillId, newLevel) => {
     if (!isOwnProfile) return;
     try {
-      const response = await fetch('/api/user-skills', {
+      const response = await apiFetch('/api/user-skills', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,7 +64,7 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
     if (!isOwnProfile) return;
     if (!confirm('Remove this skill?')) return;
     try {
-      const response = await fetch('/api/user-skills', {
+      const response = await apiFetch('/api/user-skills', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, skill_id: skillId }),
@@ -148,7 +149,7 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
                             className="proficiency-select"
                           >
                             <option value="L100">L100 - Awareness</option>
-                            <option value="L200">L200 - Understanding</option>
+                            <option value="L200">L200 - Conversant</option>
                             <option value="L300">L300 - Practitioner</option>
                             <option value="L400">L400 - Expert</option>
                           </select>

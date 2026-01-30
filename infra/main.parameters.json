@@ -1,0 +1,13 @@
+{
+  "parameters": {
+    "environmentName": {
+      "value": "${AZURE_ENV_NAME}"
+    },
+    "location": {
+      "value": "${AZURE_LOCATION}"
+    },
+    "postgresPassword": {
+      "value": "$(secretOrRandomPassword ${AZURE_POSTGRES_PASSWORD})"
+    }
+  }
+}
