@@ -73,8 +73,9 @@ describe('SkillMatrix', () => {
       expect(screen.getByText('Azure Functions')).toBeInTheDocument();
     });
 
-    const select = screen.getByRole('combobox');
-    await userEvent.selectOptions(select, 'Azure Compute');
+    // Get the category select specifically by its label
+    const categorySelect = screen.getByRole('combobox', { name: /category/i });
+    await userEvent.selectOptions(categorySelect, 'Azure Compute');
 
     // Azure SQL should not be visible, Azure Functions should be
     expect(screen.getByText('Azure Functions')).toBeInTheDocument();
@@ -88,7 +89,7 @@ describe('SkillMatrix', () => {
     });
 
     expect(screen.getByText('L100 - Awareness')).toBeInTheDocument();
-    expect(screen.getByText('L200 - Understanding')).toBeInTheDocument();
+    expect(screen.getByText('L200 - Conversant')).toBeInTheDocument();
     expect(screen.getByText('L300 - Practitioner')).toBeInTheDocument();
     expect(screen.getByText('L400 - Expert')).toBeInTheDocument();
   });

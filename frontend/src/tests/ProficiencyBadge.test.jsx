@@ -12,7 +12,7 @@ describe('ProficiencyBadge', () => {
 
   test('renders L200 badge with correct color', () => {
     render(<ProficiencyBadge level="L200" />);
-    const badge = screen.getByText('L200 - Understanding');
+    const badge = screen.getByText('L200 - Conversant');
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveStyle({ color: '#ca5010' });
   });
