@@ -10,6 +10,7 @@
     "docker:up": "docker-compose up",
     "docker:down": "docker-compose down",
     "docker:reset": "docker-compose down -v && docker-compose up --build",
+    "lint": "eslint backend/",
     "test": "npm run test:backend && npm run test:frontend",
     "test:backend": "jest",
     "test:frontend": "cd frontend && npm run test",
@@ -29,9 +30,12 @@
     "pg": "^8.17.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.18.0",
     "@playwright/test": "^1.58.0",
     "@types/jest": "^30.0.0",
     "@types/supertest": "^6.0.3",
+    "eslint": "^9.18.0",
+    "globals": "^15.14.0",
     "jest": "^30.2.0",
     "supertest": "^7.2.2"
   }

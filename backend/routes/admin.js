@@ -1,8 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const fs = require('fs');
-const path = require('path');
 
 // Database initialization endpoint (POST to prevent accidental execution)
 router.post('/init', async (req, res) => {
