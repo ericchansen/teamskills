@@ -4,6 +4,7 @@ import SkillMatrix from './components/SkillMatrix';
 import SkillGraph from './components/SkillGraph';
 import UserProfile from './components/UserProfile';
 import ErrorBoundary from './components/ErrorBoundary';
+import ChatPanel from './components/ChatPanel';
 import apiFetch from './api';
 import './App.css';
 
@@ -13,6 +14,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null); // Logged in user
   const [showLogin, setShowLogin] = useState(false);
   const [users, setUsers] = useState([]);
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Fetch users for login dropdown
   useEffect(() => {
@@ -123,7 +125,7 @@ function App() {
         </div>
       )}
 
-      <main className={`app-main ${view === 'graph' ? 'graph-view' : ''}`}>
+      <main className={`app-main ${view === 'graph' ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
         <ErrorBoundary>
           {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} />}
           {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
@@ -152,6 +154,14 @@ function App() {
           error: { duration: 5000 },
         }}
       />
+      
+      {/* Chat Panel - shown on matrix and graph views */}
+      {view !== 'profile' && (
+        <ChatPanel 
+          isOpen={chatOpen} 
+          onToggle={() => setChatOpen(!chatOpen)} 
+        />
+      )}
     </div>
   );
 }

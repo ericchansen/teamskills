@@ -1,0 +1,22 @@
+# Agent Service Dependencies
+# Microsoft Agent Framework (preview - requires --pre flag)
+agent-framework-azure-ai
+
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+sse-starlette>=2.2.1
+
+# Database
+asyncpg>=0.30.0
+
+# Azure Identity
+azure-identity>=1.19.0
+
+# Testing
+pytest>=8.3.0
+pytest-asyncio>=0.24.0
+httpx>=0.28.0
+
+# Environment
+python-dotenv>=1.0.1

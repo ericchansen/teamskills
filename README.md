@@ -13,12 +13,15 @@ A web application for tracking team member skills and proficiency levels across 
   - L400 (Green): Expert - deep expertise, can lead workshops
 - **Skill Categories**: Organized by Azure Compute, Data, AI, Security, Networking, DevOps, Soft Skills, and Use Cases
 - **Easy Skill Management**: Quick add/edit/delete with autocomplete
+- **AI Chat Assistant**: Natural language queries for finding experts and analyzing team skills
 
 ## Tech Stack
 
 - **Frontend**: React + Vite
 - **Backend**: Node.js + Express
+- **Agent**: Python + Microsoft Agent Framework
 - **Database**: PostgreSQL
+- **AI Model**: Azure OpenAI (GPT-4o)
 
 ## 🚀 Quick Start with Docker (Recommended)
 
@@ -38,7 +41,24 @@ docker-compose up --build
 Docker automatically:
 - ✅ Starts PostgreSQL with test data
 - ✅ Runs backend API (http://localhost:3001)
+- ✅ Runs agent service (http://localhost:8000)
 - ✅ Runs frontend dev server (http://localhost:3000)
+
+### Chat Assistant Setup
+
+The AI chat assistant requires Azure OpenAI credentials. Create a `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your Azure OpenAI settings:
+```
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
+```
+
+Without these credentials, the chat will show "Agent not available" but all other features work normally.
 
 See [DOCKER.md](DOCKER.md) for detailed Docker commands and troubleshooting.
 
@@ -140,6 +160,10 @@ The repository includes demo data with fictional team members. To load your real
 4. **Add Skills**: Click "+ Add Skill" button, search for skills, and select proficiency level
 5. **Update Proficiency**: Use dropdown in profile view to change skill levels
 6. **Filter Skills**: Use category filter in matrix view to focus on specific skill areas
+7. **Chat Assistant**: Click the 💬 button to ask questions like:
+   - "Who knows Kubernetes?"
+   - "What skill gaps do we have?"
+   - "Give me a team skills summary"
 
 ## API Endpoints
 
@@ -170,18 +194,22 @@ The repository includes demo data with fictional team members. To load your real
 ### Matrix
 - `GET /api/matrix` - Get complete matrix data (users × skills)
 
+### Agent (Chat Assistant)
+- `GET /agent/status` - Check agent availability and capabilities
+- `POST /chat` - Send message and get complete response
+- `POST /chat/stream` - Send message and get streaming SSE response
+
 ## Development
 
 The application includes 8 test users with diverse skill profiles across different Azure specializations. Use these to explore the functionality or add your own team members.
 
 ## Future Enhancements
 
-- AI agent integration for natural language skill queries
 - Export/reporting features (Excel, PDF)
 - Authentication and authorization
 - Skill endorsements/verification
 - Learning resource links
-- Skill gap analysis
+- MCP PostgreSQL integration for advanced queries
 
 ## License
 

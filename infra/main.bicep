@@ -16,6 +16,12 @@ param resourceGroupName string = ''
 @secure()
 param postgresPassword string
 
+@description('Azure OpenAI model deployment name')
+param openAiModelDeploymentName string = 'gpt-4o'
+
+@description('Azure OpenAI model name')
+param openAiModelName string = 'gpt-4o'
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
@@ -62,6 +68,24 @@ module postgres './core/database/postgresql.bicep' = {
   }
 }
 
+// Azure OpenAI for Chat Agent
+module openai './core/ai/openai.bicep' = {
+  name: 'openai'
+  scope: rg
+  params: {
+    name: '${abbrs.cognitiveServicesAccounts}${resourceToken}'
+    location: location
+    tags: tags
+    deployments: [
+      {
+        name: openAiModelDeploymentName
+        model: openAiModelName
+        capacity: 10
+      }
+    ]
+  }
+}
+
 // Backend Container App
 module backend './app/backend.bicep' = {
   name: 'backend'
@@ -91,9 +115,30 @@ module frontend './app/frontend.bicep' = {
   }
 }
 
+// Agent Container App (Chat Assistant)
+module agent './app/agent.bicep' = {
+  name: 'agent'
+  scope: rg
+  params: {
+    name: '${abbrs.appContainerApps}agent-${resourceToken}'
+    location: location
+    tags: union(tags, { 'azd-service-name': 'agent' })
+    containerAppsEnvironmentName: containerApps.outputs.environmentName
+    containerRegistryName: containerApps.outputs.registryName
+    postgresHost: postgres.outputs.fqdn
+    postgresPassword: postgresPassword
+    azureOpenAiEndpoint: openai.outputs.endpoint
+    azureOpenAiDeploymentName: openAiModelDeploymentName
+    frontendUrl: frontend.outputs.uri
+  }
+}
+
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerApps.outputs.registryLoginServer
 output AZURE_CONTAINER_REGISTRY_NAME string = containerApps.outputs.registryName
 output AZURE_CONTAINER_ENVIRONMENT_NAME string = containerApps.outputs.environmentName
 output BACKEND_URI string = backend.outputs.uri
 output FRONTEND_URI string = frontend.outputs.uri
+output AGENT_URI string = agent.outputs.uri
 output POSTGRES_HOST string = postgres.outputs.fqdn
+output AZURE_OPENAI_ENDPOINT string = openai.outputs.endpoint
+output AZURE_OPENAI_DEPLOYMENT_NAME string = openAiModelDeploymentName

@@ -21,3 +21,14 @@ services:
       context: .
       buildArgs:
         VITE_API_URL: ${BACKEND_URI}
+        VITE_AGENT_URL: ${AGENT_URI}
+
+  agent:
+    project: ./agent
+    language: python
+    host: containerapp
+    docker:
+      path: ./Dockerfile.agent
+      context: ./agent
+      buildArgs:
+        VITE_API_URL: ${BACKEND_URI}
