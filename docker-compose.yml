@@ -53,7 +53,7 @@ services:
     environment:
       - VITE_API_URL=http://backend:3001
     ports:
-      - "3000:3000"
+      - "3000:80"
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
