@@ -9,26 +9,21 @@ services:
     language: js
     host: containerapp
     docker:
-      path: ./Dockerfile.backend
-      context: .
+      path: ../Dockerfile.backend
+      context: ..
 
   frontend:
     project: ./frontend
     language: js
     host: containerapp
     docker:
-      path: ./Dockerfile.frontend
-      context: .
+      path: ../Dockerfile.frontend
+      context: ..
       buildArgs:
-        VITE_API_URL: ${BACKEND_URI}
-        VITE_AGENT_URL: ${AGENT_URI}
+        - VITE_API_URL=${BACKEND_URI}
+        - VITE_AGENT_URL=${AGENT_URI}
 
   agent:
     project: ./agent
     language: python
     host: containerapp
-    docker:
-      path: ./Dockerfile.agent
-      context: ./agent
-      buildArgs:
-        VITE_API_URL: ${BACKEND_URI}

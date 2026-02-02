@@ -1,9 +1,10 @@
 """AI Agent implementation using Microsoft Agent Framework."""
 import logging
-from typing import Optional
+from typing import Optional, AsyncIterator, Any
 
-from azure.identity.aio import AzureCliCredential, DefaultAzureCredential
-from agent_framework.azure import AzureAIAgentsProvider
+from azure.identity import DefaultAzureCredential
+from agent_framework import ChatAgent
+from agent_framework.azure import AzureOpenAIChatClient
 
 from config import config
 from tools import (
@@ -44,12 +45,12 @@ class SkillsAgent:
     """AI agent for team skills queries."""
     
     def __init__(self):
-        self._provider: Optional[AzureAIAgentsProvider] = None
-        self._agent = None
+        self._agent: Optional[ChatAgent] = None
+        self._chat_client: Optional[AzureOpenAIChatClient] = None
         self._credential = None
     
     async def initialize(self) -> bool:
-        """Initialize the agent with Azure AI Foundry.
+        """Initialize the agent with Azure OpenAI.
         
         Returns:
             True if initialization succeeded, False otherwise
@@ -62,15 +63,16 @@ class SkillsAgent:
             # Use DefaultAzureCredential for flexibility (supports managed identity, CLI, etc.)
             self._credential = DefaultAzureCredential()
             
-            self._provider = AzureAIAgentsProvider(
+            # Create Azure OpenAI chat client with explicit configuration
+            self._chat_client = AzureOpenAIChatClient(
                 credential=self._credential,
                 endpoint=config.azure_openai_endpoint,
                 deployment_name=config.azure_openai_deployment,
             )
             
             # Create agent with tools
-            self._agent = await self._provider.create_agent(
-                name=AGENT_NAME,
+            self._agent = ChatAgent(
+                chat_client=self._chat_client,
                 instructions=AGENT_INSTRUCTIONS,
                 tools=[
                     find_experts_by_skills,
@@ -154,12 +156,9 @@ class SkillsAgent:
     
     async def cleanup(self) -> None:
         """Clean up agent resources."""
-        if self._provider:
-            await self._provider.__aexit__(None, None, None)
-            self._provider = None
-        if self._credential:
-            await self._credential.close()
-            self._credential = None
+        if self._chat_client:
+            self._chat_client = None
+        self._credential = None
         self._agent = None
         logger.info("Agent cleaned up")
     
