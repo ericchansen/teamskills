@@ -19,6 +19,27 @@
   margin: 0;
 }
 
+.export-btn {
+  padding: 0.5rem 1rem;
+  background: #4a7c59;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: #5a9c69;
+}
+
+.export-btn:disabled {
+  background: #555;
+  color: #888;
+  cursor: not-allowed;
+}
+
 .filters {
   display: flex;
   align-items: center;

@@ -18,6 +18,16 @@ const numToLevel = (num) => {
   return 'L400';
 };
 
+// Escape CSV field (handle commas, quotes, newlines)
+const escapeCSV = (value) => {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
 function SkillMatrix({ onUserSelect }) {
   const [matrixData, setMatrixData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +183,56 @@ function SkillMatrix({ onUserSelect }) {
     }
   };
 
+  // Export current matrix view to CSV
+  const exportToCSV = () => {
+    if (!filteredUsers.length || !columns.length) return;
+
+    // Build header row
+    const headers = ['Name', 'Role', ...columns.map(col => col.name)];
+    
+    // Build data rows
+    const rows = filteredUsers.map(user => {
+      const rowData = [user.name, user.role || ''];
+      
+      columns.forEach(col => {
+        const levelData = getUserColumnLevel(user.id, col);
+        const isGroupData = levelData && typeof levelData === 'object';
+        const level = isGroupData ? levelData.level : levelData;
+        const avgNum = isGroupData ? levelData.avg : null;
+        
+        // Apply min level filter
+        const minLevelNum = minLevel === 'any' ? 0 : levelToNum(minLevel);
+        const currentLevelNum = isGroupData ? avgNum : (level ? levelToNum(level) : 0);
+        const showLevel = level && currentLevelNum >= minLevelNum;
+        
+        if (showLevel) {
+          rowData.push(isGroupData ? String(avgNum) : level);
+        } else {
+          rowData.push('');
+        }
+      });
+      
+      return rowData;
+    });
+
+    // Convert to CSV string
+    const csvContent = [
+      headers.map(escapeCSV).join(','),
+      ...rows.map(row => row.map(escapeCSV).join(','))
+    ].join('\n');
+
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `skills-matrix-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) return <div className="loading">Loading matrix...</div>;
   if (error) return <div className="error">Error: {error}</div>;
   if (!matrixData) return <div className="loading">No data available</div>;
@@ -181,6 +241,14 @@ function SkillMatrix({ onUserSelect }) {
     <div className="skill-matrix">
       <div className="matrix-header">
         <h2>Skills Matrix</h2>
+        <button 
+          className="export-btn" 
+          onClick={exportToCSV}
+          disabled={!filteredUsers.length || !columns.length}
+          title="Export current view to CSV"
+        >
+          📥 Export CSV
+        </button>
         <div className="filters">
           <div className="search-bar">
             <input
