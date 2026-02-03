@@ -211,6 +211,67 @@ The application includes 8 test users with diverse skill profiles across differe
 - Learning resource links
 - MCP PostgreSQL integration for advanced queries
 
+## Azure Deployment
+
+This project can be deployed to Azure using the Azure Developer CLI (azd).
+
+### Prerequisites
+
+- [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) installed and logged in
+- [Azure Developer CLI (azd)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) installed
+
+### Deploy to Azure
+
+```bash
+# Login to Azure
+az login
+azd auth login
+
+# Deploy everything (infrastructure + code)
+azd up
+```
+
+This will:
+- Create a resource group with PostgreSQL, Container Registry, Container Apps, and Azure OpenAI
+- Build and push Docker images to the registry
+- Deploy all three services (backend, frontend, agent)
+- Configure RBAC for the agent to call Azure OpenAI
+
+### Tear Down Azure Resources
+
+To delete all Azure resources created by this project:
+
+```bash
+# Delete all resources (with purge for soft-deleted resources)
+azd down --force --purge -e <environment-name>
+```
+
+The `--force` flag skips confirmation prompts, and `--purge` permanently deletes soft-deletable resources like Key Vaults and Cognitive Services accounts.
+
+**Note**: If azd down fails, you can manually delete the resource group:
+```bash
+az group delete --name rg-<environment-name> --yes --no-wait
+```
+
+### Useful Commands
+
+```bash
+# List deployed environments
+azd env list
+
+# Show environment details (URLs, settings)
+azd env get-values -e <environment-name>
+
+# Deploy only code changes (no infrastructure changes)
+azd deploy
+
+# Deploy only infrastructure changes
+azd provision
+
+# View deployment logs
+az containerapp logs show --name <app-name> --resource-group <rg-name> --tail 50
+```
+
 ## License
 
 ISC
