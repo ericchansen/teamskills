@@ -1,3 +1,4 @@
+// Build timestamp: 2026-02-02 18:35:26
 // API utility for making requests to the backend
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -8,3 +9,4 @@ export const apiFetch = async (endpoint, options = {}) => {
 };
 
 export default apiFetch;
+

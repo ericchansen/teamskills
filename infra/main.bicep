@@ -98,6 +98,7 @@ module backend './app/backend.bicep' = {
     containerRegistryName: containerApps.outputs.registryName
     postgresHost: postgres.outputs.fqdn
     postgresPassword: postgresPassword
+    frontendUrl: 'https://${abbrs.appContainerApps}frontend-${resourceToken}.${containerApps.outputs.defaultDomain}'
   }
 }
 

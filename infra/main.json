@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "1136855508786298862"
+      "templateHash": "11573470689986117204"
     }
   },
   "parameters": {
@@ -237,7 +237,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "7263439901636121043"
+              "templateHash": "17760817714879789795"
             }
           },
           "parameters": {
@@ -335,6 +335,10 @@
             "environmentId": {
               "type": "string",
               "value": "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppsEnvironmentName'))]"
+            },
+            "defaultDomain": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/managedEnvironments', parameters('containerAppsEnvironmentName')), '2023-05-01').defaultDomain]"
             },
             "registryName": {
               "type": "string",
@@ -704,6 +708,9 @@
           },
           "postgresPassword": {
             "value": "[parameters('postgresPassword')]"
+          },
+          "frontendUrl": {
+            "value": "[format('https://{0}frontend-{1}.{2}', variables('abbrs').appContainerApps, variables('resourceToken'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, if(not(empty(parameters('resourceGroupName'))), parameters('resourceGroupName'), format('{0}{1}', variables('abbrs').resourcesResourceGroups, parameters('environmentName')))), 'Microsoft.Resources/deployments', 'container-apps'), '2025-04-01').outputs.defaultDomain.value)]"
           }
         },
         "template": {
@@ -713,7 +720,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "11069549836473732125"
+              "templateHash": "2854538916772292959"
             }
           },
           "parameters": {
@@ -760,6 +767,13 @@
               "metadata": {
                 "description": "PostgreSQL password"
               }
+            },
+            "frontendUrl": {
+              "type": "string",
+              "defaultValue": "*",
+              "metadata": {
+                "description": "Frontend URL for CORS"
+              }
             }
           },
           "resources": [
@@ -779,7 +793,7 @@
                     "transport": "http",
                     "corsPolicy": {
                       "allowedOrigins": [
-                        "https://ca-frontend-teamskills.greenwater-c5983efd.centralus.azurecontainerapps.io"
+                        "[parameters('frontendUrl')]"
                       ],
                       "allowedMethods": [
                         "GET",
@@ -825,6 +839,10 @@
                         {
                           "name": "PORT",
                           "value": "3001"
+                        },
+                        {
+                          "name": "FRONTEND_URL",
+                          "value": "[parameters('frontendUrl')]"
                         },
                         {
                           "name": "PGHOST",

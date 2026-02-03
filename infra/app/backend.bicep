@@ -20,6 +20,9 @@ param postgresHost string
 @secure()
 param postgresPassword string
 
+@description('Frontend URL for CORS')
+param frontendUrl string = '*'
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -41,7 +44,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
         targetPort: 3001
         transport: 'http'
         corsPolicy: {
-          allowedOrigins: ['https://ca-frontend-teamskills.greenwater-c5983efd.centralus.azurecontainerapps.io']
+          allowedOrigins: [frontendUrl]
           allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
           allowedHeaders: ['Content-Type', 'Authorization']
         }
@@ -77,6 +80,10 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'PORT'
               value: '3001'
+            }
+            {
+              name: 'FRONTEND_URL'
+              value: frontendUrl
             }
             {
               name: 'PGHOST'
