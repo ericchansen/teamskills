@@ -14,7 +14,8 @@ describe('ChatPanel', () => {
     render(<ChatPanel isOpen={false} onToggle={() => {}} />);
     const button = screen.getByTitle('Open chat assistant');
     expect(button).toBeInTheDocument();
-    expect(button).toHaveTextContent('💬');
+    // Button now contains an SVG icon instead of emoji
+    expect(button.querySelector('svg')).toBeInTheDocument();
   });
 
   test('renders panel when open', () => {
