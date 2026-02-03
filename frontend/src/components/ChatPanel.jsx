@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import './ChatPanel.css';
 
 const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8000';
@@ -167,12 +168,7 @@ function ChatPanel({ isOpen, onToggle }) {
               </div>
             )}
             <div className="message-content">
-              {msg.content.split('\n').map((line, i) => (
-                <React.Fragment key={i}>
-                  {line}
-                  {i < msg.content.split('\n').length - 1 && <br />}
-                </React.Fragment>
-              ))}
+              <ReactMarkdown>{msg.content}</ReactMarkdown>
             </div>
           </div>
         ))}
