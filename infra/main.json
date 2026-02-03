@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "9929180077184517024"
+      "templateHash": "1136855508786298862"
     }
   },
   "parameters": {
@@ -1074,6 +1074,9 @@
           "azureOpenAiDeploymentName": {
             "value": "[parameters('openAiModelDeploymentName')]"
           },
+          "azureOpenAiResourceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, if(not(empty(parameters('resourceGroupName'))), parameters('resourceGroupName'), format('{0}{1}', variables('abbrs').resourcesResourceGroups, parameters('environmentName')))), 'Microsoft.Resources/deployments', 'openai'), '2025-04-01').outputs.id.value]"
+          },
           "frontendUrl": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, if(not(empty(parameters('resourceGroupName'))), parameters('resourceGroupName'), format('{0}{1}', variables('abbrs').resourcesResourceGroups, parameters('environmentName')))), 'Microsoft.Resources/deployments', 'frontend'), '2025-04-01').outputs.uri.value]"
           }
@@ -1085,7 +1088,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "8189034690626739193"
+              "templateHash": "18026120805739381276"
             }
           },
           "parameters": {
@@ -1145,6 +1148,13 @@
                 "description": "Azure OpenAI deployment name"
               }
             },
+            "azureOpenAiResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Azure OpenAI resource ID for RBAC"
+              }
+            },
             "frontendUrl": {
               "type": "string",
               "defaultValue": "*",
@@ -1152,6 +1162,9 @@
                 "description": "Frontend URL for CORS"
               }
             }
+          },
+          "variables": {
+            "cognitiveServicesOpenAiUserRoleId": "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
           },
           "resources": [
             {
@@ -1239,6 +1252,21 @@
                   }
                 }
               }
+            },
+            {
+              "condition": "[not(empty(parameters('azureOpenAiResourceId')))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.CognitiveServices/accounts/{0}', last(split(parameters('azureOpenAiResourceId'), '/')))]",
+              "name": "[guid(resourceId('Microsoft.App/containerApps', parameters('name')), parameters('azureOpenAiResourceId'), variables('cognitiveServicesOpenAiUserRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('cognitiveServicesOpenAiUserRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.App/containerApps', parameters('name')), '2023-05-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/containerApps', parameters('name'))]"
+              ]
             }
           ],
           "outputs": {

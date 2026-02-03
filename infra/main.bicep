@@ -129,6 +129,7 @@ module agent './app/agent.bicep' = {
     postgresPassword: postgresPassword
     azureOpenAiEndpoint: openai.outputs.endpoint
     azureOpenAiDeploymentName: openAiModelDeploymentName
+    azureOpenAiResourceId: openai.outputs.id
     frontendUrl: frontend.outputs.uri
   }
 }

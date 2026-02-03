@@ -26,6 +26,9 @@ param azureOpenAiEndpoint string
 @description('Azure OpenAI deployment name')
 param azureOpenAiDeploymentName string
 
+@description('Azure OpenAI resource ID for RBAC')
+param azureOpenAiResourceId string = ''
+
 @description('Frontend URL for CORS')
 param frontendUrl string = '*'
 
@@ -116,3 +119,22 @@ resource agent 'Microsoft.App/containerApps@2023-05-01' = {
 output uri string = 'https://${agent.properties.configuration.ingress.fqdn}'
 output name string = agent.name
 output principalId string = agent.identity.principalId
+
+// Role assignment for agent to call Azure OpenAI
+// Built-in role: Cognitive Services OpenAI User (5e0bd9bd-7b93-4f28-af87-19fc36ad61bd)
+var cognitiveServicesOpenAiUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+
+resource openAiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(azureOpenAiResourceId)) {
+  name: guid(agent.id, azureOpenAiResourceId, cognitiveServicesOpenAiUserRoleId)
+  scope: openAiResource
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesOpenAiUserRoleId)
+    principalId: agent.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Reference to existing OpenAI resource for scoping
+resource openAiResource 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = if (!empty(azureOpenAiResourceId)) {
+  name: last(split(azureOpenAiResourceId, '/'))
+}
