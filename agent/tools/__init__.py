@@ -2,9 +2,12 @@
 
 These tools allow the AI agent to query team skills data.
 """
+import logging
 from typing import Optional
 
 from db import db
+
+logger = logging.getLogger(__name__)
 
 
 async def find_experts_by_skills(skills: list[str], min_proficiency: str = "L200") -> str:
@@ -17,6 +20,9 @@ async def find_experts_by_skills(skills: list[str], min_proficiency: str = "L200
     Returns:
         Formatted string describing team members and their skill levels
     """
+    logger.info(f"find_experts_by_skills called with skills={skills}, min_proficiency={min_proficiency}")
+    logger.info(f"Database connected: {db.is_connected}")
+    
     if not skills:
         return "No skills specified. Please provide at least one skill to search for."
     
@@ -39,7 +45,7 @@ async def find_experts_by_skills(skills: list[str], min_proficiency: str = "L200
         JOIN users u ON us.user_id = u.id
         JOIN skills s ON us.skill_id = s.id
         LEFT JOIN skill_categories sc ON s.category_id = sc.id
-        WHERE LOWER(s.name) SIMILAR TO ANY(ARRAY[{placeholders}])
+        WHERE LOWER(s.name) ILIKE ANY(ARRAY[{placeholders}])
         AND CASE us.proficiency_level 
             WHEN 'L100' THEN 1 
             WHEN 'L200' THEN 2 
@@ -56,7 +62,9 @@ async def find_experts_by_skills(skills: list[str], min_proficiency: str = "L200
             u.name
     """
     
+    logger.info(f"Executing query with min_level={min_level}, patterns={skill_patterns}")
     results = await db.fetch_all(query, min_level, *skill_patterns)
+    logger.info(f"Query returned {len(results)} results")
     
     if not results:
         return f"No team members found with skills matching: {', '.join(skills)} (minimum {min_proficiency})"
