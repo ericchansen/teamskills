@@ -4,8 +4,11 @@ param name string
 @description('Location for all resources')
 param location string = resourceGroup().location
 
-@description('Tags for all resources')
+@description('Tags for the Function App (includes azd-service-name)')
 param tags object = {}
+
+@description('Common tags for supporting resources (no azd-service-name)')
+param commonTags object = {}
 
 @description('Name of the Storage Account for the Function App')
 param storageAccountName string
@@ -19,11 +22,11 @@ param postgresServerResourceId string
 @description('Log Analytics Workspace ID for diagnostics')
 param logAnalyticsWorkspaceId string = ''
 
-// Storage Account for Function App
+// Storage Account for Function App - use common tags (no azd-service-name)
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
   location: location
-  tags: tags
+  tags: commonTags
   sku: {
     name: 'Standard_LRS'
   }
@@ -31,29 +34,31 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   properties: {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: false
+    allowSharedKeyAccess: false
   }
 }
 
-// Consumption App Service Plan for Function App
+// Linux Consumption App Service Plan - use common tags (no azd-service-name)
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: appServicePlanName
   location: location
-  tags: tags
+  tags: commonTags
   sku: {
     name: 'Y1'
     tier: 'Dynamic'
   }
   properties: {
-    reserved: false
+    reserved: true  // Linux
   }
 }
 
-// Function App with System-Assigned Managed Identity
+// Function App with System-Assigned Managed Identity and identity-based storage
 resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
   name: name
   location: location
   tags: tags
-  kind: 'functionapp'
+  kind: 'functionapp,linux'
   identity: {
     type: 'SystemAssigned'
   }
@@ -64,19 +69,11 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
       ftpsState: 'FtpsOnly'
       minTlsVersion: '1.2'
       http20Enabled: true
-      nodeVersion: '~20'
+      linuxFxVersion: 'NODE|20'
       appSettings: [
         {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(name)
+          name: 'AzureWebJobsStorage__accountName'
+          value: storageAccount.name
         }
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'
@@ -85,10 +82,6 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'FUNCTIONS_WORKER_RUNTIME'
           value: 'node'
-        }
-        {
-          name: 'WEBSITE_NODE_DEFAULT_VERSION'
-          value: '~20'
         }
         {
           name: 'POSTGRES_SERVER_RESOURCE_ID'
@@ -105,6 +98,17 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         ]
       }
     }
+  }
+}
+
+// Role assignment: Storage Blob Data Owner for identity-based storage access
+resource storageBlobDataOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccount.id, functionApp.id, 'StorageBlobDataOwner')
+  scope: storageAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b') // Storage Blob Data Owner
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 
