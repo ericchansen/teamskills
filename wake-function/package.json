@@ -1,0 +1,18 @@
+{
+  "name": "wake-function",
+  "version": "1.0.0",
+  "description": "Azure Function to auto-wake PostgreSQL Flexible Server",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@azure/arm-postgresql-flexible": "^8.0.0",
+    "@azure/identity": "^4.0.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
