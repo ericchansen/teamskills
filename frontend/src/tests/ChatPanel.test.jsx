@@ -27,7 +27,7 @@ describe('ChatPanel', () => {
   test('shows welcome message when no messages', () => {
     render(<ChatPanel isOpen={true} onToggle={() => {}} />);
     expect(screen.getByText(/Hi! I can help you find team members/)).toBeInTheDocument();
-    expect(screen.getByText(/"Who knows Kubernetes\?"/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Who knows Kubernetes\?/ })).toBeInTheDocument();
   });
 
   test('calls onToggle when toggle button clicked', () => {

@@ -19,11 +19,10 @@ function ChatPanel({ isOpen, onToggle }) {
     }
   }, [messages, currentThinking, currentToolCall]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const sendMessage = async (messageText) => {
+    if (!messageText.trim() || isLoading) return;
 
-    const userMessage = input.trim();
+    const userMessage = messageText.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
@@ -113,6 +112,15 @@ function ChatPanel({ isOpen, onToggle }) {
     }
   };
 
+  const handleSuggestionClick = (suggestion) => {
+    sendMessage(suggestion);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    sendMessage(input);
+  };
+
   if (!isOpen) {
     return (
       <button 
@@ -145,11 +153,26 @@ function ChatPanel({ isOpen, onToggle }) {
           <div className="chat-welcome">
             <p>👋 Hi! I can help you find team members by skills.</p>
             <p className="chat-suggestions">Try asking:</p>
-            <ul>
-              <li>"Who knows Kubernetes?"</li>
-              <li>"What skill gaps do we have?"</li>
-              <li>"Give me a team skills summary"</li>
-            </ul>
+            <div className="suggestion-buttons">
+              <button 
+                className="suggestion-btn"
+                onClick={() => handleSuggestionClick("Who knows Kubernetes?")}
+              >
+                Who knows Kubernetes?
+              </button>
+              <button 
+                className="suggestion-btn"
+                onClick={() => handleSuggestionClick("What skill gaps do we have?")}
+              >
+                What skill gaps do we have?
+              </button>
+              <button 
+                className="suggestion-btn"
+                onClick={() => handleSuggestionClick("Give me a team skills summary")}
+              >
+                Give me a team skills summary
+              </button>
+            </div>
           </div>
         )}
 

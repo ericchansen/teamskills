@@ -5,6 +5,8 @@ import SkillGraph from './components/SkillGraph';
 import UserProfile from './components/UserProfile';
 import ErrorBoundary from './components/ErrorBoundary';
 import ChatPanel from './components/ChatPanel';
+import DatabaseWakeOverlay from './components/DatabaseWakeOverlay';
+import useDatabaseWake from './hooks/useDatabaseWake';
 import apiFetch from './api';
 import './App.css';
 
@@ -15,14 +17,19 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [users, setUsers] = useState([]);
   const [chatOpen, setChatOpen] = useState(false);
+  
+  // Check if database is awake, wake it if needed
+  const { dbStatus, wakeMessage, retryWake } = useDatabaseWake();
 
-  // Fetch users for login dropdown
+  // Fetch users for login dropdown (only when DB is ready)
   useEffect(() => {
+    if (dbStatus !== 'ready') return;
+    
     apiFetch('/api/users')
       .then(res => res.json())
       .then(data => setUsers(data))
       .catch(err => console.error('Failed to fetch users:', err));
-  }, []);
+  }, [dbStatus]);
 
   const handleUserSelect = (userId) => {
     setSelectedUserId(userId);
@@ -42,6 +49,13 @@ function App() {
 
   return (
     <div className="app">
+      {/* Database wake overlay - shown when DB is starting up */}
+      <DatabaseWakeOverlay 
+        status={dbStatus} 
+        message={wakeMessage} 
+        onRetry={retryWake} 
+      />
+      
       <div className="data-disclaimer">
         📋 Data shown is guesstimates from Work IQ — not verified skill levels. Help improve accuracy by updating your own profile!
       </div>

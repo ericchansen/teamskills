@@ -135,6 +135,19 @@ module agent './app/agent.bicep' = {
   }
 }
 
+// Wake Function App (auto-starts PostgreSQL on demand)
+module wakeFunction './app/wake-function.bicep' = {
+  name: 'wake-function'
+  scope: rg
+  params: {
+    name: '${abbrs.webSitesFunctions}wake-${resourceToken}'
+    location: location
+    tags: union(tags, { 'azd-service-name': 'wake-function' })
+    postgresServerResourceId: postgres.outputs.id
+    resourceToken: resourceToken
+  }
+}
+
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerApps.outputs.registryLoginServer
 output AZURE_CONTAINER_REGISTRY_NAME string = containerApps.outputs.registryName
 output AZURE_CONTAINER_ENVIRONMENT_NAME string = containerApps.outputs.environmentName
@@ -144,3 +157,4 @@ output AGENT_URI string = agent.outputs.uri
 output POSTGRES_HOST string = postgres.outputs.fqdn
 output AZURE_OPENAI_ENDPOINT string = openai.outputs.endpoint
 output AZURE_OPENAI_DEPLOYMENT_NAME string = openAiModelDeploymentName
+output WAKE_FUNCTION_URI string = wakeFunction.outputs.uri
