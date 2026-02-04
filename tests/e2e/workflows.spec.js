@@ -1,14 +1,22 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Add Skill Workflow', () => {
-  test('should complete full add skill workflow', async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
     await page.goto('/');
-
-    // Navigate to user profile
-    await expect(page.locator('.matrix-table')).toBeVisible();
-    await page.locator('.user-name').first().click();
+    
+    // Login first - required to add skills
+    await page.click('text=Login');
+    await expect(page.locator('.login-modal')).toBeVisible();
+    
+    // Select first user from dropdown
+    await page.locator('.login-modal select').selectOption({ index: 1 });
+    
+    // Wait for profile to load (login navigates to profile)
     await expect(page.locator('.user-profile')).toBeVisible();
+    await expect(page.locator('.own-profile-badge')).toBeVisible();
+  });
 
+  test('should complete full add skill workflow', async ({ page }) => {
     // Get initial skill count
     const initialSkillCount = await page.locator('.skill-item').count();
 
@@ -43,15 +51,6 @@ test.describe('Add Skill Workflow', () => {
   });
 
   test('should update proficiency and verify in matrix', async ({ page }) => {
-    await page.goto('/');
-
-    // Remember first user's name
-    const firstUserName = await page.locator('.user-name').first().textContent();
-
-    // Navigate to profile
-    await page.locator('.user-name').first().click();
-    await expect(page.locator('.user-profile')).toBeVisible();
-
     // Find first skill and change proficiency
     const firstSelect = page.locator('.proficiency-select').first();
     if (await firstSelect.isVisible()) {
@@ -59,7 +58,7 @@ test.describe('Add Skill Workflow', () => {
       await page.waitForTimeout(1000);
 
       // Navigate back to matrix
-      await page.click('text=Matrix View');
+      await page.click('text=Back to Matrix');
       await expect(page.locator('.skill-matrix')).toBeVisible();
 
       // The update should persist (verify matrix loads without error)

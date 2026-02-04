@@ -217,6 +217,17 @@
   padding: 2rem;
   overflow: auto;
   background: #0f0f1a;
+  transition: margin-right 0.3s ease;
+}
+
+.app-main.chat-open {
+  margin-right: 380px;
+}
+
+@media (max-width: 768px) {
+  .app-main.chat-open {
+    margin-right: 0;
+  }
 }
 
 .app-main.graph-view {

@@ -35,8 +35,33 @@ test.describe('User Profile', () => {
     await expect(badges.first()).toBeVisible();
   });
 
-  test('should open add skill modal', async ({ page }) => {
-    // Click Add Skill button
+  test('should navigate back to matrix view', async ({ page }) => {
+    // Click Back to Matrix button
+    await page.click('text=Back to Matrix');
+
+    // Check that matrix is visible
+    await expect(page.locator('.skill-matrix')).toBeVisible();
+  });
+});
+
+test.describe('User Profile - Logged In', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    
+    // Login first
+    await page.click('text=Login');
+    await expect(page.locator('.login-modal')).toBeVisible();
+    
+    // Select first user from dropdown
+    await page.locator('.login-modal select').selectOption({ index: 1 });
+    
+    // Wait for profile to load (login navigates to profile)
+    await expect(page.locator('.user-profile')).toBeVisible();
+    await expect(page.locator('.own-profile-badge')).toBeVisible();
+  });
+
+  test('should open add skill modal when logged in', async ({ page }) => {
+    // Click Add Skill button (only visible when logged in and on own profile)
     await page.click('text=Add Skill');
 
     // Check modal is visible
@@ -104,14 +129,5 @@ test.describe('User Profile', () => {
 
     // Modal should be closed
     await expect(page.locator('.modal-overlay')).not.toBeVisible();
-  });
-
-  test('should navigate back to matrix view', async ({ page }) => {
-    // Click Matrix View button
-    await page.click('text=Matrix View');
-
-    // Check that matrix is visible
-    await expect(page.locator('.skill-matrix')).toBeVisible();
-    await expect(page.locator('button.active')).toContainText('Matrix View');
   });
 });

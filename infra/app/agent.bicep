@@ -20,6 +20,15 @@ param postgresHost string
 @secure()
 param postgresPassword string
 
+@description('Azure OpenAI endpoint')
+param azureOpenAiEndpoint string
+
+@description('Azure OpenAI deployment name')
+param azureOpenAiDeploymentName string
+
+@description('Azure OpenAI resource ID for RBAC')
+param azureOpenAiResourceId string = ''
+
 @description('Frontend URL for CORS')
 param frontendUrl string = '*'
 
@@ -31,21 +40,24 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' e
   name: containerRegistryName
 }
 
-resource backend 'Microsoft.App/containerApps@2023-05-01' = {
+resource agent 'Microsoft.App/containerApps@2023-05-01' = {
   name: name
   location: location
   tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     managedEnvironmentId: containerAppsEnvironment.id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
         external: true
-        targetPort: 3001
+        targetPort: 8000
         transport: 'http'
         corsPolicy: {
           allowedOrigins: [frontendUrl]
-          allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+          allowedMethods: ['GET', 'POST', 'OPTIONS']
           allowedHeaders: ['Content-Type', 'Authorization']
         }
       }
@@ -70,44 +82,24 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
     template: {
       containers: [
         {
-          name: 'backend'
-          image: '${containerRegistry.properties.loginServer}/backend:latest'
+          name: 'agent'
+          image: '${containerRegistry.properties.loginServer}/agent:latest'
           env: [
             {
-              name: 'NODE_ENV'
-              value: 'production'
+              name: 'AZURE_OPENAI_ENDPOINT'
+              value: azureOpenAiEndpoint
+            }
+            {
+              name: 'AZURE_OPENAI_DEPLOYMENT_NAME'
+              value: azureOpenAiDeploymentName
+            }
+            {
+              name: 'DATABASE_URL'
+              value: 'postgresql://pgadmin:${postgresPassword}@${postgresHost}:5432/teamskills?sslmode=require'
             }
             {
               name: 'PORT'
-              value: '3001'
-            }
-            {
-              name: 'FRONTEND_URL'
-              value: frontendUrl
-            }
-            {
-              name: 'PGHOST'
-              value: postgresHost
-            }
-            {
-              name: 'PGPORT'
-              value: '5432'
-            }
-            {
-              name: 'PGUSER'
-              value: 'pgadmin'
-            }
-            {
-              name: 'PGPASSWORD'
-              secretRef: 'postgres-password'
-            }
-            {
-              name: 'PGDATABASE'
-              value: 'teamskills'
-            }
-            {
-              name: 'PGSSLMODE'
-              value: 'require'
+              value: '8000'
             }
           ]
           resources: {
@@ -124,5 +116,25 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
   }
 }
 
-output uri string = 'https://${backend.properties.configuration.ingress.fqdn}'
-output name string = backend.name
+output uri string = 'https://${agent.properties.configuration.ingress.fqdn}'
+output name string = agent.name
+output principalId string = agent.identity.principalId
+
+// Role assignment for agent to call Azure OpenAI
+// Built-in role: Cognitive Services OpenAI User (5e0bd9bd-7b93-4f28-af87-19fc36ad61bd)
+var cognitiveServicesOpenAiUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+
+resource openAiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(azureOpenAiResourceId)) {
+  name: guid(agent.id, azureOpenAiResourceId, cognitiveServicesOpenAiUserRoleId)
+  scope: openAiResource
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesOpenAiUserRoleId)
+    principalId: agent.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Reference to existing OpenAI resource for scoping
+resource openAiResource 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = if (!empty(azureOpenAiResourceId)) {
+  name: last(split(azureOpenAiResourceId, '/'))
+}

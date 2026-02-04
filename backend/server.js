@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ca-frontend-teamskills.greenwater-c5983efd.centralus.azurecontainerapps.io';
+const FRONTEND_URL = process.env.FRONTEND_URL || '*';
 app.use(cors({
   origin: FRONTEND_URL,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
