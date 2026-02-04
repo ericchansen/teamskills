@@ -22,8 +22,14 @@ services:
       buildArgs:
         - VITE_API_URL=${BACKEND_URI}
         - VITE_AGENT_URL=${AGENT_URI}
+        - VITE_WAKE_FUNCTION_URL=${WAKE_FUNCTION_URI}
 
   agent:
     project: ./agent
     language: python
     host: containerapp
+
+  wake-function:
+    project: ./wake-function
+    language: js
+    host: function
