@@ -9,19 +9,19 @@ export default defineConfig({
   reporter: 'html',
   
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
 
   projects: [
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: 'msedge',
+      use: { ...devices['Desktop Edge'], channel: 'msedge' },
     },
   ],
 
-  webServer: {
+  webServer: process.env.BASE_URL ? undefined : {
     command: 'npm run docker:up',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
