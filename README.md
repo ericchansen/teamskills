@@ -21,7 +21,7 @@ A web application for tracking team member skills and proficiency levels across 
 - **Backend**: Node.js + Express
 - **Agent**: Python + Microsoft Agent Framework
 - **Database**: PostgreSQL
-- **AI Model**: Azure OpenAI (GPT-4o)
+- **AI Model**: Azure AI Services (GPT-4o)
 
 ## 🚀 Quick Start with Docker (Recommended)
 
@@ -46,13 +46,13 @@ Docker automatically:
 
 ### Chat Assistant Setup
 
-The AI chat assistant requires Azure OpenAI credentials. Create a `.env` file:
+The AI chat assistant requires Azure AI Services credentials. Create a `.env` file:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your Azure OpenAI settings:
+Edit `.env` with your Azure AI Services settings:
 ```
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
@@ -232,10 +232,10 @@ azd up
 ```
 
 This will:
-- Create a resource group with PostgreSQL, Container Registry, Container Apps, and Azure OpenAI
+- Create a resource group with PostgreSQL, Container Registry, Container Apps, and Azure AI Services
 - Build and push Docker images to the registry
 - Deploy all three services (backend, frontend, agent)
-- Configure RBAC for the agent to call Azure OpenAI
+- Configure RBAC for the agent to call Azure AI Services
 
 ### Tear Down Azure Resources
 
