@@ -7,7 +7,7 @@ const pool = new Pool({
   database: process.env.PGDATABASE || process.env.DB_NAME || 'teamskills',
   password: process.env.PGPASSWORD || process.env.DB_PASSWORD || 'postgres',
   port: process.env.PGPORT || process.env.DB_PORT || 5432,
-  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false,
+  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: true } : false,
 });
 
 pool.on('error', (err) => {

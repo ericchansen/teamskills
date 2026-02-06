@@ -22,6 +22,9 @@ param postgresServerResourceId string
 @description('Log Analytics Workspace ID for diagnostics')
 param logAnalyticsWorkspaceId string = ''
 
+@description('Allowed CORS origins (frontend URL)')
+param allowedOrigins array = []
+
 // Storage Account for Function App - use common tags (no azd-service-name)
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -93,9 +96,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         }
       ]
       cors: {
-        allowedOrigins: [
-          '*'
-        ]
+        allowedOrigins: empty(allowedOrigins) ? [] : allowedOrigins
       }
     }
   }
