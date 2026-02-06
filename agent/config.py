@@ -24,6 +24,14 @@ class Config:
     # Rate limiting
     rate_limit: str = "10/minute"
     
+    # Environment
+    environment: str = "development"
+    
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production."""
+        return self.environment.lower() in ("production", "prod")
+    
     @classmethod
     def from_env(cls) -> "Config":
         """Load configuration from environment variables."""
@@ -35,6 +43,7 @@ class Config:
             port=int(os.environ.get("PORT", "8000")),
             frontend_url=os.environ.get("FRONTEND_URL", ""),
             rate_limit=os.environ.get("RATE_LIMIT", "10/minute"),
+            environment=os.environ.get("ENVIRONMENT", "development"),
         )
 
 
