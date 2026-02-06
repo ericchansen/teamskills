@@ -68,11 +68,19 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down agent service...")
 
 
+# Disable docs in production
+docs_url = None if config.is_production else "/docs"
+redoc_url = None if config.is_production else "/redoc"
+openapi_url = None if config.is_production else "/openapi.json"
+
 app = FastAPI(
     title="Team Skills Agent",
     description="AI-powered chat assistant for finding team members by skills",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
 )
 
 # Rate limiting
@@ -174,7 +182,7 @@ async def chat_stream(request: ChatRequest, req: Request):
             logger.error(f"Stream error: {e}")
             yield {
                 "event": "error",
-                "data": json.dumps({"type": "error", "content": str(e)}),
+                "data": json.dumps({"type": "error", "content": "An error occurred processing your request."}),
             }
     
     return EventSourceResponse(event_generator())

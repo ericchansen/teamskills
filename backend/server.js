@@ -1,9 +1,27 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Trust proxy for correct client IP behind load balancers
+app.set('trust proxy', 1);
+
+// Security headers
+app.use(helmet());
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: process.env.RATE_LIMIT_MAX || 100, // 100 requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+app.use('/api/', limiter);
 
 // Middleware
 const FRONTEND_URL = process.env.FRONTEND_URL;
@@ -42,7 +60,12 @@ app.get('/health', (req, res) => {
 
 // Error handling middleware
 app.use((err, _req, res, _next) => {
-  console.error(err.stack);
+  // Log full error for debugging (server-side only)
+  console.error('Server error:', err.message);
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(err.stack);
+  }
+  // Return generic message to client
   res.status(500).json({ error: 'Something went wrong!' });
 });
 

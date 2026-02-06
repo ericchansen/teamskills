@@ -106,7 +106,7 @@ class SkillsAgent:
             return result.text if hasattr(result, 'text') else str(result)
         except Exception as e:
             logger.error(f"Agent run failed: {e}")
-            return f"I encountered an error processing your request: {str(e)}"
+            return "I encountered an error processing your request. Please try again."
     
     async def run_stream(self, message: str):
         """Run the agent with streaming response.
