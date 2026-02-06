@@ -18,6 +18,12 @@ class Config:
     host: str = "0.0.0.0"
     port: int = 8000
     
+    # CORS settings
+    frontend_url: str = ""
+    
+    # Rate limiting
+    rate_limit: str = "10/minute"
+    
     @classmethod
     def from_env(cls) -> "Config":
         """Load configuration from environment variables."""
@@ -27,6 +33,8 @@ class Config:
             database_url=os.environ.get("DATABASE_URL", ""),
             host=os.environ.get("HOST", "0.0.0.0"),
             port=int(os.environ.get("PORT", "8000")),
+            frontend_url=os.environ.get("FRONTEND_URL", ""),
+            rate_limit=os.environ.get("RATE_LIMIT", "10/minute"),
         )
 
 

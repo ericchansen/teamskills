@@ -6,9 +6,15 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-const FRONTEND_URL = process.env.FRONTEND_URL || '*';
+const FRONTEND_URL = process.env.FRONTEND_URL;
+if (!FRONTEND_URL || FRONTEND_URL === '*') {
+  console.warn('WARNING: FRONTEND_URL not set or is wildcard. CORS will be restrictive in production.');
+}
+const corsOrigin = process.env.NODE_ENV === 'production' && (!FRONTEND_URL || FRONTEND_URL === '*')
+  ? false  // Reject all cross-origin requests if not configured in production
+  : FRONTEND_URL || true;  // Allow all in development if not set
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: corsOrigin,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));

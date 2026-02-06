@@ -8,9 +8,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sse_starlette.sse import EventSourceResponse
 
 from config import config
@@ -19,6 +22,9 @@ from agent import skills_agent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 
 class ChatRequest(BaseModel):
@@ -69,13 +75,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS configuration
+FRONTEND_URL = config.frontend_url if hasattr(config, 'frontend_url') else None
+if not FRONTEND_URL or FRONTEND_URL == "*":
+    logger.warning("FRONTEND_URL not set or is wildcard. Using restrictive CORS.")
+    allowed_origins = []  # Reject cross-origin in production if not configured
+else:
+    allowed_origins = [FRONTEND_URL]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -101,7 +117,8 @@ async def root():
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@limiter.limit(config.rate_limit)
+async def chat(request: ChatRequest, req: Request):
     """Non-streaming chat endpoint.
     
     Send a message and receive a complete response.
@@ -124,7 +141,8 @@ async def chat(request: ChatRequest):
 
 
 @app.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+@limiter.limit(config.rate_limit)
+async def chat_stream(request: ChatRequest, req: Request):
     """Streaming chat endpoint using Server-Sent Events.
     
     Send a message and receive streaming response with:
