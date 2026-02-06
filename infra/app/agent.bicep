@@ -101,6 +101,10 @@ resource agent 'Microsoft.App/containerApps@2023-05-01' = {
               name: 'PORT'
               value: '8000'
             }
+            {
+              name: 'FRONTEND_URL'
+              value: frontendUrl
+            }
           ]
           resources: {
             cpu: json('0.5')
