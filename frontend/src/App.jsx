@@ -61,7 +61,7 @@ function App() {
       </div>
       <header className="app-header">
         <div className="header-left">
-          <h1>🧠 Team Skills Tracker</h1>
+          <h1>Team Skills Tracker</h1>
           <span className="header-subtitle" title="Find help fast: Click any skill header to see experts. Use search to filter. Log in to update your own skills.">
             Find experts • Track skills • Swarm smart
           </span>
