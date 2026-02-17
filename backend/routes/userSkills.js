@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { requireAuth, requireOwnership } = require('../auth');
 
-// GET all skills for a user
+// GET all skills for a user (public - no auth required)
 router.get('/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -22,8 +23,8 @@ router.get('/:userId', async (req, res) => {
   }
 });
 
-// PUT update or create user skill
-router.put('/', async (req, res) => {
+// PUT update or create user skill (auth required, own data only)
+router.put('/', requireAuth, requireOwnership(req => req.body.user_id), async (req, res) => {
   try {
     const { user_id, skill_id, proficiency_level, notes } = req.body;
     
@@ -47,8 +48,8 @@ router.put('/', async (req, res) => {
   }
 });
 
-// DELETE user skill
-router.delete('/', async (req, res) => {
+// DELETE user skill (auth required, own data only)
+router.delete('/', requireAuth, requireOwnership(req => req.body.user_id), async (req, res) => {
   try {
     const { user_id, skill_id } = req.body;
     const result = await db.query(
