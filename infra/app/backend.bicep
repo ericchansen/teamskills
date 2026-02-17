@@ -23,6 +23,12 @@ param postgresPassword string
 @description('Frontend URL for CORS')
 param frontendUrl string = '*'
 
+@description('Microsoft Entra ID Client ID (optional)')
+param azureAdClientId string = ''
+
+@description('Microsoft Entra ID Tenant ID (optional)')
+param azureAdTenantId string = ''
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -108,6 +114,14 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'PGSSLMODE'
               value: 'require'
+            }
+            {
+              name: 'AZURE_AD_CLIENT_ID'
+              value: azureAdClientId
+            }
+            {
+              name: 'AZURE_AD_TENANT_ID'
+              value: azureAdTenantId
             }
           ]
           resources: {
