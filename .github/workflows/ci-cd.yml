@@ -121,6 +121,8 @@ jobs:
         run: |
           docker build -f Dockerfile.frontend \
             --build-arg VITE_API_URL=${{ env.BACKEND_API_URL }} \
+            --build-arg VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID || '' }} \
+            --build-arg VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID || vars.AZURE_TENANT_ID || '' }} \
             -t ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }} .
 
       - name: Push frontend image
