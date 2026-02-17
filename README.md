@@ -206,10 +206,23 @@ The application includes 8 test users with diverse skill profiles across differe
 ## Future Enhancements
 
 - Export/reporting features (Excel, PDF)
-- Authentication and authorization
 - Skill endorsements/verification
 - Learning resource links
 - MCP PostgreSQL integration for advanced queries
+- Team filtering/labels for users
+
+## Authentication
+
+The app supports Microsoft Entra ID (Azure AD) authentication. When configured, users can sign in with their Microsoft accounts and edit their own skill profiles.
+
+See [docs/authentication.md](docs/authentication.md) for setup instructions.
+
+**Quick summary:**
+- Register an app in Microsoft Entra ID
+- Set `AZURE_AD_CLIENT_ID` and `AZURE_AD_TENANT_ID` environment variables
+- Users are matched by email or auto-created on first login
+
+Without authentication configured, the app runs in demo mode with a simple user picker.
 
 ## PR Preview Environments
 
