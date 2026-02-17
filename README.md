@@ -211,6 +211,33 @@ The application includes 8 test users with diverse skill profiles across differe
 - Learning resource links
 - MCP PostgreSQL integration for advanced queries
 
+## PR Preview Environments
+
+Every pull request automatically gets an isolated staging environment for review.
+
+### How It Works
+
+1. **Open a PR** → GitHub Actions deploys a staging environment
+2. **Bot comments** on the PR with frontend and backend URLs
+3. **Push updates** → Environment is redeployed with latest changes
+4. **Close/merge PR** → Environment is automatically deleted
+
+### Staging Environment Details
+
+Each PR gets:
+- Isolated Container Apps (backend + frontend)
+- Dedicated PostgreSQL database with demo data
+- Unique URLs: `https://ca-frontend-pr{number}.*.azurecontainerapps.io`
+
+### Cost Optimization
+
+- Uses cheapest PostgreSQL SKU (B1ms Burstable)
+- Container Apps scale to zero when idle
+- Resources deleted automatically on PR close
+- Shares production ACR to avoid duplicate registry costs
+
+---
+
 ## Azure Deployment
 
 This project can be deployed to Azure using the Azure Developer CLI (azd).
