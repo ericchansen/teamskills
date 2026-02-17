@@ -104,10 +104,23 @@ async function findOrCreateUser(claims) {
 }
 
 /**
+ * Check if Entra ID authentication is configured
+ */
+function isAuthConfigured() {
+  return !!(process.env.AZURE_AD_CLIENT_ID && process.env.AZURE_AD_TENANT_ID);
+}
+
+/**
  * Required authentication middleware
- * Rejects requests without valid token
+ * Rejects requests without valid token when auth is configured.
+ * Passes through when auth is not configured (demo mode).
  */
 async function requireAuth(req, res, next) {
+  if (!isAuthConfigured()) {
+    // Auth not configured — allow all requests (demo mode)
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -159,10 +172,15 @@ async function optionalAuth(req, res, next) {
 
 /**
  * Ownership check middleware factory
- * Ensures user can only modify their own resources
+ * Ensures user can only modify their own resources.
+ * Passes through when auth is not configured (demo mode).
  */
 function requireOwnership(getUserIdFromRequest) {
   return (req, res, next) => {
+    if (!isAuthConfigured()) {
+      return next();
+    }
+
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -182,5 +200,6 @@ module.exports = {
   optionalAuth,
   requireOwnership,
   verifyToken,
-  findOrCreateUser
+  findOrCreateUser,
+  isAuthConfigured
 };
