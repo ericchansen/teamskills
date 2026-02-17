@@ -38,7 +38,6 @@ services:
       - "3001:3001"
     volumes:
       - ./backend:/app/backend
-      - /app/node_modules
     depends_on:
       db:
         condition: service_healthy
@@ -47,8 +46,8 @@ services:
   # Agent Service (Chat Assistant)
   agent:
     build:
-      context: ./agent
-      dockerfile: ../Dockerfile.agent
+      context: .
+      dockerfile: Dockerfile.agent
     container_name: teamskills-agent
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/teamskills
