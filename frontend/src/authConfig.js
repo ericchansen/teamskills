@@ -17,7 +17,7 @@ export const msalConfig = {
   auth: {
     clientId,
     authority: 'https://login.microsoftonline.com/organizations',
-    redirectUri: `${window.location.origin}/redirect.html`,
+    redirectUri: window.location.origin,
     postLogoutRedirectUri: window.location.origin,
     navigateToLoginRequestUrl: true
   },
