@@ -10,3 +10,6 @@ build/
 
 # Team data (real names/emails - not for source control)
 database/seed-team.sql
+
+# Local Docker overrides
+docker-compose.override.yml
