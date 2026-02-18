@@ -7,9 +7,10 @@ A web application for tracking team member skills and proficiency levels across 
 - **Skills Matrix View**: Visual table showing all team members and their skills
 - **User Profiles**: Detailed view of individual skills with easy editing
 - **Proficiency Levels**: Microsoft's L100-L400 scale with color coding
-  - L100 (Red): Awareness - aware of the technology
-  - L200 (Orange): Conversant - can discuss potential and use cases
-  - L300 (Blue): Practitioner - hands-on experience, can speak competently
+  - L100 (Red): Foundational - understands core concepts; applies learning with guidance
+  - L200 (Orange): Intermediate - applies skills in standard scenarios with growing independence
+  - L300 (Blue): Advanced - solves complex, ambiguous problems; coaches peers
+  - L400 (Green): Expert - recognized authority; shapes best practices and mentors others
   - L400 (Green): Expert - deep expertise, can lead workshops
 - **Skill Categories**: Organized by Azure Compute, Data, AI, Security, Networking, DevOps, Soft Skills, and Use Cases
 - **Easy Skill Management**: Quick add/edit/delete with autocomplete

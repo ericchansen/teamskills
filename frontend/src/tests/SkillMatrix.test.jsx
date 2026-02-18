@@ -88,9 +88,9 @@ describe('SkillMatrix', () => {
       expect(screen.getByText('Proficiency Levels:')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('L100 - Awareness')).toBeInTheDocument();
-    expect(screen.getByText('L200 - Conversant')).toBeInTheDocument();
-    expect(screen.getByText('L300 - Practitioner')).toBeInTheDocument();
+    expect(screen.getByText('L100 - Foundational')).toBeInTheDocument();
+    expect(screen.getByText('L200 - Intermediate')).toBeInTheDocument();
+    expect(screen.getByText('L300 - Advanced')).toBeInTheDocument();
     expect(screen.getByText('L400 - Expert')).toBeInTheDocument();
   });
 

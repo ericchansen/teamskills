@@ -180,9 +180,9 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
                             onChange={(e) => handleUpdateProficiency(skill.skill_id, e.target.value)}
                             className="proficiency-select"
                           >
-                            <option value="L100">L100 - Awareness</option>
-                            <option value="L200">L200 - Conversant</option>
-                            <option value="L300">L300 - Practitioner</option>
+                            <option value="L100">L100 - Foundational</option>
+                            <option value="L200">L200 - Intermediate</option>
+                            <option value="L300">L300 - Advanced</option>
                             <option value="L400">L400 - Expert</option>
                           </select>
                           <button 
