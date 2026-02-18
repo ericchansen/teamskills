@@ -56,7 +56,8 @@ export const msalConfig = {
  * Scopes for API access
  */
 export const loginRequest = {
-  scopes: clientId ? [`api://${clientId}/access_as_user`] : []
+  scopes: clientId ? [`api://${clientId}/access_as_user`] : [],
+  redirectUri: `${window.location.origin}/redirect.html`
 };
 
 /**
