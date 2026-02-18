@@ -6,11 +6,15 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    entra_oid VARCHAR(36),  -- Microsoft Entra ID object ID (GUID)
     role VARCHAR(100),
     team VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Index for fast Entra ID lookups
+CREATE INDEX idx_users_entra_oid ON users(entra_oid) WHERE entra_oid IS NOT NULL;
 
 -- Skill categories table (e.g., "Azure Services", "Soft Skills", "Use Cases")
 CREATE TABLE skill_categories (

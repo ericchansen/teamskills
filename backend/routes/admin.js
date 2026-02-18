@@ -38,11 +38,14 @@ router.post('/init', async (req, res) => {
           id SERIAL PRIMARY KEY,
           name VARCHAR(255) NOT NULL,
           email VARCHAR(255) UNIQUE NOT NULL,
+          entra_oid VARCHAR(36),
           role VARCHAR(100),
           team VARCHAR(100),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE INDEX IF NOT EXISTS idx_users_entra_oid ON users(entra_oid) WHERE entra_oid IS NOT NULL;
 
       CREATE TABLE IF NOT EXISTS skill_categories (
           id SERIAL PRIMARY KEY,

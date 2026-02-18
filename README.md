@@ -206,10 +206,50 @@ The application includes 8 test users with diverse skill profiles across differe
 ## Future Enhancements
 
 - Export/reporting features (Excel, PDF)
-- Authentication and authorization
 - Skill endorsements/verification
 - Learning resource links
 - MCP PostgreSQL integration for advanced queries
+- Team filtering/labels for users
+
+## Authentication
+
+The app supports Microsoft Entra ID (Azure AD) authentication. When configured, users can sign in with their Microsoft accounts and edit their own skill profiles.
+
+See [docs/authentication.md](docs/authentication.md) for setup instructions.
+
+**Quick summary:**
+- Register an app in Microsoft Entra ID
+- Set `AZURE_AD_CLIENT_ID` and `AZURE_AD_TENANT_ID` environment variables
+- Users are matched by email or auto-created on first login
+
+Without authentication configured, the app runs in demo mode with a simple user picker.
+
+## PR Preview Environments
+
+Every pull request automatically gets an isolated staging environment for review.
+
+### How It Works
+
+1. **Open a PR** → GitHub Actions deploys a staging environment
+2. **Bot comments** on the PR with frontend and backend URLs
+3. **Push updates** → Environment is redeployed with latest changes
+4. **Close/merge PR** → Environment is automatically deleted
+
+### Staging Environment Details
+
+Each PR gets:
+- Isolated Container Apps (backend + frontend)
+- Dedicated PostgreSQL database with demo data
+- Unique URLs: `https://ca-frontend-pr{number}.*.azurecontainerapps.io`
+
+### Cost Optimization
+
+- Uses cheapest PostgreSQL SKU (B1ms Burstable)
+- Container Apps scale to zero when idle
+- Resources deleted automatically on PR close
+- Shares production ACR to avoid duplicate registry costs
+
+---
 
 ## Azure Deployment
 

@@ -7,21 +7,35 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ChatPanel from './components/ChatPanel';
 import DatabaseWakeOverlay from './components/DatabaseWakeOverlay';
 import useDatabaseWake from './hooks/useDatabaseWake';
+import useAuth from './hooks/useAuth';
 import apiFetch from './api';
 import './App.css';
 
 function App() {
   const [view, setView] = useState('matrix');
   const [selectedUserId, setSelectedUserId] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null); // Logged in user
-  const [showLogin, setShowLogin] = useState(false);
+  const [showDemoLogin, setShowDemoLogin] = useState(false);
+  const [demoUser, setDemoUser] = useState(null); // Fallback demo login
   const [users, setUsers] = useState([]);
   const [chatOpen, setChatOpen] = useState(false);
+  
+  // Real authentication via MSAL
+  const { 
+    isAuthenticated, 
+    isAuthAvailable, 
+    isLoading: authLoading,
+    user: authUser, 
+    login, 
+    logout 
+  } = useAuth();
   
   // Check if database is awake, wake it if needed
   const { dbStatus, wakeMessage, retryWake } = useDatabaseWake();
 
-  // Fetch users for login dropdown (only when DB is ready)
+  // Current user is either authenticated user or demo user
+  const currentUser = authUser || demoUser;
+
+  // Fetch users for demo login dropdown (only when DB is ready)
   useEffect(() => {
     if (dbStatus !== 'ready') return;
     
@@ -36,15 +50,27 @@ function App() {
     setView('profile');
   };
 
-  const handleLogin = (userId) => {
-    setCurrentUser(users.find(u => u.id === parseInt(userId)));
+  // Demo login (fallback when auth not configured)
+  const handleDemoLogin = (userId) => {
+    setDemoUser(users.find(u => u.id === parseInt(userId)));
     setSelectedUserId(parseInt(userId));
-    setShowLogin(false);
+    setShowDemoLogin(false);
     setView('profile');
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleLogout = async () => {
+    if (isAuthenticated) {
+      await logout();
+    }
+    setDemoUser(null);
+  };
+
+  const handleLogin = () => {
+    if (isAuthAvailable) {
+      login();
+    } else {
+      setShowDemoLogin(true);
+    }
   };
 
   return (
@@ -109,24 +135,25 @@ function App() {
           ) : (
             <button 
               className="login-btn"
-              onClick={() => setShowLogin(true)}
-              title="Log in to edit your skills"
+              onClick={handleLogin}
+              disabled={authLoading}
+              title={isAuthAvailable ? "Sign in with Microsoft" : "Log in to edit your skills"}
             >
-              <span className="btn-icon">🔐</span>
-              Login
+              <span className="btn-icon">{isAuthAvailable ? '🔑' : '🔐'}</span>
+              {authLoading ? 'Loading...' : (isAuthAvailable ? 'Sign in' : 'Demo Login')}
             </button>
           )}
         </nav>
       </header>
 
-      {/* Login Modal */}
-      {showLogin && (
-        <div className="login-modal-overlay" onClick={() => setShowLogin(false)}>
+      {/* Demo Login Modal (fallback when auth not configured) */}
+      {showDemoLogin && (
+        <div className="login-modal-overlay" onClick={() => setShowDemoLogin(false)}>
           <div className="login-modal" onClick={e => e.stopPropagation()}>
-            <h2>Login</h2>
-            <p className="login-disclaimer">⚠️ This is a demo — no real authentication. Just pick a name to simulate being logged in.</p>
+            <h2>Demo Login</h2>
+            <p className="login-disclaimer">⚠️ Real authentication is not configured. Pick a name to simulate being logged in.</p>
             <select 
-              onChange={(e) => e.target.value && handleLogin(e.target.value)}
+              onChange={(e) => e.target.value && handleDemoLogin(e.target.value)}
               defaultValue=""
             >
               <option value="" disabled>Select your name...</option>
@@ -134,7 +161,7 @@ function App() {
                 <option key={user.id} value={user.id}>{user.name}</option>
               ))}
             </select>
-            <button className="cancel-btn" onClick={() => setShowLogin(false)}>Cancel</button>
+            <button className="cancel-btn" onClick={() => setShowDemoLogin(false)}>Cancel</button>
           </div>
         </div>
       )}
