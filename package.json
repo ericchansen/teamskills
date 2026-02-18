@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:all": "npm run test && npm run test:e2e",
-    "test:docker": "docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit"
+    "test:docker": "docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -40,7 +41,14 @@
     "@types/supertest": "^6.0.3",
     "eslint": "^9.18.0",
     "globals": "^15.14.0",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
+    "lint-staged": "^16.2.7",
     "supertest": "^7.2.2"
+  },
+  "lint-staged": {
+    "*.{js,mjs,ts}": [
+      "eslint --fix"
+    ]
   }
 }
