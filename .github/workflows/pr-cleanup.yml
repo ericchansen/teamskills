@@ -5,6 +5,9 @@ on:
     types: [closed]
     branches: [master, main]
 
+env:
+  STAGING_RESOURCE_GROUP: rg-teamskills-staging
+
 jobs:
   cleanup-staging:
     name: Cleanup PR Staging Environment
@@ -16,33 +19,52 @@ jobs:
         id: setup
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
-          RESOURCE_GROUP="rg-teamskills-pr${PR_NUMBER}"
           echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
-          echo "resource_group=${RESOURCE_GROUP}" >> $GITHUB_OUTPUT
 
       - name: Log in to Azure
         uses: azure/login@v2
         with:
           creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_TENANT_ID }}"}'
 
-      - name: Check if resource group exists
-        id: check_rg
+      - name: Delete PR staging resources
+        id: cleanup
         run: |
-          if az group show --name ${{ steps.setup.outputs.resource_group }} &>/dev/null; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
+          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
+          RG="${{ env.STAGING_RESOURCE_GROUP }}"
+          DELETED=0
 
-      - name: Delete staging resource group
-        if: steps.check_rg.outputs.exists == 'true'
-        run: |
-          echo "Deleting resource group ${{ steps.setup.outputs.resource_group }}..."
-          az group delete \
-            --name ${{ steps.setup.outputs.resource_group }} \
-            --yes \
-            --no-wait
-          echo "Resource group deletion initiated (async)"
+          echo "Cleaning up staging resources for PR #${PR_NUMBER} in ${RG}..."
+
+          # Delete Container Apps first (they depend on the environment)
+          for APP in $(az containerapp list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
+            echo "Deleting Container App: ${APP}"
+            az containerapp delete -g "$RG" -n "$APP" --yes --no-wait
+            DELETED=$((DELETED + 1))
+          done
+
+          # Delete Container Apps Environment
+          for ENV in $(az containerapp env list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
+            echo "Deleting Container Apps Environment: ${ENV}"
+            az containerapp env delete -g "$RG" -n "$ENV" --yes --no-wait
+            DELETED=$((DELETED + 1))
+          done
+
+          # Delete PostgreSQL Flexible Server
+          for PG in $(az postgres flexible-server list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
+            echo "Deleting PostgreSQL server: ${PG}"
+            az postgres flexible-server delete -g "$RG" -n "$PG" --yes
+            DELETED=$((DELETED + 1))
+          done
+
+          # Delete Log Analytics Workspace
+          for LOG in $(az monitor log-analytics workspace list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
+            echo "Deleting Log Analytics workspace: ${LOG}"
+            az monitor log-analytics workspace delete -g "$RG" -n "$LOG" --yes --force
+            DELETED=$((DELETED + 1))
+          done
+
+          echo "deleted_count=${DELETED}" >> $GITHUB_OUTPUT
+          echo "Cleanup complete. Deleted ${DELETED} resources."
 
       - name: Update PR comment
         uses: actions/github-script@v7
@@ -51,8 +73,8 @@ jobs:
             const prNumber = ${{ steps.setup.outputs.pr_number }};
             const merged = ${{ github.event.pull_request.merged }};
             const status = merged ? '🎉 Merged' : '❌ Closed';
+            const deletedCount = '${{ steps.cleanup.outputs.deleted_count }}';
             
-            // Find existing staging comment
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -67,7 +89,7 @@ jobs:
             if (stagingComment) {
               const body = `🚀 **PR Staging Environment**
 
-              **Status:** 🗑️ Destroyed
+              **Status:** 🗑️ Destroyed (${deletedCount} resources removed)
 
               The staging environment for this PR has been cleaned up.
               PR was ${status.toLowerCase()}.
@@ -85,8 +107,4 @@ jobs:
         run: |
           echo "## 🗑️ PR Staging Cleanup" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.check_rg.outputs.exists }}" == "true" ]; then
-            echo "Resource group **${{ steps.setup.outputs.resource_group }}** deletion initiated." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Resource group **${{ steps.setup.outputs.resource_group }}** did not exist (already cleaned up)." >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "Deleted **${{ steps.cleanup.outputs.deleted_count }}** resources for PR #${{ steps.setup.outputs.pr_number }} from **${{ env.STAGING_RESOURCE_GROUP }}**." >> $GITHUB_STEP_SUMMARY
