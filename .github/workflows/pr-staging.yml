@@ -5,6 +5,10 @@ on:
     types: [opened, synchronize, reopened]
     branches: [master, main]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   # Production ACR to reuse (avoids duplicate registry costs)
   ACR_NAME: crgvojq4dgzbtk4
