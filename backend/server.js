@@ -46,6 +46,7 @@ const userSkillsRouter = require('./routes/userSkills');
 const matrixRouter = require('./routes/matrix');
 const adminRouter = require('./routes/admin');
 const authRouter = require('./routes/authRoutes');
+const proposalsRouter = require('./routes/proposals');
 
 app.use('/api/users', usersRouter);
 app.use('/api/skills', skillsRouter);
@@ -54,6 +55,7 @@ app.use('/api/user-skills', userSkillsRouter);
 app.use('/api/matrix', matrixRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/proposals', proposalsRouter);
 
 // Health check
 app.get('/health', (req, res) => {
