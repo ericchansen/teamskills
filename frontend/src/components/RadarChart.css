@@ -1,0 +1,97 @@
+.radar-chart {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1rem;
+}
+
+.radar-controls {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.radar-user-select label {
+  display: block;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 0.25rem;
+}
+
+.radar-user-select select {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.25rem;
+  font-size: 0.85rem;
+  min-width: 180px;
+}
+
+.radar-user-select select option:checked {
+  background: #6366f1;
+  color: #fff;
+}
+
+.radar-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.radar-options label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.radar-options select {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.radar-legend {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-dot.dashed {
+  border: 2px dashed;
+  background: transparent !important;
+  border-color: #64748b;
+}
+
+.radar-svg {
+  flex: 1;
+  min-height: 400px;
+  width: 100%;
+}

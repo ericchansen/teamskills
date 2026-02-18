@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import SkillMatrix from './components/SkillMatrix';
 import SkillGraph from './components/SkillGraph';
+import RadarChart from './components/RadarChart';
+import CoverageDashboard from './components/CoverageDashboard';
 import UserProfile from './components/UserProfile';
 import ErrorBoundary from './components/ErrorBoundary';
 import ChatPanel from './components/ChatPanel';
@@ -112,6 +114,22 @@ function App() {
               <span className="btn-icon">🕸️</span>
               Graph
             </button>
+            <button 
+              className={view === 'radar' ? 'active' : ''} 
+              onClick={() => setView('radar')}
+              title="Radar chart comparing skill profiles"
+            >
+              <span className="btn-icon">🎯</span>
+              Radar
+            </button>
+            <button 
+              className={view === 'coverage' ? 'active' : ''} 
+              onClick={() => setView('coverage')}
+              title="Skill coverage and bus factor dashboard"
+            >
+              <span className="btn-icon">📈</span>
+              Coverage
+            </button>
           </div>
           
           {/* Profile / Login */}
@@ -167,10 +185,12 @@ function App() {
         </div>
       )}
 
-      <main className={`app-main ${view === 'graph' ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
+      <main className={`app-main ${(view === 'graph' || view === 'radar' || view === 'coverage') ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
         <ErrorBoundary>
           {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} isAdmin={isAdmin} isAuthenticated={!!currentUser} />}
           {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
+          {view === 'radar' && <RadarChart onUserSelect={handleUserSelect} />}
+          {view === 'coverage' && <CoverageDashboard />}
           {view === 'profile' && (
             <>
               <button 

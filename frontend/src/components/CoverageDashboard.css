@@ -1,0 +1,60 @@
+.coverage-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1rem;
+}
+
+.coverage-controls {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.coverage-controls label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.coverage-controls select {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.coverage-legend {
+  display: flex;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.coverage-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.coverage-chart-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.coverage-svg {
+  width: 100%;
+  display: block;
+}
