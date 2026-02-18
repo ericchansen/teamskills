@@ -169,7 +169,7 @@ function App() {
 
       <main className={`app-main ${view === 'graph' ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
         <ErrorBoundary>
-          {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} isAdmin={isAdmin} />}
+          {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} isAdmin={isAdmin} isAuthenticated={!!currentUser} />}
           {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
           {view === 'profile' && (
             <>

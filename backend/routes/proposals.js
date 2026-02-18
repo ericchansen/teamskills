@@ -55,10 +55,10 @@ router.get('/', requireAuth, async (req, res) => {
         FROM skill_proposals sp
         LEFT JOIN users u ON sp.proposed_by = u.id
         LEFT JOIN skill_categories sc ON sp.category_id = sc.id
-        WHERE sp.status = $1
+        ${statusFilter !== 'all' ? 'WHERE sp.status = $1' : ''}
         ORDER BY sp.created_at DESC
       `;
-      params = [statusFilter];
+      params = statusFilter !== 'all' ? [statusFilter] : [];
     } else {
       query = `
         SELECT sp.*, sc.name as category_name

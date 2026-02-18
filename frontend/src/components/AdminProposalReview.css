@@ -1,0 +1,126 @@
+.proposal-review {
+  max-width: 560px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.proposal-section h4 {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 1rem 0 0.5rem;
+}
+
+.proposal-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0.75rem;
+  background: #1e293b;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  border-left: 3px solid #334155;
+}
+
+.proposal-card.pending {
+  border-left-color: #f59e0b;
+}
+
+.proposal-card.approved {
+  border-left-color: #22c55e;
+}
+
+.proposal-card.rejected {
+  border-left-color: #ef4444;
+}
+
+.proposal-info {
+  flex: 1;
+}
+
+.proposal-info strong {
+  display: block;
+  color: #e2e8f0;
+}
+
+.proposal-desc {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+
+.proposal-meta {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.proposal-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: 1rem;
+  flex-shrink: 0;
+}
+
+.approve-btn,
+.reject-btn {
+  padding: 0.35rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.approve-btn {
+  background: #22c55e;
+  color: #fff;
+}
+
+.approve-btn:hover {
+  background: #16a34a;
+}
+
+.reject-btn {
+  background: #334155;
+  color: #ef4444;
+}
+
+.reject-btn:hover {
+  background: #475569;
+}
+
+.status-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  margin-left: 0.5rem;
+}
+
+.status-badge.approved {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.status-badge.rejected {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.empty-text,
+.loading-text {
+  color: #64748b;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.category-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  background: #334155;
+  color: #94a3b8;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+}

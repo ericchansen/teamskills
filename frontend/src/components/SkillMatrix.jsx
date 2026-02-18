@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ProficiencyBadge from './ProficiencyBadge';
+import SkillProposalForm from './SkillProposalForm';
+import AdminProposalReview from './AdminProposalReview';
 import apiFetch from '../api';
 import './SkillMatrix.css';
 
@@ -28,7 +30,7 @@ const escapeCSV = (value) => {
   return str;
 };
 
-function SkillMatrix({ onUserSelect, isAdmin }) {
+function SkillMatrix({ onUserSelect, isAdmin, isAuthenticated }) {
   const [matrixData, setMatrixData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -38,6 +40,8 @@ function SkillMatrix({ onUserSelect, isAdmin }) {
   const [minLevel, setMinLevel] = useState('any'); // 'any', 'L100', 'L200', 'L300', 'L400'
   const [selectedSkill, setSelectedSkill] = useState(null); // For "Find Expert" popup
   const [editingCell, setEditingCell] = useState(null); // {userId, skillId} for admin editing
+  const [showProposalForm, setShowProposalForm] = useState(false);
+  const [showProposalReview, setShowProposalReview] = useState(false);
 
   useEffect(() => {
     fetchMatrixData();
@@ -279,6 +283,24 @@ function SkillMatrix({ onUserSelect, isAdmin }) {
         >
           📥 Export CSV
         </button>
+        {isAuthenticated && (
+          <button 
+            className="export-btn" 
+            onClick={() => setShowProposalForm(true)}
+            title="Suggest a new skill to be tracked"
+          >
+            💡 Suggest Skill
+          </button>
+        )}
+        {isAdmin && (
+          <button 
+            className="export-btn" 
+            onClick={() => setShowProposalReview(true)}
+            title="Review pending skill proposals"
+          >
+            📋 Proposals
+          </button>
+        )}
         <div className="filters">
           <div className="search-bar">
             <input
@@ -500,6 +522,17 @@ function SkillMatrix({ onUserSelect, isAdmin }) {
             </div>
           </div>
         </div>
+      )}
+
+      {showProposalForm && (
+        <SkillProposalForm
+          onClose={() => setShowProposalForm(false)}
+          onProposed={() => fetchMatrixData()}
+        />
+      )}
+
+      {showProposalReview && (
+        <AdminProposalReview onClose={() => setShowProposalReview(false)} />
       )}
     </div>
   );
