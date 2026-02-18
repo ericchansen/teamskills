@@ -18,7 +18,7 @@ const redirectUri = import.meta.env.VITE_REDIRECT_URI || window.location.origin;
 export const msalConfig = {
   auth: {
     clientId,
-    authority: `https://login.microsoftonline.com/${tenantId}`,
+    authority: 'https://login.microsoftonline.com/organizations',
     redirectUri,
     postLogoutRedirectUri: redirectUri,
     navigateToLoginRequestUrl: true
@@ -93,5 +93,5 @@ export async function initializeMsal() {
  * Check if authentication is configured
  */
 export function isAuthConfigured() {
-  return Boolean(clientId && tenantId && tenantId !== 'common');
+  return Boolean(clientId);
 }
