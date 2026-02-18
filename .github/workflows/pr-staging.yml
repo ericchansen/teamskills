@@ -81,6 +81,8 @@ jobs:
             acrName=${{ env.ACR_NAME }}
             acrResourceGroup=${{ env.ACR_RESOURCE_GROUP }}
             location=${{ env.LOCATION }}
+            azureAdClientId=${{ vars.AZURE_AD_CLIENT_ID || '' }}
+            azureAdTenantId=${{ vars.AZURE_AD_TENANT_ID || '' }}
           failOnStdErr: false
 
       - name: Wait for backend to be ready
