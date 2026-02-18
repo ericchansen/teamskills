@@ -242,6 +242,20 @@ Each PR gets:
 - Dedicated PostgreSQL database with demo data
 - Unique URLs: `https://ca-frontend-pr{number}.*.azurecontainerapps.io`
 
+### GitHub Environment Setup
+
+PR staging uses a separate `staging` GitHub Environment (not `production`):
+
+| GitHub Environment | Purpose | Used by |
+|---|---|---|
+| `staging` | PR preview deployments | `pr-staging.yml`, `pr-cleanup.yml` |
+| `production` | Production deployments | `ci-cd.yml` (deploy job, master only) |
+
+**Required setup:**
+1. Create a `staging` GitHub Environment in repo Settings → Environments
+2. Add the same Azure credentials (vars: `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`; secret: `AZURE_CLIENT_SECRET`)
+3. For Dependabot PR staging: also add `AZURE_CLIENT_SECRET` as a [Dependabot secret](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/configuring-access-to-private-registries-for-dependabot)
+
 ### Cost Optimization
 
 - Uses cheapest PostgreSQL SKU (B1ms Burstable)

@@ -16,7 +16,7 @@ jobs:
   cleanup-staging:
     name: Cleanup PR Staging Environment
     runs-on: ubuntu-latest
-    environment: production  # Reuse production secrets for Azure access
+    environment: staging
 
     steps:
       - name: Setup environment variables

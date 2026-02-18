@@ -20,7 +20,7 @@ jobs:
   deploy-staging:
     name: Deploy PR Staging Environment
     runs-on: ubuntu-latest
-    environment: production  # Reuse production secrets for Azure access
+    environment: staging
     
     outputs:
       frontend_url: ${{ steps.deploy.outputs.frontendUrl }}
