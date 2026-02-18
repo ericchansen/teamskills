@@ -9,7 +9,6 @@ import { PublicClientApplication, LogLevel } from '@azure/msal-browser';
 
 // Default configuration (can be overridden by backend config)
 const clientId = import.meta.env.VITE_AZURE_AD_CLIENT_ID || '';
-const tenantId = import.meta.env.VITE_AZURE_AD_TENANT_ID || 'common';
 const redirectUri = import.meta.env.VITE_REDIRECT_URI || window.location.origin;
 
 /**
