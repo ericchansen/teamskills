@@ -38,7 +38,7 @@ function getKey(header, callback) {
 function verifyToken(token) {
   return new Promise((resolve, reject) => {
     const options = {
-      audience: process.env.AZURE_AD_CLIENT_ID,
+      audience: [`api://${process.env.AZURE_AD_CLIENT_ID}`, process.env.AZURE_AD_CLIENT_ID],
       issuer: [
         `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
         `https://sts.windows.net/${process.env.AZURE_AD_TENANT_ID}/`
