@@ -24,6 +24,7 @@ function App() {
     isAuthenticated, 
     isAuthAvailable, 
     isLoading: authLoading,
+    isAdmin,
     user: authUser, 
     login, 
     logout 
@@ -168,7 +169,7 @@ function App() {
 
       <main className={`app-main ${view === 'graph' ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
         <ErrorBoundary>
-          {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} />}
+          {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} isAdmin={isAdmin} />}
           {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
           {view === 'profile' && (
             <>

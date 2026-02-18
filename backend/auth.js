@@ -169,7 +169,7 @@ async function optionalAuth(req, res, next) {
 
 /**
  * Ownership check middleware factory
- * Ensures user can only modify their own resources.
+ * Ensures user can only modify their own resources (unless admin).
  * Passes through when auth is not configured (demo mode).
  */
 function requireOwnership(getUserIdFromRequest) {
@@ -182,6 +182,11 @@ function requireOwnership(getUserIdFromRequest) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
+    // Admins can modify any user's data
+    if (req.user.is_admin) {
+      return next();
+    }
+
     const resourceUserId = getUserIdFromRequest(req);
     
     if (req.user.id !== parseInt(resourceUserId, 10)) {
@@ -192,10 +197,32 @@ function requireOwnership(getUserIdFromRequest) {
   };
 }
 
+/**
+ * Admin-only middleware
+ * Requires the authenticated user to have is_admin = true.
+ * Passes through when auth is not configured (demo mode).
+ */
+function requireAdmin(req, res, next) {
+  if (!isAuthConfigured()) {
+    return next();
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  if (!req.user.is_admin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  next();
+}
+
 module.exports = {
   requireAuth,
   optionalAuth,
   requireOwnership,
+  requireAdmin,
   verifyToken,
   findOrCreateUser,
   isAuthConfigured

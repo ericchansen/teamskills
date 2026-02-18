@@ -9,6 +9,7 @@ CREATE TABLE users (
     entra_oid VARCHAR(36),  -- Microsoft Entra ID object ID (GUID)
     role VARCHAR(100),
     team VARCHAR(100),
+    is_admin BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

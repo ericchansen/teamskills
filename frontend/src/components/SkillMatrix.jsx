@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ProficiencyBadge from './ProficiencyBadge';
 import apiFetch from '../api';
 import './SkillMatrix.css';
@@ -28,7 +28,7 @@ const escapeCSV = (value) => {
   return str;
 };
 
-function SkillMatrix({ onUserSelect }) {
+function SkillMatrix({ onUserSelect, isAdmin }) {
   const [matrixData, setMatrixData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -37,6 +37,7 @@ function SkillMatrix({ onUserSelect }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [minLevel, setMinLevel] = useState('any'); // 'any', 'L100', 'L200', 'L300', 'L400'
   const [selectedSkill, setSelectedSkill] = useState(null); // For "Find Expert" popup
+  const [editingCell, setEditingCell] = useState(null); // {userId, skillId} for admin editing
 
   useEffect(() => {
     fetchMatrixData();
@@ -182,6 +183,35 @@ function SkillMatrix({ onUserSelect }) {
       setSelectedSkill(col);
     }
   };
+
+  // Admin: handle cell click to start editing
+  const handleCellClick = useCallback((userId, skillId, currentLevel) => {
+    if (!isAdmin || viewBy !== 'skill') return;
+    setEditingCell({ userId, skillId, currentLevel });
+  }, [isAdmin, viewBy]);
+
+  // Admin: save edited skill level
+  const handleAdminSave = useCallback(async (userId, skillId, newLevel) => {
+    setEditingCell(null);
+    try {
+      if (newLevel) {
+        await apiFetch('/api/admin/user-skills', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, skill_id: skillId, proficiency_level: newLevel }),
+        });
+      } else {
+        await apiFetch('/api/admin/user-skills', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, skill_id: skillId }),
+        });
+      }
+      fetchMatrixData();
+    } catch (err) {
+      console.error('Admin edit failed:', err);
+    }
+  }, []);
 
   // Export current matrix view to CSV
   const exportToCSV = () => {
@@ -375,9 +405,32 @@ function SkillMatrix({ onUserSelect }) {
                   const currentLevelNum = isGroupData ? avgNum : (level ? levelToNum(level) : 0);
                   const showLevel = level && currentLevelNum >= minLevelNum;
                   
+                  const isEditing = editingCell && 
+                    editingCell.userId === user.id && 
+                    editingCell.skillId === col.id && 
+                    !isGroupData;
+                  
                   return (
-                    <td key={col.id} className="skill-cell">
-                      {showLevel && (
+                    <td 
+                      key={col.id} 
+                      className={`skill-cell${isAdmin && !isGroupData ? ' admin-editable' : ''}`}
+                      onClick={() => !isEditing && !isGroupData && handleCellClick(user.id, col.id, level)}
+                    >
+                      {isEditing ? (
+                        <select
+                          className="admin-level-select"
+                          defaultValue={level || ''}
+                          autoFocus
+                          onChange={(e) => handleAdminSave(user.id, col.id, e.target.value || null)}
+                          onBlur={() => setEditingCell(null)}
+                        >
+                          <option value="">None</option>
+                          <option value="L100">L100</option>
+                          <option value="L200">L200</option>
+                          <option value="L300">L300</option>
+                          <option value="L400">L400</option>
+                        </select>
+                      ) : showLevel ? (
                         isGroupData ? (
                           <span 
                             className={`avg-badge avg-${level?.toLowerCase()}`}
@@ -388,7 +441,7 @@ function SkillMatrix({ onUserSelect }) {
                         ) : (
                           <ProficiencyBadge level={level} compact />
                         )
-                      )}
+                      ) : null}
                     </td>
                   );
                 })}

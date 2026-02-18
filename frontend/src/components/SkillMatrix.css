@@ -256,6 +256,25 @@
   background: #2a2a2a;
 }
 
+.skill-cell.admin-editable {
+  cursor: pointer;
+}
+
+.skill-cell.admin-editable:hover {
+  background: #383838;
+}
+
+.admin-level-select {
+  background: #1e1e1e;
+  color: #e0e0e0;
+  border: 1px solid #0078d4;
+  border-radius: 4px;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  width: 60px;
+}
+
 /* Average badge for group view */
 .avg-badge {
   display: inline-block;

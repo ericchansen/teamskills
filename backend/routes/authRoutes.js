@@ -13,14 +13,14 @@ const { requireAuth } = require('../auth');
  * Returns the currently authenticated user's profile
  */
 router.get('/me', requireAuth, (req, res) => {
-  // Return user without sensitive fields
-  const { id, name, email, role, team, created_at, updated_at } = req.user;
+  const { id, name, email, role, team, is_admin, created_at, updated_at } = req.user;
   res.json({
     id,
     name,
     email,
     role,
     team,
+    is_admin: is_admin || false,
     created_at,
     updated_at
   });
