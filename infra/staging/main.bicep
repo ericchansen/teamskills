@@ -1,5 +1,6 @@
 // PR Staging Environment - Minimal infrastructure for pull request previews
-// Creates isolated Container Apps + PostgreSQL for each PR
+// All PR environments deploy into a shared resource group (rg-teamskills-staging)
+// with per-PR resource naming to avoid subscription-level permissions.
 
 targetScope = 'resourceGroup'
 
@@ -20,7 +21,7 @@ param imageTag string = 'latest'
 param acrName string
 
 @description('Existing Container Registry resource group')
-param acrResourceGroup string = resourceGroup().name
+param acrResourceGroup string = 'rg-teamskills-prod'
 
 var resourceToken = 'pr${prNumber}'
 var tags = { 
@@ -34,22 +35,22 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' e
   scope: resourceGroup(acrResourceGroup)
 }
 
-// Log Analytics Workspace (minimal for staging)
+// Shared Log Analytics Workspace for all PR environments
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: 'log-${resourceToken}'
+  name: 'log-staging-${resourceToken}'
   location: location
   tags: tags
   properties: {
     sku: {
       name: 'PerGB2018'
     }
-    retentionInDays: 7 // Minimal retention for staging
+    retentionInDays: 7
   }
 }
 
-// Container Apps Environment
+// Per-PR Container Apps Environment
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
-  name: 'cae-${resourceToken}'
+  name: 'cae-staging-${resourceToken}'
   location: location
   tags: tags
   properties: {
@@ -65,7 +66,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
 
 // PostgreSQL Flexible Server (cheapest tier for staging)
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
-  name: 'psql-${resourceToken}'
+  name: 'psql-staging-${resourceToken}'
   location: location
   tags: tags
   sku: {
@@ -174,7 +175,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
         }
       ]
       scale: {
-        minReplicas: 0 // Scale to zero when idle
+        minReplicas: 0
         maxReplicas: 1
       }
     }
@@ -222,7 +223,7 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
         }
       ]
       scale: {
-        minReplicas: 0 // Scale to zero when idle
+        minReplicas: 0
         maxReplicas: 1
       }
     }
@@ -233,4 +234,3 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
 output frontendUrl string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output backendUrl string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output initSecret string = 'staging-init-${prNumber}'
-output resourceGroupName string = resourceGroup().name

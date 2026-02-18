@@ -9,6 +9,7 @@ env:
   # Production ACR to reuse (avoids duplicate registry costs)
   ACR_NAME: crgvojq4dgzbtk4
   ACR_RESOURCE_GROUP: rg-teamskills-prod
+  STAGING_RESOURCE_GROUP: rg-teamskills-staging
   LOCATION: centralus
 
 jobs:
@@ -20,7 +21,6 @@ jobs:
     outputs:
       frontend_url: ${{ steps.deploy.outputs.frontendUrl }}
       backend_url: ${{ steps.deploy.outputs.backendUrl }}
-      resource_group: ${{ steps.setup.outputs.resource_group }}
 
     steps:
       - uses: actions/checkout@v4
@@ -29,22 +29,13 @@ jobs:
         id: setup
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
-          RESOURCE_GROUP="rg-teamskills-pr${PR_NUMBER}"
           echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
-          echo "resource_group=${RESOURCE_GROUP}" >> $GITHUB_OUTPUT
           echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
 
       - name: Log in to Azure
         uses: azure/login@v2
         with:
           creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_TENANT_ID }}"}'
-
-      - name: Create resource group
-        run: |
-          az group create \
-            --name ${{ steps.setup.outputs.resource_group }} \
-            --location ${{ env.LOCATION }} \
-            --tags "pr-staging=true" "pr-number=${{ steps.setup.outputs.pr_number }}"
 
       - name: Log in to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
@@ -57,10 +48,8 @@ jobs:
 
       - name: Build and push frontend image
         run: |
-          # Frontend needs backend URL at build time
-          # Use placeholder, actual value will be set via CORS from backend
           PR_NUMBER=${{ steps.setup.outputs.pr_number }}
-          BACKEND_URL="https://ca-backend-pr${PR_NUMBER}.$(az containerapp env list --query "[0].properties.defaultDomain" -o tsv 2>/dev/null || echo 'placeholder.centralus.azurecontainerapps.io')"
+          BACKEND_URL="https://ca-backend-pr${PR_NUMBER}.$(az containerapp env list -g ${{ env.STAGING_RESOURCE_GROUP }} --query "[0].properties.defaultDomain" -o tsv 2>/dev/null || echo 'placeholder.centralus.azurecontainerapps.io')"
           
           docker build -f Dockerfile.frontend \
             --build-arg VITE_API_URL=${BACKEND_URL} \
@@ -70,7 +59,6 @@ jobs:
       - name: Generate PostgreSQL password
         id: pg_password
         run: |
-          # Generate a secure random password
           PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
           echo "::add-mask::${PASSWORD}"
           echo "password=${PASSWORD}" >> $GITHUB_OUTPUT
@@ -79,7 +67,7 @@ jobs:
         id: deploy
         uses: azure/arm-deploy@v2
         with:
-          resourceGroupName: ${{ steps.setup.outputs.resource_group }}
+          resourceGroupName: ${{ env.STAGING_RESOURCE_GROUP }}
           template: ./infra/staging/main.bicep
           parameters: >
             prNumber=${{ steps.setup.outputs.pr_number }}
@@ -124,7 +112,6 @@ jobs:
             const prNumber = ${{ steps.setup.outputs.pr_number }};
             const sha = '${{ github.sha }}';
             
-            // Find existing staging comment
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
