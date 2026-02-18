@@ -54,24 +54,13 @@ export function useAuth() {
     }
   }, [isAuthenticated, isInteracting]);
 
-  // Login with popup
+  // Login with redirect (full page redirect to Microsoft login)
   const login = useCallback(async () => {
-    try {
-      setError(null);
-      await instance.loginPopup(loginRequest);
-    } catch (err) {
-      console.error('[useAuth] Login error:', err);
-      setError(err.message);
-    }
-  }, [instance]);
-
-  // Login with redirect (alternative)
-  const loginRedirect = useCallback(async () => {
     try {
       setError(null);
       await instance.loginRedirect(loginRequest);
     } catch (err) {
-      console.error('[useAuth] Login redirect error:', err);
+      console.error('[useAuth] Login error:', err);
       setError(err.message);
     }
   }, [instance]);
@@ -80,7 +69,7 @@ export function useAuth() {
   const logout = useCallback(async () => {
     try {
       setBackendUser(null);
-      await instance.logoutPopup({
+      await instance.logoutRedirect({
         postLogoutRedirectUri: window.location.origin
       });
     } catch (err) {
@@ -102,7 +91,6 @@ export function useAuth() {
     
     // Actions
     login,
-    loginRedirect,
     logout
   };
 }

@@ -23,6 +23,12 @@ param acrName string
 @description('Existing Container Registry resource group')
 param acrResourceGroup string = 'rg-teamskills-prod'
 
+@description('Entra ID client ID for authentication (optional)')
+param azureAdClientId string = ''
+
+@description('Entra ID tenant ID for authentication (optional)')
+param azureAdTenantId string = ''
+
 var resourceToken = 'pr${prNumber}'
 var tags = { 
   'pr-staging': 'true'
@@ -167,6 +173,8 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'PGDATABASE', value: 'teamskills' }
             { name: 'PGSSLMODE', value: 'require' }
             { name: 'INIT_SECRET', secretRef: 'init-secret' }
+            { name: 'AZURE_AD_CLIENT_ID', value: azureAdClientId }
+            { name: 'AZURE_AD_TENANT_ID', value: azureAdTenantId }
           ]
           resources: {
             cpu: json('0.25')
