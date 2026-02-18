@@ -9,7 +9,6 @@ import { PublicClientApplication, LogLevel } from '@azure/msal-browser';
 
 // Default configuration (can be overridden by backend config)
 const clientId = import.meta.env.VITE_AZURE_AD_CLIENT_ID || '';
-const redirectUri = import.meta.env.VITE_REDIRECT_URI || window.location.origin;
 
 /**
  * MSAL configuration object
@@ -18,8 +17,8 @@ export const msalConfig = {
   auth: {
     clientId,
     authority: 'https://login.microsoftonline.com/organizations',
-    redirectUri,
-    postLogoutRedirectUri: redirectUri,
+    redirectUri: `${window.location.origin}/redirect.html`,
+    postLogoutRedirectUri: window.location.origin,
     navigateToLoginRequestUrl: true
   },
   cache: {
@@ -56,8 +55,7 @@ export const msalConfig = {
  * Scopes for API access
  */
 export const loginRequest = {
-  scopes: clientId ? [`api://${clientId}/access_as_user`] : [],
-  redirectUri: `${window.location.origin}/redirect.html`
+  scopes: clientId ? [`api://${clientId}/access_as_user`] : []
 };
 
 /**
