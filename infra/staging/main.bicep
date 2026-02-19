@@ -224,6 +224,11 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
         {
           name: 'frontend'
           image: '${containerRegistry.properties.loginServer}/frontend:${imageTag}'
+          env: [
+            { name: 'VITE_API_URL', value: 'https://ca-backend-${resourceToken}.${containerAppsEnvironment.properties.defaultDomain}' }
+            { name: 'VITE_AZURE_AD_CLIENT_ID', value: azureAdClientId }
+            { name: 'VITE_AZURE_AD_TENANT_ID', value: azureAdTenantId }
+          ]
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'

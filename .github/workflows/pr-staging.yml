@@ -52,12 +52,8 @@ jobs:
 
       - name: Build and push frontend image
         run: |
-          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
-          BACKEND_URL="https://ca-backend-pr${PR_NUMBER}.$(az containerapp env list -g ${{ env.STAGING_RESOURCE_GROUP }} --query "[0].properties.defaultDomain" -o tsv 2>/dev/null || echo 'placeholder.centralus.azurecontainerapps.io')"
-          
+          # No VITE_API_URL needed at build time — injected at runtime by docker-entrypoint.sh
           docker build -f Dockerfile.frontend \
-            --build-arg VITE_API_URL=${BACKEND_URL} \
-            --build-arg VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID || '' }} \
             -t ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ steps.setup.outputs.image_tag }} .
           docker push ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ steps.setup.outputs.image_tag }}
 
@@ -109,6 +105,56 @@ jobs:
             -d "{\"secret\": \"${INIT_SECRET}\"}")
           
           echo "Database init response: ${RESPONSE}"
+
+      - name: Smoke test staging deployment
+        run: |
+          FRONTEND_URL="${{ steps.deploy.outputs.frontendUrl }}"
+          BACKEND_URL="${{ steps.deploy.outputs.backendUrl }}"
+          
+          echo "=== Smoke Test: Backend Health ==="
+          if ! curl -sf "${BACKEND_URL}/health" | grep -q "ok"; then
+            echo "❌ Backend health check failed!"
+            exit 1
+          fi
+          echo "✅ Backend health OK"
+          
+          echo "=== Smoke Test: Frontend Accessible ==="
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}")
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ Frontend returned HTTP ${HTTP_STATUS}"
+            exit 1
+          fi
+          echo "✅ Frontend accessible (HTTP 200)"
+          
+          echo "=== Smoke Test: Runtime Config ==="
+          CONFIG=$(curl -sf "${FRONTEND_URL}/config.js" || echo "FAILED")
+          if echo "$CONFIG" | grep -q "FAILED"; then
+            echo "❌ Could not fetch /config.js"
+            exit 1
+          fi
+          echo "config.js contents:"
+          echo "$CONFIG"
+          
+          if echo "$CONFIG" | grep -q 'VITE_API_URL: ""'; then
+            echo "❌ VITE_API_URL is empty in config.js — runtime injection failed!"
+            exit 1
+          fi
+          
+          if ! echo "$CONFIG" | grep -q "azurecontainerapps.io"; then
+            echo "❌ VITE_API_URL does not contain expected domain!"
+            exit 1
+          fi
+          echo "✅ Runtime config looks correct"
+          
+          echo "=== Smoke Test: Frontend can reach backend ==="
+          API_URL=$(echo "$CONFIG" | grep VITE_API_URL | sed 's/.*"\(https[^"]*\)".*/\1/')
+          if curl -sf "${API_URL}/health" | grep -q "ok"; then
+            echo "✅ Frontend's configured API URL is reachable"
+          else
+            echo "⚠️  Could not reach backend via frontend's configured URL (may be CORS)"
+          fi
+          
+          echo "=== All smoke tests passed! ==="
 
       - name: Comment on PR with staging URLs
         uses: actions/github-script@v7

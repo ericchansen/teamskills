@@ -6,9 +6,10 @@
  */
 
 import { PublicClientApplication, LogLevel } from '@azure/msal-browser';
+import { getConfig } from './config';
 
 // Default configuration (can be overridden by backend config)
-const clientId = import.meta.env.VITE_AZURE_AD_CLIENT_ID || '';
+const clientId = getConfig('VITE_AZURE_AD_CLIENT_ID');
 
 /**
  * MSAL configuration object
