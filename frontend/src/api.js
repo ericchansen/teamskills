@@ -1,7 +1,8 @@
 // API utility for making requests to the backend
 import { msalInstance, loginRequest } from './authConfig';
+import { getConfig } from './config';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = getConfig('VITE_API_URL');
 
 /**
  * Get access token for API calls
