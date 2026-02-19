@@ -2,7 +2,7 @@
  * Auth middleware tests
  */
 
-const { findOrCreateUser } = require('../auth');
+const { findOrCreateUser, requireAdmin, requireOwnership } = require('../auth');
 
 // Mock the database module
 jest.mock('../db', () => ({
@@ -108,6 +108,85 @@ describe('Auth Middleware', () => {
         expect.stringContaining('INSERT INTO users'),
         ['Company User', 'user@company.com', 'another-oid', 'Team Member', null]
       );
+    });
+  });
+
+  describe('requireAdmin', () => {
+    it('should pass through when auth is not configured', () => {
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+
+      const req = {};
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      requireAdmin(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should reject when no user is authenticated', () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.AZURE_AD_TENANT_ID = 'test-tenant-id';
+
+      const req = { user: null };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      requireAdmin(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(next).not.toHaveBeenCalled();
+
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+    });
+
+    it('should reject non-admin users', () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.AZURE_AD_TENANT_ID = 'test-tenant-id';
+
+      const req = { user: { id: 1, is_admin: false } };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      requireAdmin(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+    });
+
+    it('should allow admin users', () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.AZURE_AD_TENANT_ID = 'test-tenant-id';
+
+      const req = { user: { id: 1, is_admin: true } };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      requireAdmin(req, res, next);
+      expect(next).toHaveBeenCalled();
+
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+    });
+  });
+
+  describe('requireOwnership with admin bypass', () => {
+    it('should allow admin to modify any user data', () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.AZURE_AD_TENANT_ID = 'test-tenant-id';
+
+      const middleware = requireOwnership(req => req.body.user_id);
+      const req = { user: { id: 1, is_admin: true }, body: { user_id: 99 } };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+      expect(next).toHaveBeenCalled();
+
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
     });
   });
 });

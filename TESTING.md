@@ -94,7 +94,7 @@ cd frontend && npm run test:ui
 ```javascript
 test('renders L300 badge with correct color', () => {
   render(<ProficiencyBadge level="L300" />);
-  const badge = screen.getByText('L300 - Practitioner');
+  const badge = screen.getByText('L300 - Advanced');
   expect(badge).toBeInTheDocument();
   expect(badge).toHaveStyle({ color: '#0078d4' });
 });

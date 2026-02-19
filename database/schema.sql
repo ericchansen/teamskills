@@ -9,6 +9,7 @@ CREATE TABLE users (
     entra_oid VARCHAR(36),  -- Microsoft Entra ID object ID (GUID)
     role VARCHAR(100),
     team VARCHAR(100),
+    is_admin BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -60,6 +61,21 @@ CREATE INDEX idx_user_skills_skill ON user_skills(skill_id);
 CREATE INDEX idx_skills_category ON skills(category_id);
 CREATE INDEX idx_skill_relationships_parent ON skill_relationships(parent_skill_id);
 CREATE INDEX idx_skill_relationships_child ON skill_relationships(child_skill_id);
+
+-- Skill proposals table (user-suggested skills with admin approval)
+CREATE TABLE skill_proposals (
+    id SERIAL PRIMARY KEY,
+    proposed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    name VARCHAR(255) NOT NULL,
+    category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
+    description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_skill_proposals_status ON skill_proposals(status);
 
 -- Update trigger for user_skills
 CREATE OR REPLACE FUNCTION update_user_skills_timestamp()

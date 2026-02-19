@@ -83,6 +83,7 @@ export function useAuth() {
     isAuthenticated,
     isAuthAvailable,
     isLoading: loading || isInteracting,
+    isAdmin: backendUser?.is_admin || false,
     error,
     
     // User info

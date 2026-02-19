@@ -5,21 +5,21 @@ import ProficiencyBadge from '../components/ProficiencyBadge';
 describe('ProficiencyBadge', () => {
   test('renders L100 badge with correct color', () => {
     render(<ProficiencyBadge level="L100" />);
-    const badge = screen.getByText('L100 - Awareness');
+    const badge = screen.getByText('L100 - Foundational');
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveStyle({ color: '#d13438' });
   });
 
   test('renders L200 badge with correct color', () => {
     render(<ProficiencyBadge level="L200" />);
-    const badge = screen.getByText('L200 - Conversant');
+    const badge = screen.getByText('L200 - Intermediate');
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveStyle({ color: '#ca5010' });
   });
 
   test('renders L300 badge with correct color', () => {
     render(<ProficiencyBadge level="L300" />);
-    const badge = screen.getByText('L300 - Practitioner');
+    const badge = screen.getByText('L300 - Advanced');
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveStyle({ color: '#0078d4' });
   });

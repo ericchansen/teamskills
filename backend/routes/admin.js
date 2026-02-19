@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { requireAuth, requireAdmin } = require('../auth');
 
 // Database initialization endpoint (POST to prevent accidental execution)
 router.post('/init', async (req, res) => {
@@ -41,6 +42,7 @@ router.post('/init', async (req, res) => {
           entra_oid VARCHAR(36),
           role VARCHAR(100),
           team VARCHAR(100),
+          is_admin BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -86,6 +88,20 @@ router.post('/init', async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_skills_category ON skills(category_id);
       CREATE INDEX IF NOT EXISTS idx_skill_relationships_parent ON skill_relationships(parent_skill_id);
       CREATE INDEX IF NOT EXISTS idx_skill_relationships_child ON skill_relationships(child_skill_id);
+
+      CREATE TABLE IF NOT EXISTS skill_proposals (
+          id SERIAL PRIMARY KEY,
+          proposed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          name VARCHAR(255) NOT NULL,
+          category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
+          description TEXT,
+          status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+          reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          reviewed_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_skill_proposals_status ON skill_proposals(status);
 
       CREATE OR REPLACE FUNCTION update_user_skills_timestamp()
       RETURNS TRIGGER AS $$
@@ -475,6 +491,91 @@ router.get('/status', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ connected: false, error: error.message });
+  }
+});
+
+// List all users with admin status (admin only)
+router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT id, name, email, role, team, is_admin FROM users ORDER BY name'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Grant or revoke admin access (admin only)
+router.put('/users/:id/admin', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_admin } = req.body;
+
+    if (typeof is_admin !== 'boolean') {
+      return res.status(400).json({ error: 'is_admin must be a boolean' });
+    }
+
+    const result = await db.query(
+      'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING id, name, email, is_admin',
+      [is_admin, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: update any user's skill (bypasses ownership)
+router.put('/user-skills', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { user_id, skill_id, proficiency_level } = req.body;
+
+    if (!user_id || !skill_id || !proficiency_level) {
+      return res.status(400).json({ error: 'user_id, skill_id, and proficiency_level required' });
+    }
+
+    const validLevels = ['L100', 'L200', 'L300', 'L400'];
+    if (!validLevels.includes(proficiency_level)) {
+      return res.status(400).json({ error: 'Invalid proficiency level' });
+    }
+
+    const result = await db.query(`
+      INSERT INTO user_skills (user_id, skill_id, proficiency_level)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (user_id, skill_id) 
+      DO UPDATE SET proficiency_level = $3
+      RETURNING *
+    `, [user_id, skill_id, proficiency_level]);
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: delete any user's skill (bypasses ownership)
+router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { user_id, skill_id } = req.body;
+
+    if (!user_id || !skill_id) {
+      return res.status(400).json({ error: 'user_id and skill_id required' });
+    }
+
+    await db.query(
+      'DELETE FROM user_skills WHERE user_id = $1 AND skill_id = $2',
+      [user_id, skill_id]
+    );
+
+    res.json({ message: 'Skill removed' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

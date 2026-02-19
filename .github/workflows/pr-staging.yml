@@ -64,6 +64,27 @@ jobs:
           echo "::add-mask::${PASSWORD}"
           echo "password=${PASSWORD}" >> $GITHUB_OUTPUT
 
+      - name: Wake up Postgres if stopped
+        run: |
+          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
+          SERVER_NAME="psql-staging-pr${PR_NUMBER}"
+          RG="${{ env.STAGING_RESOURCE_GROUP }}"
+          
+          # Check if server exists and is stopped
+          STATE=$(az postgres flexible-server show \
+            --name "$SERVER_NAME" --resource-group "$RG" \
+            --query "state" -o tsv 2>/dev/null || echo "NotFound")
+          
+          if [ "$STATE" = "Stopped" ]; then
+            echo "Postgres server is stopped — starting it..."
+            az postgres flexible-server start --name "$SERVER_NAME" --resource-group "$RG"
+            echo "✅ Postgres server started"
+          elif [ "$STATE" = "NotFound" ]; then
+            echo "No existing Postgres server — Bicep will create it"
+          else
+            echo "Postgres server state: $STATE"
+          fi
+
       - name: Deploy staging infrastructure
         id: deploy
         uses: azure/arm-deploy@v2
