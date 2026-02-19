@@ -37,9 +37,11 @@ function RadarChart({ onUserSelect }) {
   const userSkillMap = useMemo(() => {
     if (!matrixData) return {};
     const map = {};
-    matrixData.userSkills.forEach(us => {
-      if (!map[us.user_id]) map[us.user_id] = {};
-      map[us.user_id][us.skill_id] = us.proficiency_level;
+    // userSkills is an object keyed by "userId-skillId"
+    Object.entries(matrixData.userSkills).forEach(([key, val]) => {
+      const [userId, skillId] = key.split('-').map(Number);
+      if (!map[userId]) map[userId] = {};
+      map[userId][skillId] = val.proficiency_level;
     });
     return map;
   }, [matrixData]);

@@ -35,11 +35,12 @@ function CoverageDashboard() {
       ? matrixData.skills
       : matrixData.skills.filter(s => s.category_name === filterCategory);
 
-    // Build lookup
+    // Build lookup — userSkills is an object keyed by "userId-skillId"
     const skillMap = {};
-    matrixData.userSkills.forEach(us => {
-      if (!skillMap[us.skill_id]) skillMap[us.skill_id] = [];
-      skillMap[us.skill_id].push(us.proficiency_level);
+    Object.entries(matrixData.userSkills).forEach(([key, val]) => {
+      const skillId = parseInt(key.split('-')[1], 10);
+      if (!skillMap[skillId]) skillMap[skillId] = [];
+      skillMap[skillId].push(val.proficiency_level);
     });
 
     const stats = filteredSkills.map(skill => {
