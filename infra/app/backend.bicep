@@ -41,6 +41,9 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
   name: name
   location: location
   tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     managedEnvironmentId: containerAppsEnvironment.id
     configuration: {
@@ -58,15 +61,10 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: containerRegistry.properties.loginServer
-          username: containerRegistry.listCredentials().username
-          passwordSecretRef: 'registry-password'
+          identity: 'system'
         }
       ]
       secrets: [
-        {
-          name: 'registry-password'
-          value: containerRegistry.listCredentials().passwords[0].value
-        }
         {
           name: 'postgres-password'
           value: postgresPassword
@@ -140,3 +138,4 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
 
 output uri string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output name string = backend.name
+output principalId string = backend.identity.principalId

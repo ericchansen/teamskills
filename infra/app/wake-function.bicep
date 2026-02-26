@@ -10,6 +10,9 @@ param tags object = {}
 @description('PostgreSQL Server Resource ID')
 param postgresServerResourceId string
 
+@description('PostgreSQL Server name for scoped RBAC')
+param postgresServerName string = ''
+
 @description('Log Analytics Workspace ID')
 param logAnalyticsWorkspaceId string = ''
 
@@ -34,6 +37,7 @@ module functionApp '../core/host/function-app.bicep' = {
     storageAccountName: storageAccountName
     appServicePlanName: appServicePlanName
     postgresServerResourceId: postgresServerResourceId
+    postgresServerName: postgresServerName
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
   }
 }

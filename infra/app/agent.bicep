@@ -64,15 +64,10 @@ resource agent 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: containerRegistry.properties.loginServer
-          username: containerRegistry.listCredentials().username
-          passwordSecretRef: 'registry-password'
+          identity: 'system'
         }
       ]
       secrets: [
-        {
-          name: 'registry-password'
-          value: containerRegistry.listCredentials().passwords[0].value
-        }
         {
           name: 'postgres-password'
           value: postgresPassword
@@ -94,8 +89,28 @@ resource agent 'Microsoft.App/containerApps@2023-05-01' = {
               value: azureOpenAiDeploymentName
             }
             {
-              name: 'DATABASE_URL'
-              value: 'postgresql://pgadmin:${postgresPassword}@${postgresHost}:5432/teamskills?sslmode=require'
+              name: 'PGHOST'
+              value: postgresHost
+            }
+            {
+              name: 'PGPORT'
+              value: '5432'
+            }
+            {
+              name: 'PGUSER'
+              value: 'pgadmin'
+            }
+            {
+              name: 'PGPASSWORD'
+              secretRef: 'postgres-password'
+            }
+            {
+              name: 'PGDATABASE'
+              value: 'teamskills'
+            }
+            {
+              name: 'PGSSLMODE'
+              value: 'require'
             }
             {
               name: 'PORT'

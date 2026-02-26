@@ -144,6 +144,7 @@ module wakeFunction './app/wake-function.bicep' = {
     location: location
     tags: union(tags, { 'azd-service-name': 'wake-function' })
     postgresServerResourceId: postgres.outputs.id
+    postgresServerName: postgres.outputs.name
     resourceToken: resourceToken
   }
 }
@@ -158,3 +159,31 @@ output POSTGRES_HOST string = postgres.outputs.fqdn
 output AZURE_OPENAI_ENDPOINT string = openai.outputs.endpoint
 output AZURE_OPENAI_DEPLOYMENT_NAME string = openAiModelDeploymentName
 output WAKE_FUNCTION_URI string = wakeFunction.outputs.uri
+
+// AcrPull role assignments for Container Apps managed identity
+module backendAcrPull './core/security/acr-pull.bicep' = {
+  name: 'backend-acr-pull'
+  scope: rg
+  params: {
+    containerRegistryName: containerApps.outputs.registryName
+    principalId: backend.outputs.principalId
+  }
+}
+
+module frontendAcrPull './core/security/acr-pull.bicep' = {
+  name: 'frontend-acr-pull'
+  scope: rg
+  params: {
+    containerRegistryName: containerApps.outputs.registryName
+    principalId: frontend.outputs.principalId
+  }
+}
+
+module agentAcrPull './core/security/acr-pull.bicep' = {
+  name: 'agent-acr-pull'
+  scope: rg
+  params: {
+    containerRegistryName: containerApps.outputs.registryName
+    principalId: agent.outputs.principalId
+  }
+}
