@@ -502,3 +502,37 @@
   text-align: center;
   padding: 1rem;
 }
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+  .matrix-header {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .matrix-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .filter-bar input,
+  .filter-bar select {
+    width: 100%;
+  }
+
+  .matrix-table th,
+  .matrix-table td {
+    padding: 4px 6px;
+    font-size: 0.75rem;
+    min-width: 60px;
+  }
+
+  .sticky-col {
+    min-width: 80px;
+    max-width: 100px;
+  }
+}

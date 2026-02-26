@@ -28,6 +28,9 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
   name: name
   location: location
   tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     managedEnvironmentId: containerAppsEnvironment.id
     configuration: {
@@ -40,14 +43,7 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: containerRegistry.properties.loginServer
-          username: containerRegistry.listCredentials().username
-          passwordSecretRef: 'registry-password'
-        }
-      ]
-      secrets: [
-        {
-          name: 'registry-password'
-          value: containerRegistry.listCredentials().passwords[0].value
+          identity: 'system'
         }
       ]
     }
@@ -78,3 +74,4 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
 
 output uri string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output name string = frontend.name
+output principalId string = frontend.identity.principalId

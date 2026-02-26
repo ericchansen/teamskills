@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
@@ -9,6 +10,13 @@ const PORT = process.env.PORT || 3001;
 
 // Trust proxy for correct client IP behind load balancers
 app.set('trust proxy', 1);
+
+// Correlation ID middleware
+app.use((req, res, next) => {
+  req.correlationId = req.headers['x-correlation-id'] || crypto.randomUUID();
+  res.setHeader('x-correlation-id', req.correlationId);
+  next();
+});
 
 // Security headers
 app.use(helmet());
@@ -47,6 +55,7 @@ const matrixRouter = require('./routes/matrix');
 const adminRouter = require('./routes/admin');
 const authRouter = require('./routes/authRoutes');
 const proposalsRouter = require('./routes/proposals');
+const trendsRouter = require('./routes/trends');
 
 app.use('/api/users', usersRouter);
 app.use('/api/skills', skillsRouter);
@@ -56,6 +65,7 @@ app.use('/api/matrix', matrixRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/proposals', proposalsRouter);
+app.use('/api/trends', trendsRouter);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -63,9 +73,9 @@ app.get('/health', (req, res) => {
 });
 
 // Error handling middleware
-app.use((err, _req, res, _next) => {
-  // Log full error for debugging (server-side only)
-  console.error('Server error:', err.message);
+app.use((err, req, res, _next) => {
+  // Log full error with correlation ID for debugging (server-side only)
+  console.error(`[${req.correlationId}] Server error:`, err.message);
   if (process.env.NODE_ENV !== 'production') {
     console.error(err.stack);
   }

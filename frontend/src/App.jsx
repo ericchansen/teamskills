@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Toaster } from 'react-hot-toast';
 import SkillMatrix from './components/SkillMatrix';
-import SkillGraph from './components/SkillGraph';
-import RadarChart from './components/RadarChart';
-import CoverageDashboard from './components/CoverageDashboard';
+const SkillGraph = lazy(() => import('./components/SkillGraph'));
+const RadarChart = lazy(() => import('./components/RadarChart'));
+const CoverageDashboard = lazy(() => import('./components/CoverageDashboard'));
+const TrendsChart = lazy(() => import('./components/TrendsChart'));
+const GapAnalysis = lazy(() => import('./components/GapAnalysis'));
 import UserProfile from './components/UserProfile';
 import ErrorBoundary from './components/ErrorBoundary';
 import ChatPanel from './components/ChatPanel';
@@ -130,6 +132,22 @@ function App() {
               <span className="btn-icon">📈</span>
               Coverage
             </button>
+            <button 
+              className={view === 'trends' ? 'active' : ''} 
+              onClick={() => setView('trends')}
+              title="Proficiency trends over time"
+            >
+              <span className="btn-icon">📉</span>
+              Trends
+            </button>
+            <button 
+              className={view === 'gaps' ? 'active' : ''} 
+              onClick={() => setView('gaps')}
+              title="Skill gap analysis vs targets"
+            >
+              <span className="btn-icon">🔍</span>
+              Gaps
+            </button>
           </div>
           
           {/* Profile / Login */}
@@ -185,12 +203,16 @@ function App() {
         </div>
       )}
 
-      <main className={`app-main ${(view === 'graph' || view === 'radar' || view === 'coverage') ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
+      <main className={`app-main ${(view === 'graph' || view === 'radar' || view === 'coverage' || view === 'trends' || view === 'gaps') ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
         <ErrorBoundary>
           {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} isAdmin={isAdmin} isAuthenticated={!!currentUser} />}
-          {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
-          {view === 'radar' && <RadarChart onUserSelect={handleUserSelect} />}
-          {view === 'coverage' && <CoverageDashboard />}
+          <Suspense fallback={<div style={{ color: '#888', textAlign: 'center', padding: '3rem' }}>Loading visualization...</div>}>
+            {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
+            {view === 'radar' && <RadarChart onUserSelect={handleUserSelect} />}
+            {view === 'coverage' && <CoverageDashboard />}
+            {view === 'trends' && <TrendsChart />}
+            {view === 'gaps' && <GapAnalysis />}
+          </Suspense>
           {view === 'profile' && (
             <>
               <button 

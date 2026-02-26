@@ -19,6 +19,9 @@ param appServicePlanName string
 @description('PostgreSQL Server Resource ID for role assignment')
 param postgresServerResourceId string
 
+@description('PostgreSQL Server name for scoped role assignment')
+param postgresServerName string = ''
+
 @description('Log Analytics Workspace ID for diagnostics')
 param logAnalyticsWorkspaceId string = ''
 
@@ -113,10 +116,15 @@ resource storageBlobDataOwnerRole 'Microsoft.Authorization/roleAssignments@2022-
   }
 }
 
-// Role assignment: Contributor on PostgreSQL server for start/stop operations
-resource postgresContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+// Reference to existing PostgreSQL server for scoped RBAC
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' existing = if (!empty(postgresServerName)) {
+  name: postgresServerName
+}
+
+// Role assignment: Contributor scoped to PostgreSQL server only (for start/stop)
+resource postgresContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(postgresServerName)) {
   name: guid(postgresServerResourceId, functionApp.id, 'Contributor')
-  scope: resourceGroup()
+  scope: postgresServer
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c') // Contributor
     principalId: functionApp.identity.principalId
