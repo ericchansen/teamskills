@@ -151,10 +151,6 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           name: 'postgres-password'
           value: postgresPassword
         }
-        {
-          name: 'init-secret'
-          value: 'staging-init-${prNumber}'
-        }
       ]
     }
     template: {
@@ -172,7 +168,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'PGPASSWORD', secretRef: 'postgres-password' }
             { name: 'PGDATABASE', value: 'teamskills' }
             { name: 'PGSSLMODE', value: 'require' }
-            { name: 'INIT_SECRET', secretRef: 'init-secret' }
+            { name: 'INIT_SECRET', value: 'staging-init-${prNumber}' }
             { name: 'AZURE_AD_CLIENT_ID', value: azureAdClientId }
             { name: 'AZURE_AD_TENANT_ID', value: azureAdTenantId }
           ]
