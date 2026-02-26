@@ -31,6 +31,8 @@ CREATE TABLE skills (
     name VARCHAR(255) NOT NULL,
     category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
     description TEXT,
+    target_level VARCHAR(10) DEFAULT 'L200',
+    is_core BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -5,6 +5,7 @@ import SkillGraph from './components/SkillGraph';
 import RadarChart from './components/RadarChart';
 import CoverageDashboard from './components/CoverageDashboard';
 import TrendsChart from './components/TrendsChart';
+import GapAnalysis from './components/GapAnalysis';
 import UserProfile from './components/UserProfile';
 import ErrorBoundary from './components/ErrorBoundary';
 import ChatPanel from './components/ChatPanel';
@@ -139,6 +140,14 @@ function App() {
               <span className="btn-icon">📉</span>
               Trends
             </button>
+            <button 
+              className={view === 'gaps' ? 'active' : ''} 
+              onClick={() => setView('gaps')}
+              title="Skill gap analysis vs targets"
+            >
+              <span className="btn-icon">🔍</span>
+              Gaps
+            </button>
           </div>
           
           {/* Profile / Login */}
@@ -194,13 +203,14 @@ function App() {
         </div>
       )}
 
-      <main className={`app-main ${(view === 'graph' || view === 'radar' || view === 'coverage' || view === 'trends') ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
+      <main className={`app-main ${(view === 'graph' || view === 'radar' || view === 'coverage' || view === 'trends' || view === 'gaps') ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
         <ErrorBoundary>
           {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} isAdmin={isAdmin} isAuthenticated={!!currentUser} />}
           {view === 'graph' && <SkillGraph onUserSelect={handleUserSelect} />}
           {view === 'radar' && <RadarChart onUserSelect={handleUserSelect} />}
           {view === 'coverage' && <CoverageDashboard />}
           {view === 'trends' && <TrendsChart />}
+          {view === 'gaps' && <GapAnalysis />}
           {view === 'profile' && (
             <>
               <button 
