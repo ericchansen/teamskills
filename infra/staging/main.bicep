@@ -261,7 +261,7 @@ resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (
         enabled: true
         registration: {
           clientId: azureAdClientId
-          openIdIssuer: 'https://sts.windows.net/${azureAdTenantId}/v2.0'
+          openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
         }
         validation: {
           allowedAudiences: [
@@ -291,7 +291,7 @@ resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if 
         enabled: true
         registration: {
           clientId: azureAdClientId
-          openIdIssuer: 'https://sts.windows.net/${azureAdTenantId}/v2.0'
+          openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
         }
         validation: {
           allowedAudiences: [
