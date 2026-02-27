@@ -9,7 +9,7 @@ test.describe('Add Skill Workflow', () => {
     // Login via auth gate - demo mode shows inline login
     await expect(page.locator('.auth-gate')).toBeVisible();
     // Wait for user options to load before selecting
-    await expect(page.locator('.demo-login-inline select option')).not.toHaveCount(1, { timeout: 10000 });
+    await page.locator('.demo-login-inline select option:nth-child(2)').waitFor({ state: 'attached', timeout: 10000 });
     await page.locator('.demo-login-inline select').selectOption({ index: 1 });
     
     // Auth gate login shows matrix view; navigate to own profile
