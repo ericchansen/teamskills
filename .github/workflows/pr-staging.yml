@@ -100,6 +100,7 @@ jobs:
             location=${{ env.LOCATION }}
             azureAdClientId=${{ vars.AZURE_AD_CLIENT_ID || '' }}
             azureAdTenantId=${{ vars.AZURE_AD_TENANT_ID || '' }}
+            azureAdClientSecret=${{ secrets.AZURE_AD_CLIENT_SECRET || '' }}
           failOnStdErr: false
 
       - name: Wait for backend to be ready
@@ -121,11 +122,19 @@ jobs:
           INIT_SECRET="${{ steps.deploy.outputs.initSecret }}"
           
           echo "Initializing database..."
-          RESPONSE=$(curl -s -X POST "${BACKEND_URL}/api/admin/init" \
+          HTTP_CODE=$(curl -s -o /tmp/init_response.json -w "%{http_code}" -X POST "${BACKEND_URL}/api/admin/init" \
             -H "Content-Type: application/json" \
             -d "{\"secret\": \"${INIT_SECRET}\"}")
+          RESPONSE=$(cat /tmp/init_response.json 2>/dev/null || echo "")
           
-          echo "Database init response: ${RESPONSE}"
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+            echo "✅ Database initialized successfully"
+          elif [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "302" ]; then
+            echo "⚠️  Easy Auth blocked DB init (HTTP ${HTTP_CODE}) — DB may already be seeded"
+          else
+            echo "⚠️  DB init returned HTTP ${HTTP_CODE}"
+          fi
+          echo "Response: ${RESPONSE}"
 
       - name: Smoke test staging deployment
         run: |
@@ -133,46 +142,60 @@ jobs:
           BACKEND_URL="${{ steps.deploy.outputs.backendUrl }}"
           
           echo "=== Smoke Test: Backend Health ==="
-          if ! curl -sf "${BACKEND_URL}/health" | grep -q "ok"; then
-            echo "❌ Backend health check failed!"
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_URL}/health")
+          if [ "$HEALTH_STATUS" = "200" ]; then
+            echo "✅ Backend health OK (HTTP 200)"
+          elif [ "$HEALTH_STATUS" = "401" ] || [ "$HEALTH_STATUS" = "302" ]; then
+            echo "✅ Backend is alive (HTTP ${HEALTH_STATUS} — Easy Auth is active)"
+          else
+            echo "❌ Backend health check failed (HTTP ${HEALTH_STATUS})"
             exit 1
           fi
-          echo "✅ Backend health OK"
           
           echo "=== Smoke Test: Frontend Accessible ==="
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}")
-          if [ "$HTTP_STATUS" != "200" ]; then
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "302" ] || [ "$HTTP_STATUS" = "401" ]; then
+            echo "✅ Frontend accessible (HTTP ${HTTP_STATUS})"
+          else
             echo "❌ Frontend returned HTTP ${HTTP_STATUS}"
             exit 1
           fi
-          echo "✅ Frontend accessible (HTTP 200)"
           
           echo "=== Smoke Test: Runtime Config ==="
-          CONFIG=$(curl -sf "${FRONTEND_URL}/config.js" || echo "FAILED")
-          if echo "$CONFIG" | grep -q "FAILED"; then
-            echo "❌ Could not fetch /config.js"
+          CONFIG_STATUS=$(curl -s -o /tmp/config_response.txt -w "%{http_code}" "${FRONTEND_URL}/config.js")
+          CONFIG=$(cat /tmp/config_response.txt 2>/dev/null || echo "")
+          if [ "$CONFIG_STATUS" = "401" ] || [ "$CONFIG_STATUS" = "302" ]; then
+            echo "⚠️  Easy Auth blocked /config.js (HTTP ${CONFIG_STATUS}) — skipping config validation"
+          elif [ -z "$CONFIG" ] || [ "$CONFIG_STATUS" != "200" ]; then
+            echo "❌ Could not fetch /config.js (HTTP ${CONFIG_STATUS})"
             exit 1
+          else
+            echo "config.js contents:"
+            echo "$CONFIG"
+            
+            if echo "$CONFIG" | grep -q 'VITE_API_URL: ""'; then
+              echo "❌ VITE_API_URL is empty in config.js — runtime injection failed!"
+              exit 1
+            fi
+            
+            if ! echo "$CONFIG" | grep -q "azurecontainerapps.io"; then
+              echo "❌ VITE_API_URL does not contain expected domain!"
+              exit 1
+            fi
+            echo "✅ Runtime config looks correct"
           fi
-          echo "config.js contents:"
-          echo "$CONFIG"
-          
-          if echo "$CONFIG" | grep -q 'VITE_API_URL: ""'; then
-            echo "❌ VITE_API_URL is empty in config.js — runtime injection failed!"
-            exit 1
-          fi
-          
-          if ! echo "$CONFIG" | grep -q "azurecontainerapps.io"; then
-            echo "❌ VITE_API_URL does not contain expected domain!"
-            exit 1
-          fi
-          echo "✅ Runtime config looks correct"
           
           echo "=== Smoke Test: Frontend can reach backend ==="
-          API_URL=$(echo "$CONFIG" | grep VITE_API_URL | sed 's/.*"\(https[^"]*\)".*/\1/')
-          if curl -sf "${API_URL}/health" | grep -q "ok"; then
-            echo "✅ Frontend's configured API URL is reachable"
+          if [ -n "$CONFIG" ] && echo "$CONFIG" | grep -q "VITE_API_URL"; then
+            API_URL=$(echo "$CONFIG" | grep VITE_API_URL | sed 's/.*"\(https[^"]*\)".*/\1/')
+            CROSS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}/health")
+            if [ "$CROSS_STATUS" = "200" ] || [ "$CROSS_STATUS" = "401" ] || [ "$CROSS_STATUS" = "302" ]; then
+              echo "✅ Frontend's configured API URL is reachable (HTTP ${CROSS_STATUS})"
+            else
+              echo "⚠️  Could not reach backend via frontend's configured URL (HTTP ${CROSS_STATUS})"
+            fi
           else
-            echo "⚠️  Could not reach backend via frontend's configured URL (may be CORS)"
+            echo "⚠️  Skipping cross-connectivity check (config.js not available)"
           fi
           
           echo "=== All smoke tests passed! ==="

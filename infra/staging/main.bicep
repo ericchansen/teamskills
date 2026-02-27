@@ -29,6 +29,10 @@ param azureAdClientId string = ''
 @description('Entra ID tenant ID for authentication (optional)')
 param azureAdTenantId string = ''
 
+@secure()
+@description('Entra ID Client Secret for Easy Auth (optional)')
+param azureAdClientSecret string = ''
+
 var resourceToken = 'pr${prNumber}'
 var tags = { 
   'pr-staging': 'true'
@@ -142,7 +146,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           passwordSecretRef: 'registry-password'
         }
       ]
-      secrets: [
+      secrets: concat([
         {
           name: 'registry-password'
           value: containerRegistry.listCredentials().passwords[0].value
@@ -151,7 +155,12 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           name: 'postgres-password'
           value: postgresPassword
         }
-      ]
+      ], !empty(azureAdClientSecret) ? [
+        {
+          name: 'azure-ad-client-secret'
+          value: azureAdClientSecret
+        }
+      ] : [])
     }
     template: {
       containers: [
@@ -208,12 +217,17 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           passwordSecretRef: 'registry-password'
         }
       ]
-      secrets: [
+      secrets: concat([
         {
           name: 'registry-password'
           value: containerRegistry.listCredentials().passwords[0].value
         }
-      ]
+      ], !empty(azureAdClientSecret) ? [
+        {
+          name: 'azure-ad-client-secret'
+          value: azureAdClientSecret
+        }
+      ] : [])
     }
     template: {
       containers: [
@@ -243,3 +257,65 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
 output frontendUrl string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output backendUrl string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output initSecret string = 'staging-init-${prNumber}'
+
+// Easy Auth: Entra ID authentication for staging (only when configured)
+resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+  parent: backend
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'Return401'
+      excludedPaths: ['/health', '/api/admin/init']
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: azureAdClientId
+          clientSecretSettingName: 'azure-ad-client-secret'
+          openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${azureAdClientId}'
+            azureAdClientId
+          ]
+        }
+      }
+    }
+  }
+}
+
+resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+  parent: frontend
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+      redirectToProvider: 'azureactivedirectory'
+      excludedPaths: ['/config.js']
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: azureAdClientId
+          clientSecretSettingName: 'azure-ad-client-secret'
+          openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${azureAdClientId}'
+            azureAdClientId
+          ]
+        }
+      }
+    }
+  }
+}

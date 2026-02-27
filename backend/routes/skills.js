@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { requireAuth, requireAdmin } = require('../auth');
 
 // GET all skills
 router.get('/', async (req, res) => {
@@ -56,8 +57,8 @@ router.get('/:id/related', async (req, res) => {
   }
 });
 
-// POST create skill
-router.post('/', async (req, res) => {
+// POST create skill (admin only)
+router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { name, category_id, description } = req.body;
     const result = await db.query(
@@ -71,8 +72,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT update skill
-router.put('/:id', async (req, res) => {
+// PUT update skill (admin only)
+router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, category_id, description } = req.body;
@@ -90,8 +91,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE skill
-router.delete('/:id', async (req, res) => {
+// DELETE skill (admin only)
+router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await db.query('DELETE FROM skills WHERE id = $1 RETURNING *', [id]);

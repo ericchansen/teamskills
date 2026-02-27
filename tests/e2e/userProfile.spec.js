@@ -1,12 +1,24 @@
 import { test, expect } from '@playwright/test';
 
+// Demo login helper: selects a user from the auth gate dropdown
+async function demoLogin(page) {
+  await page.goto('/');
+  // Auth gate shows the demo login inline when MSAL is not configured
+  await expect(page.locator('.auth-gate')).toBeVisible();
+  // Wait for user options to load before selecting
+  await page.locator('.demo-login-inline select option:nth-child(2)').waitFor({ state: 'attached', timeout: 10000 });
+  await page.locator('.demo-login-inline select').selectOption({ index: 1 });
+  // Wait for matrix to load after login (auth gate login shows matrix view)
+  await expect(page.locator('.skill-matrix')).toBeVisible({ timeout: 10000 });
+}
+
 test.describe('User Profile', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await demoLogin(page);
     
-    // Navigate to first user's profile
+    // Click a user (not the logged-in user) to get to profile view
     await expect(page.locator('.matrix-table')).toBeVisible();
-    await page.locator('.user-name').first().click();
+    await page.locator('.user-name').nth(1).click();
     await expect(page.locator('.user-profile')).toBeVisible();
   });
 
@@ -46,17 +58,10 @@ test.describe('User Profile', () => {
 
 test.describe('User Profile - Logged In', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    
-    // Login first
-    await page.click('text=Login');
-    await expect(page.locator('.login-modal')).toBeVisible();
-    
-    // Select first user from dropdown
-    await page.locator('.login-modal select').selectOption({ index: 1 });
-    
-    // Wait for profile to load (login navigates to profile)
-    await expect(page.locator('.user-profile')).toBeVisible();
+    await demoLogin(page);
+    // Navigate to own profile via header button
+    await page.locator('.profile-btn').click();
+    await expect(page.locator('.user-profile')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.own-profile-badge')).toBeVisible();
   });
 

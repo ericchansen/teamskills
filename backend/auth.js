@@ -10,9 +10,13 @@ const jwksClient = require('jwks-rsa');
 const db = require('./db');
 
 // JWKS client for fetching Microsoft's signing keys
-// Use 'common' endpoint to accept tokens from any tenant (multi-tenant app)
+// Use tenant-specific endpoint when configured, fall back to 'common' for demo mode
+const jwksUri = process.env.AZURE_AD_TENANT_ID
+  ? `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/discovery/v2.0/keys`
+  : 'https://login.microsoftonline.com/common/discovery/v2.0/keys';
+
 const client = jwksClient({
-  jwksUri: 'https://login.microsoftonline.com/common/discovery/v2.0/keys',
+  jwksUri,
   cache: true,
   cacheMaxAge: 86400000, // 24 hours
   rateLimit: true,
@@ -42,6 +46,14 @@ function verifyToken(token) {
       audience: [`api://${process.env.AZURE_AD_CLIENT_ID}`, process.env.AZURE_AD_CLIENT_ID],
       algorithms: ['RS256']
     };
+
+    // Validate issuer when tenant ID is configured (prevents cross-tenant token abuse)
+    if (process.env.AZURE_AD_TENANT_ID) {
+      options.issuer = [
+        `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
+        `https://sts.windows.net/${process.env.AZURE_AD_TENANT_ID}/`
+      ];
+    }
 
     jwt.verify(token, getKey, options, (err, decoded) => {
       if (err) {

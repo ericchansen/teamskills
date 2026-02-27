@@ -212,6 +212,64 @@
   color: #ffffff;
 }
 
+/* Auth gate - shown before login */
+.auth-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+  padding: 2rem;
+}
+
+.auth-gate h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+}
+
+.auth-gate p {
+  color: #8a8aaa;
+  margin: 0 0 2rem 0;
+  font-size: 1.1rem;
+}
+
+.auth-gate-btn {
+  font-size: 1.1rem;
+  padding: 14px 28px;
+}
+
+.demo-login-inline {
+  max-width: 400px;
+  width: 100%;
+}
+
+.demo-login-inline select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #3a3a5c;
+  border-radius: 8px;
+  background: #252542;
+  color: #ffffff;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+.demo-login-inline select:focus {
+  outline: none;
+  border-color: #00d4ff;
+}
+
+.demo-login-inline .login-disclaimer {
+  background: #2d2a1a;
+  color: #d4c896;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 .app-main {
   flex: 1;
   padding: 2rem;

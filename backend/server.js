@@ -56,6 +56,13 @@ const adminRouter = require('./routes/admin');
 const authRouter = require('./routes/authRoutes');
 const proposalsRouter = require('./routes/proposals');
 const trendsRouter = require('./routes/trends');
+const { requireAuth } = require('./auth');
+
+// Auth config must be accessible before login (pre-auth)
+app.use('/api/auth', authRouter);
+
+// All other API routes require authentication (passes through in demo mode)
+app.use('/api', requireAuth);
 
 app.use('/api/users', usersRouter);
 app.use('/api/skills', skillsRouter);
@@ -63,7 +70,6 @@ app.use('/api/categories', categoriesRouter);
 app.use('/api/user-skills', userSkillsRouter);
 app.use('/api/matrix', matrixRouter);
 app.use('/api/admin', adminRouter);
-app.use('/api/auth', authRouter);
 app.use('/api/proposals', proposalsRouter);
 app.use('/api/trends', trendsRouter);
 

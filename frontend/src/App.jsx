@@ -40,15 +40,20 @@ function App() {
   // Current user is either authenticated user or demo user
   const currentUser = authUser || demoUser;
 
-  // Fetch users for demo login dropdown (only when DB is ready)
+  // Fetch users for demo login dropdown (only when DB is ready AND user is authenticated or auth not available)
   useEffect(() => {
     if (dbStatus !== 'ready') return;
+    // Only fetch when authenticated or in demo mode without a demo user yet
+    if (isAuthAvailable && !isAuthenticated) return;
     
     apiFetch('/api/users')
-      .then(res => res.json())
-      .then(data => setUsers(data))
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch users');
+        return res.json();
+      })
+      .then(data => { if (Array.isArray(data)) setUsers(data); })
       .catch(err => console.error('Failed to fetch users:', err));
-  }, [dbStatus]);
+  }, [dbStatus, isAuthenticated, isAuthAvailable]);
 
   const handleUserSelect = (userId) => {
     setSelectedUserId(userId);
@@ -77,6 +82,69 @@ function App() {
       setShowDemoLogin(true);
     }
   };
+
+  // Auth gate: block all content until user is authenticated
+  // In MSAL mode: show "Sign in with Microsoft" 
+  // In demo mode: auto-show the demo login picker
+  if (!currentUser && !authLoading) {
+    // Still waiting for DB to be ready — show wake overlay only
+    if (dbStatus !== 'ready') {
+      return (
+        <div className="app">
+          <DatabaseWakeOverlay 
+            status={dbStatus} 
+            message={wakeMessage} 
+            onRetry={retryWake} 
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="app">
+        <div className="auth-gate">
+          <h1>Team Skills Tracker</h1>
+          <p>Sign in to view and manage team skills.</p>
+          {isAuthAvailable ? (
+            <button className="login-btn auth-gate-btn" onClick={login}>
+              <span className="btn-icon">🔑</span>
+              Sign in with Microsoft
+            </button>
+          ) : (
+            <div className="demo-login-inline">
+              <p className="login-disclaimer">⚠️ Authentication is not configured. Select a user to continue in demo mode.</p>
+              <select 
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const userId = parseInt(e.target.value);
+                    setDemoUser(users.find(u => u.id === userId));
+                  }
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>Select your name...</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>{user.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading spinner while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div className="auth-gate">
+          <h1>Team Skills Tracker</h1>
+          <p>Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
