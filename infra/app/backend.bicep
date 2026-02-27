@@ -139,3 +139,32 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
 output uri string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output name string = backend.name
 output principalId string = backend.identity.principalId
+
+// Easy Auth: Entra ID authentication (only when configured)
+resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+  parent: backend
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'Return401'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: azureAdClientId
+          openIdIssuer: 'https://sts.windows.net/${azureAdTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${azureAdClientId}'
+            azureAdClientId
+          ]
+        }
+      }
+    }
+  }
+}

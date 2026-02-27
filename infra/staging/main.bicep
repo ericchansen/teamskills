@@ -243,3 +243,61 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
 output frontendUrl string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output backendUrl string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output initSecret string = 'staging-init-${prNumber}'
+
+// Easy Auth: Entra ID authentication for staging (only when configured)
+resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+  parent: backend
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'Return401'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: azureAdClientId
+          openIdIssuer: 'https://sts.windows.net/${azureAdTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${azureAdClientId}'
+            azureAdClientId
+          ]
+        }
+      }
+    }
+  }
+}
+
+resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+  parent: frontend
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+      redirectToProvider: 'azureactivedirectory'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: azureAdClientId
+          openIdIssuer: 'https://sts.windows.net/${azureAdTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${azureAdClientId}'
+            azureAdClientId
+          ]
+        }
+      }
+    }
+  }
+}

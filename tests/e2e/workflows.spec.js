@@ -6,14 +6,13 @@ test.describe('Add Skill Workflow', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     
-    // Login first - required to add skills
-    await page.click('text=Login');
-    await expect(page.locator('.login-modal')).toBeVisible();
+    // Login via auth gate - demo mode shows inline login
+    await expect(page.locator('.auth-gate')).toBeVisible();
+    await page.locator('.demo-login-inline select').selectOption({ index: 1 });
     
-    // Select first user from dropdown
-    await page.locator('.login-modal select').selectOption({ index: 1 });
-    
-    // Wait for profile to load (login navigates to profile)
+    // Auth gate login shows matrix view; navigate to own profile
+    await expect(page.locator('.skill-matrix')).toBeVisible({ timeout: 10000 });
+    await page.locator('.profile-btn').click();
     await expect(page.locator('.user-profile')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.own-profile-badge')).toBeVisible();
   });

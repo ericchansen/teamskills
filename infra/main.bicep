@@ -22,6 +22,12 @@ param openAiModelDeploymentName string = 'gpt-4o'
 @description('Azure OpenAI model name')
 param openAiModelName string = 'gpt-4o'
 
+@description('Microsoft Entra ID Client ID for authentication (optional)')
+param azureAdClientId string = ''
+
+@description('Microsoft Entra ID Tenant ID for authentication (optional)')
+param azureAdTenantId string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
@@ -99,6 +105,8 @@ module backend './app/backend.bicep' = {
     postgresHost: postgres.outputs.fqdn
     postgresPassword: postgresPassword
     frontendUrl: 'https://${abbrs.appContainerApps}frontend-${resourceToken}.${containerApps.outputs.defaultDomain}'
+    azureAdClientId: azureAdClientId
+    azureAdTenantId: azureAdTenantId
   }
 }
 
@@ -113,6 +121,8 @@ module frontend './app/frontend.bicep' = {
     containerAppsEnvironmentName: containerApps.outputs.environmentName
     containerRegistryName: containerApps.outputs.registryName
     backendUrl: backend.outputs.uri
+    azureAdClientId: azureAdClientId
+    azureAdTenantId: azureAdTenantId
   }
 }
 

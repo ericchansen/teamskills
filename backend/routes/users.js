@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { requireAuth, requireAdmin } = require('../auth');
 
 // GET all users
 router.get('/', async (req, res) => {
@@ -28,8 +29,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST create user
-router.post('/', async (req, res) => {
+// POST create user (admin only)
+router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { name, email, role, team } = req.body;
     const result = await db.query(
@@ -43,8 +44,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT update user
-router.put('/:id', async (req, res) => {
+// PUT update user (admin only)
+router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, role, team } = req.body;
@@ -62,8 +63,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE user
-router.delete('/:id', async (req, res) => {
+// DELETE user (admin only)
+router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);

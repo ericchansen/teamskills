@@ -16,6 +16,12 @@ param containerRegistryName string
 @description('Backend URL for API proxy')
 param backendUrl string
 
+@description('Microsoft Entra ID Client ID for Easy Auth (optional)')
+param azureAdClientId string = ''
+
+@description('Microsoft Entra ID Tenant ID for Easy Auth (optional)')
+param azureAdTenantId string = ''
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -75,3 +81,33 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
 output uri string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output name string = frontend.name
 output principalId string = frontend.identity.principalId
+
+// Easy Auth: Entra ID authentication (only when configured)
+resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+  parent: frontend
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+      redirectToProvider: 'azureactivedirectory'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: azureAdClientId
+          openIdIssuer: 'https://sts.windows.net/${azureAdTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${azureAdClientId}'
+            azureAdClientId
+          ]
+        }
+      }
+    }
+  }
+}

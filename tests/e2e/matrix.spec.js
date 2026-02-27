@@ -1,8 +1,21 @@
 import { test, expect } from '@playwright/test';
 
+// Demo login helper: selects a user from the auth gate dropdown
+async function demoLogin(page) {
+  await page.goto('/');
+  // Auth gate shows the demo login inline when MSAL is not configured
+  await expect(page.locator('.auth-gate')).toBeVisible();
+  await page.locator('.demo-login-inline select').selectOption({ index: 1 });
+  // Wait for matrix to load after login
+  await expect(page.locator('.skill-matrix')).toBeVisible({ timeout: 10000 });
+}
+
 test.describe('Skills Matrix', () => {
+  test.beforeEach(async ({ page }) => {
+    await demoLogin(page);
+  });
+
   test('should display the skills matrix', async ({ page }) => {
-    await page.goto('/');
 
     // Check page title
     await expect(page.locator('h1')).toContainText('Team Skills Tracker');
@@ -16,8 +29,6 @@ test.describe('Skills Matrix', () => {
   });
 
   test('should display users and skills', async ({ page }) => {
-    await page.goto('/');
-
     // Wait for matrix to load
     await expect(page.locator('.matrix-table')).toBeVisible();
 
@@ -35,8 +46,6 @@ test.describe('Skills Matrix', () => {
   });
 
   test('should filter skills by category', async ({ page }) => {
-    await page.goto('/');
-
     // Wait for matrix to load
     await expect(page.locator('.matrix-table')).toBeVisible();
 
@@ -55,8 +64,6 @@ test.describe('Skills Matrix', () => {
   });
 
   test('should navigate to user profile', async ({ page }) => {
-    await page.goto('/');
-
     // Wait for matrix to load
     await expect(page.locator('.matrix-table')).toBeVisible();
 
