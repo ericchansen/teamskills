@@ -18,6 +18,12 @@ export default [
     },
   },
   {
-    ignores: ['node_modules/', 'frontend/', 'coverage/'],
+    files: ['playwright.config.js', 'tests/e2e/**/*.js'],
+    languageOptions: {
+      sourceType: 'module',
+    },
+  },
+  {
+    ignores: ['node_modules/', 'frontend/', 'coverage/', 'eslint.config.mjs'],
   },
 ];
