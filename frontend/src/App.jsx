@@ -29,6 +29,7 @@ function App() {
     isAuthAvailable, 
     isLoading: authLoading,
     isAdmin,
+    error: authError,
     user: authUser, 
     login, 
     logout 
@@ -109,9 +110,46 @@ function App() {
   };
 
   // Auth gate: block all content until user is authenticated
-  // On deployed instances: auto-redirect to Microsoft login
-  // On localhost: show demo login picker
-  if (!currentUser && !authLoading) {
+  // Order matters: loading → authenticated-but-loading → auth gate → main app
+
+  // 1. Show loading while MSAL is initializing or processing redirect
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div className="auth-gate">
+          <h1>Team Skills Tracker</h1>
+          <p>{isAuthenticated ? 'Loading your profile...' : 'Authenticating...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. MSAL authenticated but backend profile not loaded (fetch failed or still resolving)
+  if (isAuthenticated && !currentUser) {
+    return (
+      <div className="app">
+        <div className="auth-gate">
+          <h1>Team Skills Tracker</h1>
+          {authError ? (
+            <>
+              <p className="auth-error-msg">Unable to load your profile. Please try again.</p>
+              <button className="auth-retry-btn" onClick={() => window.location.reload()}>
+                Retry
+              </button>
+              <button className="auth-retry-btn" onClick={logout} style={{ marginLeft: '0.5rem' }}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <p>Loading your profile...</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Not authenticated — show auth gate
+  if (!currentUser) {
     // Still waiting for DB to be ready — show wake overlay only
     if (dbStatus !== 'ready') {
       return (
@@ -170,18 +208,6 @@ function App() {
               <p>🔒 Authentication is not configured. Please contact your administrator.</p>
             </div>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  // Show loading spinner while auth is initializing
-  if (authLoading) {
-    return (
-      <div className="app">
-        <div className="auth-gate">
-          <h1>Team Skills Tracker</h1>
-          <p>Authenticating...</p>
         </div>
       </div>
     );
