@@ -104,6 +104,32 @@ jobs:
             azureAdClientSecret=${{ secrets.AZURE_AD_CLIENT_SECRET || '' }}
           failOnStdErr: false
 
+      - name: Register Entra ID redirect URIs
+        if: vars.AZURE_AD_CLIENT_ID != ''
+        run: |
+          APP_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
+          FRONTEND_URL="${{ steps.deploy.outputs.frontendUrl }}"
+          BACKEND_URL="${{ steps.deploy.outputs.backendUrl }}"
+          CALLBACK_SUFFIX="/.auth/login/aad/callback"
+
+          NEW_FRONTEND="${FRONTEND_URL}${CALLBACK_SUFFIX}"
+          NEW_BACKEND="${BACKEND_URL}${CALLBACK_SUFFIX}"
+
+          # Get existing redirect URIs
+          EXISTING=$(az ad app show --id "$APP_ID" --query "web.redirectUris[]" -o tsv)
+
+          # Build combined list (existing + new, deduplicated)
+          ALL_URIS=$(echo -e "${EXISTING}\n${NEW_FRONTEND}\n${NEW_BACKEND}" | grep -v '^$' | sort -u)
+
+          # Convert newlines to space-separated args
+          URI_ARGS=$(echo "$ALL_URIS" | tr '\n' ' ')
+
+          echo "Setting redirect URIs on Entra ID app ${APP_ID}:"
+          echo "$ALL_URIS"
+
+          az ad app update --id "$APP_ID" --web-redirect-uris $URI_ARGS
+          echo "✅ Redirect URIs registered"
+
       - name: Wait for backend to be ready
         run: |
           echo "Waiting for backend to be ready..."
