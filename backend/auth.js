@@ -141,15 +141,22 @@ async function requireAuth(req, res, next) {
 
   const token = authHeader.substring(7);
 
+  let claims;
   try {
-    const claims = await verifyToken(token);
+    claims = await verifyToken(token);
+  } catch (err) {
+    console.error('Auth error:', err.message);
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  try {
     const user = await findOrCreateUser(claims);
     req.user = user;
     req.claims = claims;
     next();
   } catch (err) {
-    console.error('Auth error:', err.message);
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    console.error('User lookup error:', err.message);
+    return res.status(500).json({ error: 'Failed to load user profile' });
   }
 }
 
