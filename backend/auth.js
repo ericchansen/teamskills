@@ -126,6 +126,9 @@ function isAuthConfigured() {
  */
 async function requireAuth(req, res, next) {
   if (!isAuthConfigured()) {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(503).json({ error: 'Authentication not configured. Contact administrator.' });
+    }
     // Auth not configured — allow all requests (demo mode)
     return next();
   }

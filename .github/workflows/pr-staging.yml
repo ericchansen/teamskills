@@ -19,6 +19,7 @@ env:
 jobs:
   deploy-staging:
     name: Deploy PR Staging Environment
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     environment: staging
     
