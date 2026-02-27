@@ -268,7 +268,7 @@ resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (
     }
     globalValidation: {
       unauthenticatedClientAction: 'Return401'
-      excludedPaths: ['/health', '/api/admin/init']
+      excludedPaths: ['/health', '/api/admin/init', '/api/auth/config']
     }
     identityProviders: {
       azureActiveDirectory: {
@@ -276,7 +276,7 @@ resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (
         registration: {
           clientId: azureAdClientId
           clientSecretSettingName: 'azure-ad-client-secret'
-          openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
+          openIdIssuer: 'https://sts.windows.net/${azureAdTenantId}/'
         }
         validation: {
           allowedAudiences: [
