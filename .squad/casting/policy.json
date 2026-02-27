@@ -1,0 +1,7 @@
+{
+  "universes_allowed": ["the-usual-suspects"],
+  "max_agents_per_universe": 10,
+  "scribe_exempt": true,
+  "ralph_exempt": true,
+  "copilot_exempt": true
+}
