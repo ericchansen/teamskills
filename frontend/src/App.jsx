@@ -40,6 +40,9 @@ function App() {
   // Current user is either authenticated user or demo user
   const currentUser = authUser || demoUser;
 
+  // Demo mode only allowed in local development (not deployed)
+  const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
   // Fetch users for demo login dropdown (only when DB is ready AND user is authenticated or auth not available)
   useEffect(() => {
     if (dbStatus !== 'ready') return;
@@ -78,7 +81,7 @@ function App() {
   const handleLogin = () => {
     if (isAuthAvailable) {
       login();
-    } else {
+    } else if (isLocalDev) {
       setShowDemoLogin(true);
     }
   };
@@ -110,7 +113,7 @@ function App() {
               <span className="btn-icon">🔑</span>
               Sign in with Microsoft
             </button>
-          ) : (
+          ) : isLocalDev ? (
             <div className="demo-login-inline">
               <p className="login-disclaimer">⚠️ Authentication is not configured. Select a user to continue in demo mode.</p>
               <select 
@@ -127,6 +130,10 @@ function App() {
                   <option key={user.id} value={user.id}>{user.name}</option>
                 ))}
               </select>
+            </div>
+          ) : (
+            <div className="auth-error">
+              <p>🔒 Authentication is not configured. Please contact your administrator.</p>
             </div>
           )}
         </div>
@@ -237,22 +244,22 @@ function App() {
                 Logout
               </button>
             </div>
-          ) : (
+          ) : (isAuthAvailable || isLocalDev) ? (
             <button 
               className="login-btn"
               onClick={handleLogin}
-              disabled={authLoading}
+              disabled={authLoading || (!isAuthAvailable && !isLocalDev)}
               title={isAuthAvailable ? "Sign in with Microsoft" : "Log in to edit your skills"}
             >
               <span className="btn-icon">{isAuthAvailable ? '🔑' : '🔐'}</span>
               {authLoading ? 'Loading...' : (isAuthAvailable ? 'Sign in' : 'Demo Login')}
             </button>
-          )}
+          ) : null}
         </nav>
       </header>
 
-      {/* Demo Login Modal (fallback when auth not configured) */}
-      {showDemoLogin && (
+      {/* Demo Login Modal (local dev only, when auth not configured) */}
+      {showDemoLogin && isLocalDev && (
         <div className="login-modal-overlay" onClick={() => setShowDemoLogin(false)}>
           <div className="login-modal" onClick={e => e.stopPropagation()}>
             <h2>Demo Login</h2>
