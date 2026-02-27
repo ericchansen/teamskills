@@ -22,6 +22,10 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID for Easy Auth (optional)')
 param azureAdTenantId string = ''
 
+@secure()
+@description('Microsoft Entra ID Client Secret for Easy Auth (optional)')
+param azureAdClientSecret string = ''
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -52,6 +56,12 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           identity: 'system'
         }
       ]
+      secrets: !empty(azureAdClientSecret) ? [
+        {
+          name: 'azure-ad-client-secret'
+          value: azureAdClientSecret
+        }
+      ] : []
     }
     template: {
       containers: [
@@ -100,6 +110,7 @@ resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if 
         enabled: true
         registration: {
           clientId: azureAdClientId
+          clientSecretSettingName: 'azure-ad-client-secret'
           openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
         }
         validation: {

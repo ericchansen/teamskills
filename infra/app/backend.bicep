@@ -29,6 +29,10 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID (optional)')
 param azureAdTenantId string = ''
 
+@secure()
+@description('Microsoft Entra ID Client Secret for Easy Auth (optional)')
+param azureAdClientSecret string = ''
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -64,12 +68,17 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           identity: 'system'
         }
       ]
-      secrets: [
+      secrets: concat([
         {
           name: 'postgres-password'
           value: postgresPassword
         }
-      ]
+      ], !empty(azureAdClientSecret) ? [
+        {
+          name: 'azure-ad-client-secret'
+          value: azureAdClientSecret
+        }
+      ] : [])
     }
     template: {
       containers: [
@@ -157,6 +166,7 @@ resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (
         enabled: true
         registration: {
           clientId: azureAdClientId
+          clientSecretSettingName: 'azure-ad-client-secret'
           openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
         }
         validation: {

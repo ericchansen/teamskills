@@ -100,6 +100,7 @@ jobs:
             location=${{ env.LOCATION }}
             azureAdClientId=${{ vars.AZURE_AD_CLIENT_ID || '' }}
             azureAdTenantId=${{ vars.AZURE_AD_TENANT_ID || '' }}
+            azureAdClientSecret=${{ secrets.AZURE_AD_CLIENT_SECRET || '' }}
           failOnStdErr: false
 
       - name: Wait for backend to be ready

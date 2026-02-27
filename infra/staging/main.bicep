@@ -29,6 +29,10 @@ param azureAdClientId string = ''
 @description('Entra ID tenant ID for authentication (optional)')
 param azureAdTenantId string = ''
 
+@secure()
+@description('Entra ID Client Secret for Easy Auth (optional)')
+param azureAdClientSecret string = ''
+
 var resourceToken = 'pr${prNumber}'
 var tags = { 
   'pr-staging': 'true'
@@ -142,7 +146,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           passwordSecretRef: 'registry-password'
         }
       ]
-      secrets: [
+      secrets: concat([
         {
           name: 'registry-password'
           value: containerRegistry.listCredentials().passwords[0].value
@@ -151,7 +155,12 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           name: 'postgres-password'
           value: postgresPassword
         }
-      ]
+      ], !empty(azureAdClientSecret) ? [
+        {
+          name: 'azure-ad-client-secret'
+          value: azureAdClientSecret
+        }
+      ] : [])
     }
     template: {
       containers: [
@@ -208,12 +217,17 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           passwordSecretRef: 'registry-password'
         }
       ]
-      secrets: [
+      secrets: concat([
         {
           name: 'registry-password'
           value: containerRegistry.listCredentials().passwords[0].value
         }
-      ]
+      ], !empty(azureAdClientSecret) ? [
+        {
+          name: 'azure-ad-client-secret'
+          value: azureAdClientSecret
+        }
+      ] : [])
     }
     template: {
       containers: [
@@ -261,6 +275,7 @@ resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (
         enabled: true
         registration: {
           clientId: azureAdClientId
+          clientSecretSettingName: 'azure-ad-client-secret'
           openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
         }
         validation: {
@@ -291,6 +306,7 @@ resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if 
         enabled: true
         registration: {
           clientId: azureAdClientId
+          clientSecretSettingName: 'azure-ad-client-secret'
           openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
         }
         validation: {
