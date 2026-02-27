@@ -150,6 +150,7 @@ resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (
     }
     globalValidation: {
       unauthenticatedClientAction: 'Return401'
+      excludedPaths: ['/health']
     }
     identityProviders: {
       azureActiveDirectory: {

@@ -141,11 +141,11 @@ jobs:
           
           echo "=== Smoke Test: Frontend Accessible ==="
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}")
-          if [ "$HTTP_STATUS" != "200" ]; then
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "302" ]; then
             echo "❌ Frontend returned HTTP ${HTTP_STATUS}"
             exit 1
           fi
-          echo "✅ Frontend accessible (HTTP 200)"
+          echo "✅ Frontend accessible (HTTP ${HTTP_STATUS})"
           
           echo "=== Smoke Test: Runtime Config ==="
           CONFIG=$(curl -sf "${FRONTEND_URL}/config.js" || echo "FAILED")

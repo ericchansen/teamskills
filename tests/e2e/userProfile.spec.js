@@ -5,6 +5,8 @@ async function demoLogin(page) {
   await page.goto('/');
   // Auth gate shows the demo login inline when MSAL is not configured
   await expect(page.locator('.auth-gate')).toBeVisible();
+  // Wait for user options to load before selecting
+  await expect(page.locator('.demo-login-inline select option')).not.toHaveCount(1, { timeout: 10000 });
   await page.locator('.demo-login-inline select').selectOption({ index: 1 });
   // Wait for matrix to load after login (auth gate login shows matrix view)
   await expect(page.locator('.skill-matrix')).toBeVisible({ timeout: 10000 });

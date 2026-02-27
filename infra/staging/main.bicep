@@ -254,6 +254,7 @@ resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (
     }
     globalValidation: {
       unauthenticatedClientAction: 'Return401'
+      excludedPaths: ['/health', '/api/admin/init']
     }
     identityProviders: {
       azureActiveDirectory: {
@@ -283,6 +284,7 @@ resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if 
     globalValidation: {
       unauthenticatedClientAction: 'RedirectToLoginPage'
       redirectToProvider: 'azureactivedirectory'
+      excludedPaths: ['/config.js']
     }
     identityProviders: {
       azureActiveDirectory: {
