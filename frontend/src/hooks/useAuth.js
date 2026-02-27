@@ -36,8 +36,9 @@ export function useAuth() {
           const user = await response.json();
           setBackendUser(user);
         } else if (response.status === 401) {
-          // Token expired or invalid
+          // Token expired or invalid — set error so UI can show retry
           setBackendUser(null);
+          setError('Session expired or token rejected. Please sign in again.');
         } else {
           throw new Error('Failed to fetch user profile');
         }
