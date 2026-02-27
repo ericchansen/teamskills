@@ -2,7 +2,7 @@
  * Auth middleware tests
  */
 
-const { findOrCreateUser, requireAdmin, requireOwnership } = require('../auth');
+const { findOrCreateUser, requireAdmin, requireOwnership, requireAuth, isAuthConfigured } = require('../auth');
 
 // Mock the database module
 jest.mock('../db', () => ({
@@ -169,6 +169,104 @@ describe('Auth Middleware', () => {
 
       delete process.env.AZURE_AD_CLIENT_ID;
       delete process.env.AZURE_AD_TENANT_ID;
+    });
+  });
+
+  describe('requireAuth', () => {
+    let savedNodeEnv;
+
+    beforeEach(() => {
+      savedNodeEnv = process.env.NODE_ENV;
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+    });
+
+    afterEach(() => {
+      process.env.NODE_ENV = savedNodeEnv;
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+    });
+
+    it('should return 503 in production when auth env vars are missing', async () => {
+      process.env.NODE_ENV = 'production';
+
+      const req = {};
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      await requireAuth(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith({
+        error: 'Authentication not configured. Contact administrator.'
+      });
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should call next() in non-production when auth env vars are missing (demo mode)', async () => {
+      process.env.NODE_ENV = 'development';
+
+      const req = {};
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      await requireAuth(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('should call next() in test env when auth env vars are missing (demo mode)', async () => {
+      process.env.NODE_ENV = 'test';
+
+      const req = {};
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      await requireAuth(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('should return 401 when auth is configured but no Authorization header', async () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.AZURE_AD_TENANT_ID = 'test-tenant-id';
+
+      const req = { headers: {} };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      await requireAuth(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Authorization header required' });
+      expect(next).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isAuthConfigured', () => {
+    afterEach(() => {
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+    });
+
+    it('should return false when both env vars are missing', () => {
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+      expect(isAuthConfigured()).toBe(false);
+    });
+
+    it('should return false when only CLIENT_ID is set', () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-id';
+      delete process.env.AZURE_AD_TENANT_ID;
+      expect(isAuthConfigured()).toBe(false);
+    });
+
+    it('should return true when both env vars are set', () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-id';
+      process.env.AZURE_AD_TENANT_ID = 'test-tenant';
+      expect(isAuthConfigured()).toBe(true);
     });
   });
 
