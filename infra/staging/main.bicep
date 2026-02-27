@@ -289,33 +289,4 @@ resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (
   }
 }
 
-resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
-  parent: frontend
-  name: 'current'
-  properties: {
-    platform: {
-      enabled: true
-    }
-    globalValidation: {
-      unauthenticatedClientAction: 'RedirectToLoginPage'
-      redirectToProvider: 'azureactivedirectory'
-      excludedPaths: ['/config.js']
-    }
-    identityProviders: {
-      azureActiveDirectory: {
-        enabled: true
-        registration: {
-          clientId: azureAdClientId
-          clientSecretSettingName: 'azure-ad-client-secret'
-          openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
-        }
-        validation: {
-          allowedAudiences: [
-            'api://${azureAdClientId}'
-            azureAdClientId
-          ]
-        }
-      }
-    }
-  }
-}
+
