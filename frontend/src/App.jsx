@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Toaster } from 'react-hot-toast';
 import SkillMatrix from './components/SkillMatrix';
 const SkillGraph = lazy(() => import('./components/SkillGraph'));
@@ -42,6 +42,28 @@ function App() {
 
   // Demo mode only allowed in local development (not deployed)
   const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  // Auto-login: on deployed instances with auth configured, redirect to Microsoft login automatically
+  const autoLoginTriggered = useRef(false);
+  const [autoLoginDone, setAutoLoginDone] = useState(() => {
+    return sessionStorage.getItem('msal_auto_login') === 'true';
+  });
+
+  useEffect(() => {
+    if (isAuthAvailable && !isAuthenticated && !authLoading && !isLocalDev && !autoLoginDone && !autoLoginTriggered.current) {
+      autoLoginTriggered.current = true;
+      sessionStorage.setItem('msal_auto_login', 'true');
+      setAutoLoginDone(true);
+      login();
+    }
+  }, [isAuthAvailable, isAuthenticated, authLoading, isLocalDev, autoLoginDone, login]);
+
+  // Clear auto-login flag on successful authentication (so next session auto-redirects again)
+  useEffect(() => {
+    if (isAuthenticated) {
+      sessionStorage.removeItem('msal_auto_login');
+    }
+  }, [isAuthenticated]);
 
   // Fetch users for demo login dropdown (only when DB is ready AND user is authenticated or auth not available)
   useEffect(() => {
@@ -87,8 +109,8 @@ function App() {
   };
 
   // Auth gate: block all content until user is authenticated
-  // In MSAL mode: show "Sign in with Microsoft" 
-  // In demo mode: auto-show the demo login picker
+  // On deployed instances: auto-redirect to Microsoft login
+  // On localhost: show demo login picker
   if (!currentUser && !authLoading) {
     // Still waiting for DB to be ready — show wake overlay only
     if (dbStatus !== 'ready') {
@@ -99,6 +121,18 @@ function App() {
             message={wakeMessage} 
             onRetry={retryWake} 
           />
+        </div>
+      );
+    }
+
+    // Auto-redirect pending — show loading instead of button
+    if (isAuthAvailable && !isLocalDev && !autoLoginDone) {
+      return (
+        <div className="app">
+          <div className="auth-gate">
+            <h1>Team Skills Tracker</h1>
+            <p>Redirecting to sign in...</p>
+          </div>
         </div>
       );
     }
