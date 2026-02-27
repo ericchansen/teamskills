@@ -1,0 +1,15 @@
+[
+  {
+    "assignment_id": "tusq-2026-02-27",
+    "universe": "the-usual-suspects",
+    "timestamp": "2026-02-27T18:29:44Z",
+    "agents": [
+      { "name": "Keaton", "role": "Lead" },
+      { "name": "Verbal", "role": "Frontend Dev" },
+      { "name": "Fenster", "role": "Backend Dev" },
+      { "name": "McManus", "role": "DevOps" },
+      { "name": "Hockney", "role": "Tester" },
+      { "name": "Kobayashi", "role": "Auth / Security" }
+    ]
+  }
+]
