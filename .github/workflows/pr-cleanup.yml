@@ -30,6 +30,29 @@ jobs:
         with:
           creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_TENANT_ID }}"}'
 
+      - name: Remove Entra ID redirect URIs
+        if: vars.AZURE_AD_CLIENT_ID != ''
+        run: |
+          APP_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
+          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
+
+          # Get existing redirect URIs
+          EXISTING=$(az ad app show --id "$APP_ID" --query "web.redirectUris[]" -o tsv)
+
+          # Filter out URIs containing this PR's identifier (e.g., pr23)
+          REMAINING=$(echo "$EXISTING" | grep -v "pr${PR_NUMBER}" || true)
+
+          if [ -z "$REMAINING" ]; then
+            echo "No redirect URIs remaining after filtering — clearing all"
+            az ad app update --id "$APP_ID" --web-redirect-uris
+          else
+            URI_ARGS=$(echo "$REMAINING" | tr '\n' ' ')
+            echo "Updating redirect URIs (removed pr${PR_NUMBER} entries):"
+            echo "$REMAINING"
+            az ad app update --id "$APP_ID" --web-redirect-uris $URI_ARGS
+          fi
+          echo "✅ PR-specific redirect URIs removed"
+
       - name: Delete PR staging resources
         id: cleanup
         run: |
