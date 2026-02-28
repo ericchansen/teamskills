@@ -1,16 +1,17 @@
-// PR Staging Environment - Minimal infrastructure for pull request previews
-// All PR environments deploy into a shared resource group (rg-teamskills-staging)
-// with per-PR resource naming to avoid subscription-level permissions.
+// Staging Environment - Shared infrastructure for pull request previews.
+// Uses stable resource names so the frontend URL never changes (avoids
+// per-PR redirect URI registration in Entra ID). Each PR deploy updates
+// the container images; cleanup scales to zero and stops Postgres.
 
 targetScope = 'resourceGroup'
 
-@description('PR number for unique resource naming')
+@description('PR number for tagging (tracks which PR is currently deployed)')
 param prNumber string
 
 @description('Location for all resources')
 param location string = resourceGroup().location
 
-@description('PostgreSQL administrator password')
+@description('PostgreSQL administrator password (stored as GitHub environment secret)')
 @secure()
 param postgresPassword string
 
@@ -33,7 +34,6 @@ param azureAdTenantId string = ''
 @description('Entra ID Client Secret for Easy Auth (optional)')
 param azureAdClientSecret string = ''
 
-var resourceToken = 'pr${prNumber}'
 var tags = { 
   'pr-staging': 'true'
   'pr-number': prNumber
@@ -45,9 +45,9 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' e
   scope: resourceGroup(acrResourceGroup)
 }
 
-// Shared Log Analytics Workspace for all PR environments
+// Shared Log Analytics Workspace (stable across all PRs)
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: 'log-staging-${resourceToken}'
+  name: 'log-staging'
   location: location
   tags: tags
   properties: {
@@ -58,9 +58,9 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   }
 }
 
-// Per-PR Container Apps Environment
+// Shared Container Apps Environment (stable URL suffix across all PRs)
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
-  name: 'cae-staging-${resourceToken}'
+  name: 'cae-staging'
   location: location
   tags: tags
   properties: {
@@ -74,9 +74,9 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
   }
 }
 
-// PostgreSQL Flexible Server (cheapest tier for staging)
+// Shared PostgreSQL Server (stopped between PRs to save costs)
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
-  name: 'psql-staging-${resourceToken}'
+  name: 'psql-staging'
   location: location
   tags: tags
   sku: {
@@ -120,9 +120,9 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-06-0
   }
 }
 
-// Backend Container App
+// Backend Container App (stable name, image updated per PR)
 resource backend 'Microsoft.App/containerApps@2023-05-01' = {
-  name: 'ca-backend-${resourceToken}'
+  name: 'ca-backend-staging'
   location: location
   tags: tags
   properties: {
@@ -134,7 +134,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
         targetPort: 3001
         transport: 'http'
         corsPolicy: {
-          allowedOrigins: ['https://ca-frontend-${resourceToken}.${containerAppsEnvironment.properties.defaultDomain}']
+          allowedOrigins: ['https://ca-frontend-staging.${containerAppsEnvironment.properties.defaultDomain}']
           allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
           allowedHeaders: ['Content-Type', 'Authorization']
         }
@@ -165,14 +165,14 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           env: [
             { name: 'NODE_ENV', value: 'production' }
             { name: 'PORT', value: '3001' }
-            { name: 'FRONTEND_URL', value: 'https://ca-frontend-${resourceToken}.${containerAppsEnvironment.properties.defaultDomain}' }
+            { name: 'FRONTEND_URL', value: 'https://ca-frontend-staging.${containerAppsEnvironment.properties.defaultDomain}' }
             { name: 'PGHOST', value: postgresServer.properties.fullyQualifiedDomainName }
             { name: 'PGPORT', value: '5432' }
             { name: 'PGUSER', value: 'pgadmin' }
             { name: 'PGPASSWORD', secretRef: 'postgres-password' }
             { name: 'PGDATABASE', value: 'teamskills' }
             { name: 'PGSSLMODE', value: 'require' }
-            { name: 'INIT_SECRET', value: 'staging-init-${prNumber}' }
+            { name: 'INIT_SECRET', value: 'staging-init-secret' }
             { name: 'AZURE_AD_CLIENT_ID', value: azureAdClientId }
             { name: 'AZURE_AD_TENANT_ID', value: azureAdTenantId }
           ]
@@ -191,9 +191,9 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
   dependsOn: [database]
 }
 
-// Frontend Container App
+// Frontend Container App (stable name, image updated per PR)
 resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
-  name: 'ca-frontend-${resourceToken}'
+  name: 'ca-frontend-staging'
   location: location
   tags: tags
   properties: {
@@ -230,7 +230,7 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           name: 'frontend'
           image: '${containerRegistry.properties.loginServer}/frontend:${imageTag}'
           env: [
-            { name: 'VITE_API_URL', value: 'https://ca-backend-${resourceToken}.${containerAppsEnvironment.properties.defaultDomain}' }
+            { name: 'VITE_API_URL', value: 'https://ca-backend-staging.${containerAppsEnvironment.properties.defaultDomain}' }
             { name: 'VITE_AZURE_AD_CLIENT_ID', value: azureAdClientId }
             { name: 'VITE_AZURE_AD_TENANT_ID', value: azureAdTenantId }
           ]
@@ -251,7 +251,7 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
 // Outputs for GitHub Actions
 output frontendUrl string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output backendUrl string = 'https://${backend.properties.configuration.ingress.fqdn}'
-output initSecret string = 'staging-init-${prNumber}'
+output initSecret string = 'staging-init-secret'
 
 // NOTE: Easy Auth explicitly disabled on backend — Express middleware handles JWT validation directly.
 // This is the standard pattern for SPA + API: MSAL sends Bearer tokens, Express validates via JWKS.

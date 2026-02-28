@@ -30,75 +30,50 @@ jobs:
         with:
           creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_TENANT_ID }}"}'
 
-      - name: Remove Entra ID redirect URIs
-        if: vars.AZURE_AD_CLIENT_ID != ''
-        run: |
-          APP_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
-          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
-
-          # Clean up web redirect URIs (backend Easy Auth callbacks)
-          EXISTING_WEB=$(az ad app show --id "$APP_ID" --query "web.redirectUris[]" -o tsv)
-          REMAINING_WEB=$(echo "$EXISTING_WEB" | grep -v "pr${PR_NUMBER}" || true)
-          if [ -z "$REMAINING_WEB" ]; then
-            echo "No web redirect URIs remaining — clearing all"
-            az ad app update --id "$APP_ID" --web-redirect-uris
-          else
-            WEB_ARGS=$(echo "$REMAINING_WEB" | tr '\n' ' ')
-            echo "Remaining web redirect URIs:"
-            echo "$REMAINING_WEB"
-            az ad app update --id "$APP_ID" --web-redirect-uris $WEB_ARGS
-          fi
-
-          # Clean up SPA redirect URIs (frontend MSAL)
-          OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
-          EXISTING_SPA=$(az ad app show --id "$APP_ID" --query "spa.redirectUris[]" -o tsv)
-          REMAINING_SPA=$(echo "$EXISTING_SPA" | grep -v "pr${PR_NUMBER}" || true)
-          SPA_JSON=$(echo "$REMAINING_SPA" | jq -R -s 'split("\n") | map(select(length > 0))')
-          az rest --method PATCH \
-            --url "https://graph.microsoft.com/v1.0/applications/${OBJECT_ID}" \
-            --headers "Content-Type=application/json" \
-            --body "{\"spa\":{\"redirectUris\":${SPA_JSON}}}"
-          echo "✅ PR-specific redirect URIs removed (web + SPA)"
-
-      - name: Delete PR staging resources
+      - name: Scale down staging and stop Postgres
         id: cleanup
         run: |
-          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
           RG="${{ env.STAGING_RESOURCE_GROUP }}"
-          DELETED=0
+          ACTIONS=0
 
-          echo "Cleaning up staging resources for PR #${PR_NUMBER} in ${RG}..."
+          echo "Scaling down staging resources..."
 
-          # Delete Container Apps first (they depend on the environment)
-          for APP in $(az containerapp list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
-            echo "Deleting Container App: ${APP}"
+          # Scale Container Apps to 0 replicas
+          for APP in ca-frontend-staging ca-backend-staging; do
+            if az containerapp show -g "$RG" -n "$APP" &>/dev/null; then
+              echo "Scaling $APP to 0 replicas..."
+              az containerapp update -g "$RG" -n "$APP" --min-replicas 0 --max-replicas 0 2>/dev/null || true
+              ACTIONS=$((ACTIONS + 1))
+            fi
+          done
+
+          # Stop PostgreSQL server to save costs
+          SERVER_NAME="psql-staging"
+          STATE=$(az postgres flexible-server show \
+            --name "$SERVER_NAME" --resource-group "$RG" \
+            --query "state" -o tsv 2>/dev/null || echo "NotFound")
+          
+          if [ "$STATE" = "Ready" ]; then
+            echo "Stopping Postgres server..."
+            az postgres flexible-server stop --name "$SERVER_NAME" --resource-group "$RG" --no-wait
+            ACTIONS=$((ACTIONS + 1))
+            echo "✅ Postgres server stop initiated"
+          elif [ "$STATE" = "NotFound" ]; then
+            echo "No Postgres server found"
+          else
+            echo "Postgres server state: $STATE"
+          fi
+
+          # Also clean up any leftover per-PR resources from previous approach
+          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
+          for APP in $(az containerapp list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}' && contains(name, 'pr${PR_NUMBER}')].name" -o tsv 2>/dev/null); do
+            echo "Deleting legacy per-PR Container App: ${APP}"
             az containerapp delete -g "$RG" -n "$APP" --yes --no-wait
-            DELETED=$((DELETED + 1))
+            ACTIONS=$((ACTIONS + 1))
           done
 
-          # Delete Container Apps Environment
-          for ENV in $(az containerapp env list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
-            echo "Deleting Container Apps Environment: ${ENV}"
-            az containerapp env delete -g "$RG" -n "$ENV" --yes --no-wait
-            DELETED=$((DELETED + 1))
-          done
-
-          # Delete PostgreSQL Flexible Server
-          for PG in $(az postgres flexible-server list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
-            echo "Deleting PostgreSQL server: ${PG}"
-            az postgres flexible-server delete -g "$RG" -n "$PG" --yes
-            DELETED=$((DELETED + 1))
-          done
-
-          # Delete Log Analytics Workspace
-          for LOG in $(az monitor log-analytics workspace list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
-            echo "Deleting Log Analytics workspace: ${LOG}"
-            az monitor log-analytics workspace delete -g "$RG" -n "$LOG" --yes --force
-            DELETED=$((DELETED + 1))
-          done
-
-          echo "deleted_count=${DELETED}" >> $GITHUB_OUTPUT
-          echo "Cleanup complete. Deleted ${DELETED} resources."
+          echo "action_count=${ACTIONS}" >> $GITHUB_OUTPUT
+          echo "Cleanup complete. ${ACTIONS} actions taken."
 
       - name: Update PR comment
         uses: actions/github-script@v7
@@ -107,7 +82,7 @@ jobs:
             const prNumber = ${{ steps.setup.outputs.pr_number }};
             const merged = ${{ github.event.pull_request.merged }};
             const status = merged ? '🎉 Merged' : '❌ Closed';
-            const deletedCount = '${{ steps.cleanup.outputs.deleted_count }}';
+            const actionCount = '${{ steps.cleanup.outputs.action_count }}';
             
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
@@ -123,9 +98,10 @@ jobs:
             if (stagingComment) {
               const body = `🚀 **PR Staging Environment**
 
-              **Status:** 🗑️ Destroyed (${deletedCount} resources removed)
+              **Status:** 💤 Scaled down (${actionCount} actions taken)
 
-              The staging environment for this PR has been cleaned up.
+              The staging environment has been scaled to zero and Postgres stopped.
+              Resources are preserved for reuse by the next PR.
               PR was ${status.toLowerCase()}.
               `;
               
@@ -139,6 +115,8 @@ jobs:
 
       - name: Cleanup summary
         run: |
-          echo "## 🗑️ PR Staging Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "## 💤 PR Staging Scaled Down" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Deleted **${{ steps.cleanup.outputs.deleted_count }}** resources for PR #${{ steps.setup.outputs.pr_number }} from **${{ env.STAGING_RESOURCE_GROUP }}**." >> $GITHUB_STEP_SUMMARY
+          echo "Took **${{ steps.cleanup.outputs.action_count }}** actions for PR #${{ steps.setup.outputs.pr_number }} in **${{ env.STAGING_RESOURCE_GROUP }}**." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Resources preserved for reuse. Postgres stopped to save costs." >> $GITHUB_STEP_SUMMARY

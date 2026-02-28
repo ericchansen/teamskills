@@ -58,17 +58,9 @@ jobs:
             -t ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ steps.setup.outputs.image_tag }} .
           docker push ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ steps.setup.outputs.image_tag }}
 
-      - name: Generate PostgreSQL password
-        id: pg_password
-        run: |
-          PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
-          echo "::add-mask::${PASSWORD}"
-          echo "password=${PASSWORD}" >> $GITHUB_OUTPUT
-
       - name: Wake up Postgres if stopped
         run: |
-          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
-          SERVER_NAME="psql-staging-pr${PR_NUMBER}"
+          SERVER_NAME="psql-staging"
           RG="${{ env.STAGING_RESOURCE_GROUP }}"
           
           # Check if server exists and is stopped
@@ -94,7 +86,7 @@ jobs:
           template: ./infra/staging/main.bicep
           parameters: >
             prNumber=${{ steps.setup.outputs.pr_number }}
-            postgresPassword=${{ steps.pg_password.outputs.password }}
+            postgresPassword=${{ secrets.STAGING_POSTGRES_PASSWORD }}
             imageTag=${{ steps.setup.outputs.image_tag }}
             acrName=${{ env.ACR_NAME }}
             acrResourceGroup=${{ env.ACR_RESOURCE_GROUP }}
@@ -103,48 +95,6 @@ jobs:
             azureAdTenantId=${{ vars.AZURE_AD_TENANT_ID || '' }}
             azureAdClientSecret=${{ secrets.AZURE_AD_CLIENT_SECRET || '' }}
           failOnStdErr: false
-
-      - name: Register Entra ID redirect URIs
-        if: vars.AZURE_AD_CLIENT_ID != ''
-        continue-on-error: true
-        run: |
-          APP_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
-          FRONTEND_URL="${{ steps.deploy.outputs.frontendUrl }}"
-          BACKEND_URL="${{ steps.deploy.outputs.backendUrl }}"
-
-          # Backend Easy Auth needs web redirect URI
-          BACKEND_CALLBACK="${BACKEND_URL}/.auth/login/aad/callback"
-          EXISTING_WEB=$(az ad app show --id "$APP_ID" --query "web.redirectUris[]" -o tsv 2>/dev/null) || true
-          if [ -n "$EXISTING_WEB" ]; then
-            ALL_WEB=$(echo -e "${EXISTING_WEB}\n${BACKEND_CALLBACK}" | grep -v '^$' | sort -u)
-          else
-            ALL_WEB="$BACKEND_CALLBACK"
-          fi
-          WEB_ARGS=$(echo "$ALL_WEB" | tr '\n' ' ')
-          echo "Web redirect URIs (backend Easy Auth):"
-          echo "$ALL_WEB"
-          az ad app update --id "$APP_ID" --web-redirect-uris $WEB_ARGS || echo "⚠️ Could not update web redirect URIs (needs Application.ReadWrite.All permission)"
-
-          # Frontend MSAL needs SPA redirect URI (origin only, no callback path)
-          OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv 2>/dev/null) || true
-          if [ -n "$OBJECT_ID" ]; then
-            EXISTING_SPA=$(az ad app show --id "$APP_ID" --query "spa.redirectUris[]" -o tsv 2>/dev/null) || true
-            if [ -n "$EXISTING_SPA" ]; then
-              ALL_SPA=$(echo -e "${EXISTING_SPA}\n${FRONTEND_URL}" | grep -v '^$' | sort -u)
-            else
-              ALL_SPA="$FRONTEND_URL"
-            fi
-            SPA_JSON=$(echo "$ALL_SPA" | jq -R -s 'split("\n") | map(select(length > 0))')
-            echo "SPA redirect URIs (frontend MSAL):"
-            echo "$ALL_SPA"
-            az rest --method PATCH \
-              --url "https://graph.microsoft.com/v1.0/applications/${OBJECT_ID}" \
-              --headers "Content-Type=application/json" \
-              --body "{\"spa\":{\"redirectUris\":${SPA_JSON}}}" || echo "⚠️ Could not update SPA redirect URIs (needs Application.ReadWrite.All permission)"
-            echo "✅ Redirect URIs registered"
-          else
-            echo "⚠️ Could not read app registration (service principal may need Application.ReadWrite.All permission on Microsoft Graph)"
-          fi
 
       - name: Wait for backend to be ready
         run: |
