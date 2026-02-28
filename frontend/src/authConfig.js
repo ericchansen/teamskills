@@ -17,7 +17,7 @@ const clientId = getConfig('VITE_AZURE_AD_CLIENT_ID');
 export const msalConfig = {
   auth: {
     clientId,
-    authority: 'https://login.microsoftonline.com/organizations',
+    authority: `https://login.microsoftonline.com/${getConfig('VITE_AZURE_AD_TENANT_ID') || 'organizations'}`,
     redirectUri: window.location.origin,
     postLogoutRedirectUri: window.location.origin,
     navigateToLoginRequestUrl: true
