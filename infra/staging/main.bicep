@@ -76,7 +76,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
 
 // Shared PostgreSQL Server (stopped between PRs to save costs)
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
-  name: 'psql-staging'
+  name: 'psql-teamskills-staging'
   location: location
   tags: tags
   sku: {

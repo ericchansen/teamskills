@@ -48,7 +48,7 @@ jobs:
           done
 
           # Stop PostgreSQL server to save costs
-          SERVER_NAME="psql-staging"
+          SERVER_NAME="psql-teamskills-staging"
           STATE=$(az postgres flexible-server show \
             --name "$SERVER_NAME" --resource-group "$RG" \
             --query "state" -o tsv 2>/dev/null || echo "NotFound")

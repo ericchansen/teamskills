@@ -60,7 +60,7 @@ jobs:
 
       - name: Wake up Postgres if stopped
         run: |
-          SERVER_NAME="psql-staging"
+          SERVER_NAME="psql-teamskills-staging"
           RG="${{ env.STAGING_RESOURCE_GROUP }}"
           
           # Check if server exists and is stopped
