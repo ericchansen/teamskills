@@ -253,7 +253,20 @@ output frontendUrl string = 'https://${frontend.properties.configuration.ingress
 output backendUrl string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output initSecret string = 'staging-init-${prNumber}'
 
-// NOTE: Easy Auth removed from backend — Express middleware handles JWT validation directly.
+// NOTE: Easy Auth explicitly disabled on backend — Express middleware handles JWT validation directly.
 // This is the standard pattern for SPA + API: MSAL sends Bearer tokens, Express validates via JWKS.
+// We must keep this resource to ensure Easy Auth stays disabled (removing it doesn't delete the config).
+resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = {
+  parent: backend
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: false
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'AllowAnonymous'
+    }
+  }
+}
 
 
