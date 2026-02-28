@@ -146,7 +146,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           passwordSecretRef: 'registry-password'
         }
       ]
-      secrets: concat([
+      secrets: [
         {
           name: 'registry-password'
           value: containerRegistry.listCredentials().passwords[0].value
@@ -155,12 +155,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           name: 'postgres-password'
           value: postgresPassword
         }
-      ], !empty(azureAdClientSecret) ? [
-        {
-          name: 'azure-ad-client-secret'
-          value: azureAdClientSecret
-        }
-      ] : [])
+      ]
     }
     template: {
       containers: [
@@ -258,35 +253,7 @@ output frontendUrl string = 'https://${frontend.properties.configuration.ingress
 output backendUrl string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output initSecret string = 'staging-init-${prNumber}'
 
-// Easy Auth: Entra ID authentication for staging (only when configured)
-resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
-  parent: backend
-  name: 'current'
-  properties: {
-    platform: {
-      enabled: true
-    }
-    globalValidation: {
-      unauthenticatedClientAction: 'Return401'
-      excludedPaths: ['/health', '/api/admin/init', '/api/auth/config']
-    }
-    identityProviders: {
-      azureActiveDirectory: {
-        enabled: true
-        registration: {
-          clientId: azureAdClientId
-          clientSecretSettingName: 'azure-ad-client-secret'
-          openIdIssuer: 'https://sts.windows.net/${azureAdTenantId}/'
-        }
-        validation: {
-          allowedAudiences: [
-            'api://${azureAdClientId}'
-            azureAdClientId
-          ]
-        }
-      }
-    }
-  }
-}
+// NOTE: Easy Auth removed from backend — Express middleware handles JWT validation directly.
+// This is the standard pattern for SPA + API: MSAL sends Bearer tokens, Express validates via JWKS.
 
 
