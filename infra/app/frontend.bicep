@@ -22,10 +22,6 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID for Easy Auth (optional)')
 param azureAdTenantId string = ''
 
-@secure()
-@description('Microsoft Entra ID Client Secret for Easy Auth (optional)')
-param azureAdClientSecret string = ''
-
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -56,12 +52,6 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           identity: 'system'
         }
       ]
-      secrets: !empty(azureAdClientSecret) ? [
-        {
-          name: 'azure-ad-client-secret'
-          value: azureAdClientSecret
-        }
-      ] : []
     }
     template: {
       containers: [
@@ -72,6 +62,14 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'VITE_API_URL'
               value: backendUrl
+            }
+            {
+              name: 'VITE_AZURE_AD_CLIENT_ID'
+              value: azureAdClientId
+            }
+            {
+              name: 'VITE_AZURE_AD_TENANT_ID'
+              value: azureAdTenantId
             }
           ]
           resources: {
@@ -91,5 +89,21 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
 output uri string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output name string = frontend.name
 output principalId string = frontend.identity.principalId
+
+// NOTE: Easy Auth explicitly disabled on frontend — MSAL.js handles authentication directly in the browser.
+// This is the standard pattern for SPAs: MSAL acquires tokens client-side, sends to backend via Bearer header.
+// We must keep this resource to ensure Easy Auth stays disabled (removing it doesn't delete the config).
+resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+  parent: frontend
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: false
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'AllowAnonymous'
+    }
+  }
+}
 
 
