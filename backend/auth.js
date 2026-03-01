@@ -9,16 +9,16 @@ const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 const db = require('./db');
 
-// JWKS client for fetching Microsoft's signing keys
-// Use tenant-specific endpoint when configured, fall back to 'common' for demo mode
-const jwksUri = process.env.AZURE_AD_TENANT_ID
-  ? `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/discovery/v2.0/keys`
-  : 'https://login.microsoftonline.com/common/discovery/v2.0/keys';
+// JWKS client for fetching Microsoft's signing keys.
+// Always use the 'common' endpoint — it serves keys for all tenants, which is
+// required for multi-tenant apps (AzureADMultipleOrgs) where tokens come from
+// any Entra ID tenant.
+const jwksUri = 'https://login.microsoftonline.com/common/discovery/v2.0/keys';
 
 const client = jwksClient({
   jwksUri,
   cache: true,
-  cacheMaxAge: 86400000, // 24 hours
+  cacheMaxAge: 14400000, // 4 hours — short enough to pick up key rotations
   rateLimit: true,
   jwksRequestsPerMinute: 10
 });
@@ -47,13 +47,10 @@ function verifyToken(token) {
       algorithms: ['RS256']
     };
 
-    // Validate issuer when tenant ID is configured (prevents cross-tenant token abuse)
-    if (process.env.AZURE_AD_TENANT_ID) {
-      options.issuer = [
-        `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
-        `https://sts.windows.net/${process.env.AZURE_AD_TENANT_ID}/`
-      ];
-    }
+    // Issuer validation is intentionally skipped for multi-tenant apps.
+    // Each tenant's tokens carry that tenant's issuer URL, so there is no single
+    // issuer to validate against. The audience check (api://{clientId}) is
+    // sufficient — only tokens explicitly requested for THIS app will pass.
 
     jwt.verify(token, getKey, options, (err, decoded) => {
       if (err) {
@@ -116,7 +113,9 @@ async function findOrCreateUser(claims) {
  * Check if Entra ID authentication is configured
  */
 function isAuthConfigured() {
-  return !!(process.env.AZURE_AD_CLIENT_ID && process.env.AZURE_AD_TENANT_ID);
+  // Only AZURE_AD_CLIENT_ID is required — tenant ID is used by the frontend
+  // for MSAL authority but is not needed for backend JWT validation.
+  return !!process.env.AZURE_AD_CLIENT_ID;
 }
 
 /**
