@@ -29,10 +29,6 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID (optional)')
 param azureAdTenantId string = ''
 
-@secure()
-@description('Microsoft Entra ID Client Secret for Easy Auth (optional)')
-param azureAdClientSecret string = ''
-
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -147,7 +143,9 @@ output principalId string = backend.identity.principalId
 // NOTE: Easy Auth explicitly disabled on backend — Express middleware handles JWT validation directly.
 // This is the standard pattern for SPA + API: MSAL sends Bearer tokens, Express validates via JWKS.
 // We must keep this resource to ensure Easy Auth stays disabled (removing it doesn't delete the config).
-resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+// Always deployed unconditionally — if env vars are empty and this resource
+// isn't deployed, any pre-existing Easy Auth config would persist.
+resource backendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = {
   parent: backend
   name: 'current'
   properties: {

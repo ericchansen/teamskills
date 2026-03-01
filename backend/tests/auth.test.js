@@ -251,16 +251,16 @@ describe('Auth Middleware', () => {
       delete process.env.AZURE_AD_TENANT_ID;
     });
 
-    it('should return false when both env vars are missing', () => {
+    it('should return false when CLIENT_ID is missing', () => {
       delete process.env.AZURE_AD_CLIENT_ID;
       delete process.env.AZURE_AD_TENANT_ID;
       expect(isAuthConfigured()).toBe(false);
     });
 
-    it('should return false when only CLIENT_ID is set', () => {
+    it('should return true when only CLIENT_ID is set (multi-tenant)', () => {
       process.env.AZURE_AD_CLIENT_ID = 'test-id';
       delete process.env.AZURE_AD_TENANT_ID;
-      expect(isAuthConfigured()).toBe(false);
+      expect(isAuthConfigured()).toBe(true);
     });
 
     it('should return true when both env vars are set', () => {

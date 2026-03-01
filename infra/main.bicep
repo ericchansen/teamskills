@@ -28,10 +28,6 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID for authentication (optional)')
 param azureAdTenantId string = ''
 
-@secure()
-@description('Microsoft Entra ID Client Secret for Easy Auth (optional)')
-param azureAdClientSecret string = ''
-
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
@@ -111,7 +107,6 @@ module backend './app/backend.bicep' = {
     frontendUrl: 'https://${abbrs.appContainerApps}frontend-${resourceToken}.${containerApps.outputs.defaultDomain}'
     azureAdClientId: azureAdClientId
     azureAdTenantId: azureAdTenantId
-    azureAdClientSecret: azureAdClientSecret
   }
 }
 

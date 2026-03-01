@@ -93,7 +93,9 @@ output principalId string = frontend.identity.principalId
 // NOTE: Easy Auth explicitly disabled on frontend — MSAL.js handles authentication directly in the browser.
 // This is the standard pattern for SPAs: MSAL acquires tokens client-side, sends to backend via Bearer header.
 // We must keep this resource to ensure Easy Auth stays disabled (removing it doesn't delete the config).
-resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = if (!empty(azureAdClientId) && !empty(azureAdTenantId)) {
+// Always deployed unconditionally — if env vars are empty and this resource
+// isn't deployed, any pre-existing Easy Auth config would persist.
+resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = {
   parent: frontend
   name: 'current'
   properties: {
