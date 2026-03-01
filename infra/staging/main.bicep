@@ -163,7 +163,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           name: 'backend'
           image: '${containerRegistry.properties.loginServer}/backend:${imageTag}'
           env: [
-            { name: 'NODE_ENV', value: 'production' }
+            { name: 'NODE_ENV', value: 'staging' }
             { name: 'PORT', value: '3001' }
             { name: 'FRONTEND_URL', value: 'https://ca-frontend-${resourceToken}.${containerAppsEnvironment.properties.defaultDomain}' }
             { name: 'PGHOST', value: postgresServer.properties.fullyQualifiedDomainName }
