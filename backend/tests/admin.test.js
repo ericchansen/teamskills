@@ -190,4 +190,51 @@ describe('Admin API', () => {
       expect(response.status).toBe(400);
     });
   });
+
+  describe('GET /api/admin/status - Auth enforcement', () => {
+    afterEach(() => {
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+    });
+
+    test('should return 401 when auth is configured but no token provided', async () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.AZURE_AD_TENANT_ID = 'test-tenant-id';
+
+      const app = require('../server');
+      const response = await request(app).get('/api/admin/status');
+
+      expect(response.status).toBe(401);
+    });
+
+    test('should succeed in demo mode (auth not configured)', async () => {
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+
+      db.query
+        .mockResolvedValueOnce({ rows: [{ time: '2026-01-01T00:00:00Z' }] })
+        .mockResolvedValueOnce({ rows: [{ count: '5' }] })
+        .mockResolvedValueOnce({ rows: [{ count: '20' }] });
+
+      const app = require('../server');
+      const response = await request(app).get('/api/admin/status');
+
+      expect(response.status).toBe(200);
+      expect(response.body.connected).toBe(true);
+    });
+  });
+
+  describe('GET /api/admin/status - Error handling', () => {
+    test('should return generic error message, not raw error details', async () => {
+      db.query.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:5432'));
+
+      const app = require('../server');
+      const response = await request(app).get('/api/admin/status');
+
+      expect(response.status).toBe(500);
+      expect(response.body.connected).toBe(false);
+      expect(response.body.error).toBe('Database connection failed');
+      expect(response.body.error).not.toContain('ECONNREFUSED');
+    });
+  });
 });

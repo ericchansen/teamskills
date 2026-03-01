@@ -23,7 +23,7 @@ describe('Users API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockUsers);
-      expect(db.query).toHaveBeenCalledWith('SELECT * FROM users ORDER BY name');
+      expect(db.query).toHaveBeenCalledWith('SELECT id, name, email, title, department, is_admin, created_at, updated_at FROM users ORDER BY name');
     });
   });
 
@@ -103,6 +103,30 @@ describe('Users API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('message');
+    });
+  });
+
+  describe('User response filtering - entra_oid exclusion', () => {
+    test('GET /api/users query should not select entra_oid', async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      const app = require('../server');
+      await request(app).get('/api/users');
+
+      const sqlQuery = db.query.mock.calls[0][0];
+      expect(sqlQuery).not.toContain('entra_oid');
+      expect(sqlQuery).not.toContain('SELECT *');
+    });
+
+    test('GET /api/users/:id query should not select entra_oid', async () => {
+      db.query.mockResolvedValue({ rows: [{ id: 1, name: 'Test User' }] });
+
+      const app = require('../server');
+      await request(app).get('/api/users/1');
+
+      const sqlQuery = db.query.mock.calls[0][0];
+      expect(sqlQuery).not.toContain('entra_oid');
+      expect(sqlQuery).not.toContain('SELECT *');
     });
   });
 });
