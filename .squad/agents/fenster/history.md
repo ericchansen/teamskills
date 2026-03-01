@@ -12,3 +12,9 @@
 - `requireAuth` in production now returns 503 if Entra ID env vars are missing (no more unauthenticated demo mode in prod). Demo mode still works in dev/test.
 - `/health` and `/api/auth/*` are exempt from `requireAuth` by middleware ordering in `server.js` — `/health` is not under `/api`, and `authRouter` is mounted before the `requireAuth` middleware.
 - `requireOwnership` and `requireAdmin` also have `isAuthConfigured()` pass-through — if production enforcement is needed there too, same pattern applies.
+- PR #28 added `req.user = { id: 1, ... is_admin: true }` in demo mode for both `requireAuth` and `optionalAuth`. Hardcoded `id: 1` assumes that user ID exists in the DB — fragile but functional for dev.
+- PR #27 moved JWKS to `common` endpoint (multi-tenant), dropped issuer validation (correct for multi-tenant), reduced cache to 4h, simplified `isAuthConfigured()` to only need `AZURE_AD_CLIENT_ID`. All sound changes.
+- `POST /api/categories` now requires `requireAuth + requireAdmin` (fixed). GET /categories remains public.
+- `/admin/status` now requires `requireAuth + requireAdmin` (fixed). Error handler uses generic message instead of leaking `error.message`.
+- `GET /api/users` and `GET /api/users/:id` now use explicit column list excluding `entra_oid` (fixed).
+- ESLint config uses `argsIgnorePattern: '^_'` but this only covers function args, not catch clause variables. Use bare `catch {}` (no binding) when the error object isn't needed.
