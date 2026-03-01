@@ -62,4 +62,39 @@ describe('Categories API', () => {
       expect(response.status).toBe(500);
     });
   });
+
+  describe('POST /api/categories - Auth enforcement', () => {
+    afterEach(() => {
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+    });
+
+    test('should return 401 when auth is configured but no token provided', async () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.AZURE_AD_TENANT_ID = 'test-tenant-id';
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/categories')
+        .send({ name: 'Test Category' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('should succeed in demo mode (auth not configured)', async () => {
+      delete process.env.AZURE_AD_CLIENT_ID;
+      delete process.env.AZURE_AD_TENANT_ID;
+
+      const mockResult = { id: 1, name: 'New Category' };
+      db.query.mockResolvedValue({ rows: [mockResult] });
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/categories')
+        .send({ name: 'New Category' });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual(mockResult);
+    });
+  });
 });

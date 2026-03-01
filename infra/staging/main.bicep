@@ -29,10 +29,6 @@ param azureAdClientId string = ''
 @description('Entra ID tenant ID for authentication (optional)')
 param azureAdTenantId string = ''
 
-@secure()
-@description('Entra ID Client Secret for Easy Auth (optional)')
-param azureAdClientSecret string = ''
-
 var resourceToken = 'pr${prNumber}'
 var tags = { 
   'pr-staging': 'true'
@@ -212,17 +208,12 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           passwordSecretRef: 'registry-password'
         }
       ]
-      secrets: concat([
+      secrets: [
         {
           name: 'registry-password'
           value: containerRegistry.listCredentials().passwords[0].value
         }
-      ], !empty(azureAdClientSecret) ? [
-        {
-          name: 'azure-ad-client-secret'
-          value: azureAdClientSecret
-        }
-      ] : [])
+      ]
     }
     template: {
       containers: [

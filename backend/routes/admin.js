@@ -506,7 +506,7 @@ router.post('/init', async (req, res) => {
 });
 
 // Check database status
-router.get('/status', async (req, res) => {
+router.get('/status', requireAuth, requireAdmin, async (req, res) => {
   try {
     const result = await db.query('SELECT NOW() as time');
     const userCount = await db.query('SELECT COUNT(*) as count FROM users').catch(() => ({ rows: [{ count: 0 }] }));
@@ -520,8 +520,8 @@ router.get('/status', async (req, res) => {
         skills: parseInt(skillCount.rows[0].count)
       }
     });
-  } catch (error) {
-    res.status(500).json({ connected: false, error: error.message });
+  } catch {
+    res.status(500).json({ connected: false, error: 'Database connection failed' });
   }
 });
 
