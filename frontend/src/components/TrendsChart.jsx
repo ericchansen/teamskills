@@ -2,13 +2,6 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
 import { getConfig } from '../config';
 
-const LEVEL_COLORS = {
-  L100: '#e74c3c',
-  L200: '#e67e22',
-  L300: '#3498db',
-  L400: '#27ae60'
-};
-
 const LEVEL_NUM = { L100: 100, L200: 200, L300: 300, L400: 400 };
 
 function TrendsChart() {
