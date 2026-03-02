@@ -613,9 +613,9 @@ router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
 
 // Admin: sync skills from CSV or SharePoint
 // POST /api/admin/sync-skills
-// Body: { source: 'csv' | 'sharepoint', secret: string }
+// Body: { source: 'csv' | 'pivot-csv' | 'sharepoint', secret: string, csvContent?: string, filePath?: string }
 router.post('/sync-skills', async (req, res) => {
-  const { secret, source = 'csv', csvContent } = req.body;
+  const { secret, source = 'csv', csvContent, filePath } = req.body;
 
   // Require INIT_SECRET for security (same as /init)
   const initSecret = process.env.INIT_SECRET;
@@ -627,6 +627,9 @@ router.post('/sync-skills', async (req, res) => {
     const options = {};
     if (csvContent) {
       options.csvContent = csvContent;
+    }
+    if (filePath) {
+      options.filePath = filePath;
     }
 
     if (source === 'sharepoint') {

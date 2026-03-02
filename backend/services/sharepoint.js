@@ -216,11 +216,156 @@ async function ensureSchemaExtensions() {
 }
 
 /**
+ * Parse a pivot-table CSV (SharePoint skills matrix export).
+ * Header: Title, Alias, Qualifier, Skill1, Skill2, ...
+ * Rows: Name, Alias, Team, 100, 200, 300, 400, "", ...
+ * Returns { skillNames: string[], rows: { name, team, skills: { skillName: 'L100'|... }[] } }
+ */
+function parsePivotCSV(content) {
+  const lines = content.split('\n').filter(line => line.trim());
+  const headers = parseCSVLine(lines[0]).map(h => h.trim());
+
+  // Columns 0=Title, 1=Alias, 2=Qualifier, 3+=skill names
+  const skillNames = headers.slice(3);
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i]);
+    const name = (values[0] || '').trim();
+    if (!name) continue;
+
+    const team = (values[2] || '').trim();
+    const skills = {};
+
+    for (let s = 0; s < skillNames.length; s++) {
+      const raw = (values[s + 3] || '').trim();
+      if (!raw) continue;
+      const numVal = parseInt(raw, 10);
+      if (!numVal || numVal < 100) continue;
+      // Map 100→L100, 200→L200, etc.
+      const level = `L${numVal}`;
+      if (['L100', 'L200', 'L300', 'L400'].includes(level)) {
+        skills[skillNames[s]] = level;
+      }
+    }
+
+    rows.push({ name, team, skills });
+  }
+
+  return { skillNames, rows };
+}
+
+/**
+ * Sync pivot-table CSV into PostgreSQL (users, skills, user_skills).
+ * Generates placeholder emails for users without one.
+ */
+async function syncPivotToDatabase(pivotData) {
+  const { skillNames, rows } = pivotData;
+  const stats = {
+    users: { created: 0, updated: 0 },
+    skills: { created: 0, existing: 0 },
+    userSkills: { created: 0, updated: 0, skipped: 0 },
+    totalUsers: rows.length,
+    totalSkillColumns: skillNames.length
+  };
+
+  await ensureSchemaExtensions();
+
+  // Phase 1: Upsert all skills from column headers
+  const skillIdMap = new Map();
+  for (const skillName of skillNames) {
+    const existing = await db.query('SELECT id FROM skills WHERE name = $1', [skillName]);
+    if (existing.rows.length > 0) {
+      skillIdMap.set(skillName, existing.rows[0].id);
+      stats.skills.existing++;
+    } else {
+      const result = await db.query(
+        'INSERT INTO skills (name, target_level) VALUES ($1, $2) RETURNING id',
+        [skillName, 'L200']
+      );
+      skillIdMap.set(skillName, result.rows[0].id);
+      stats.skills.created++;
+    }
+  }
+
+  // Phase 2: Upsert users and their skills
+  for (const row of rows) {
+    // Generate a placeholder email from the display name
+    const emailSlug = row.name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+    const email = `${emailSlug}@placeholder.local`;
+
+    // Upsert user by email
+    let userResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (userResult.rows.length > 0) {
+      await db.query(
+        'UPDATE users SET name = $1, team = $2 WHERE email = $3',
+        [row.name, row.team, email]
+      );
+      stats.users.updated++;
+    } else {
+      userResult = await db.query(
+        'INSERT INTO users (name, email, team) VALUES ($1, $2, $3) RETURNING id',
+        [row.name, email, row.team]
+      );
+      stats.users.created++;
+    }
+    const userId = userResult.rows[0].id;
+
+    // Phase 3: Upsert user_skills
+    for (const [skillName, level] of Object.entries(row.skills)) {
+      const skillId = skillIdMap.get(skillName);
+      if (!skillId) { stats.userSkills.skipped++; continue; }
+
+      const existing = await db.query(
+        'SELECT proficiency_level FROM user_skills WHERE user_id = $1 AND skill_id = $2',
+        [userId, skillId]
+      );
+
+      if (existing.rows.length > 0) {
+        if (existing.rows[0].proficiency_level !== level) {
+          await db.query(
+            'UPDATE user_skills SET proficiency_level = $1 WHERE user_id = $2 AND skill_id = $3',
+            [level, userId, skillId]
+          );
+          stats.userSkills.updated++;
+        } else {
+          stats.userSkills.skipped++;
+        }
+      } else {
+        await db.query(
+          'INSERT INTO user_skills (user_id, skill_id, proficiency_level) VALUES ($1, $2, $3)',
+          [userId, skillId, level]
+        );
+        stats.userSkills.created++;
+      }
+    }
+  }
+
+  return stats;
+}
+
+/**
  * Full sync: read from source and write to DB
- * @param {string} source - 'csv' or 'sharepoint'
- * @param {object} options - { csvPath, graphClient }
+ * @param {string} source - 'csv', 'pivot-csv', or 'sharepoint'
+ * @param {object} options - { csvPath, csvContent, filePath, graphClient }
  */
 async function sync(source = 'csv', options = {}) {
+  if (source === 'pivot-csv') {
+    let content;
+    if (options.csvContent) {
+      content = options.csvContent;
+    } else {
+      const filePath = options.filePath || path.join(__dirname, '..', '..', '.data', 'skills-matrix.csv');
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Pivot CSV file not found: ${filePath}`);
+      }
+      content = fs.readFileSync(filePath, 'utf-8');
+    }
+    const pivotData = parsePivotCSV(content);
+    const stats = await syncPivotToDatabase(pivotData);
+    return { source, ...stats };
+  }
+
   let records;
   
   if (source === 'sharepoint') {
@@ -242,4 +387,4 @@ async function sync(source = 'csv', options = {}) {
   return { source, ...stats };
 }
 
-module.exports = { sync, parseCSV, parseCSVContent, fetchFromSharePoint, syncToDatabase, ensureSchemaExtensions };
+module.exports = { sync, parseCSV, parseCSVContent, parsePivotCSV, syncPivotToDatabase, fetchFromSharePoint, syncToDatabase, ensureSchemaExtensions };
