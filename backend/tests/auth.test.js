@@ -67,6 +67,34 @@ describe('Auth Middleware', () => {
       expect(result.entra_oid).toBe('test-oid-12345');
     });
 
+    it('should link CSV-imported user by name when oid and email miss', async () => {
+      const csvUser = {
+        id: 5,
+        name: 'Test User',
+        email: 'test.user@placeholder.local',
+        entra_oid: null
+      };
+
+      // First query (by oid) returns nothing
+      db.query.mockResolvedValueOnce({ rows: [] });
+      // Second query (by email) returns nothing (placeholder email doesn't match)
+      db.query.mockResolvedValueOnce({ rows: [] });
+      // Third query (by name) returns CSV user
+      db.query.mockResolvedValueOnce({ rows: [csvUser] });
+      // Fourth query (update oid + email)
+      db.query.mockResolvedValueOnce({ rows: [] });
+
+      const result = await findOrCreateUser(mockClaims);
+
+      expect(db.query).toHaveBeenCalledTimes(4);
+      expect(db.query).toHaveBeenNthCalledWith(3,
+        'SELECT * FROM users WHERE LOWER(name) = LOWER($1)',
+        ['Test User']
+      );
+      expect(result.entra_oid).toBe('test-oid-12345');
+      expect(result.email).toBe('test@example.com');
+    });
+
     it('should create new user if not found', async () => {
       const newUser = {
         id: 3,
@@ -81,12 +109,14 @@ describe('Auth Middleware', () => {
       db.query.mockResolvedValueOnce({ rows: [] });
       // Second query (by email) returns nothing
       db.query.mockResolvedValueOnce({ rows: [] });
-      // Third query (insert) returns new user
+      // Third query (by name) returns nothing
+      db.query.mockResolvedValueOnce({ rows: [] });
+      // Fourth query (insert) returns new user
       db.query.mockResolvedValueOnce({ rows: [newUser] });
 
       const result = await findOrCreateUser(mockClaims);
 
-      expect(db.query).toHaveBeenCalledTimes(3);
+      expect(db.query).toHaveBeenCalledTimes(4);
       expect(result).toEqual(newUser);
     });
 
@@ -99,12 +129,13 @@ describe('Auth Middleware', () => {
 
       db.query.mockResolvedValueOnce({ rows: [] });
       db.query.mockResolvedValueOnce({ rows: [] });
+      db.query.mockResolvedValueOnce({ rows: [] });
       db.query.mockResolvedValueOnce({ rows: [{ id: 4, email: 'user@company.com' }] });
 
       await findOrCreateUser(claims);
 
       // Verify INSERT used preferred_username as email
-      expect(db.query).toHaveBeenNthCalledWith(3,
+      expect(db.query).toHaveBeenNthCalledWith(4,
         expect.stringContaining('INSERT INTO users'),
         ['Company User', 'user@company.com', 'another-oid', 'Team Member', null]
       );
