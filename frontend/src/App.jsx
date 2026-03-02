@@ -31,6 +31,7 @@ function App() {
     isLoading: authLoading,
     isAdmin,
     error: authError,
+    loadingMessage,
     user: authUser, 
     login, 
     logout 
@@ -119,7 +120,7 @@ function App() {
       <div className="app">
         <div className="auth-gate">
           <h1>Team Skills Tracker</h1>
-          <p>{isAuthenticated ? 'Loading your profile...' : 'Authenticating...'}</p>
+          <p>{loadingMessage || (isAuthenticated ? 'Loading your profile...' : 'Authenticating...')}</p>
         </div>
       </div>
     );
