@@ -131,7 +131,11 @@ jobs:
           az containerapp update \
             --name ${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }} \
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
-            --image ${{ vars.ACR_NAME || 'crywmkgjccarkve' }}.azurecr.io/backend:${{ github.sha }}
+            --image ${{ vars.ACR_NAME || 'crywmkgjccarkve' }}.azurecr.io/backend:${{ github.sha }} \
+            --set-env-vars \
+              AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
+              AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
+              NODE_ENV=production
 
       - name: Deploy frontend
         run: |
@@ -151,6 +155,14 @@ jobs:
 
           echo "Frontend: $FRONTEND_URL"
           echo "Backend: $BACKEND_URL"
+
+          echo "=== Smoke Test: Health Check ==="
+          HEALTH=$(curl -sf "${BACKEND_URL}/api/health" || echo '{"status":"unreachable"}')
+          echo "Health: ${HEALTH}"
+          if ! echo "$HEALTH" | grep -q '"ok"'; then
+            echo "❌ Backend health check failed!"
+            exit 1
+          fi
 
           echo "=== Smoke Test: Auth Config ==="
           AUTH_CONFIG=$(curl -sf "${BACKEND_URL}/api/auth/config" || echo "{}")
