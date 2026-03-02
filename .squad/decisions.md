@@ -330,3 +330,341 @@ What this rules out:
 **Status:** ⚠️ BLOCKED — See "Zero Permissions in Tenant 72f988bf" above
 
 The implementation in pr-staging.yml and pr-cleanup.yml (adding/removing SPA redirect URIs via `az ad app update`) exists in code but WILL NOT WORK because the CI/CD service principal cannot authenticate to tenant 72f988bf. This code should be removed.
+
+---
+
+### Remove Fictional Seed Users from Init Endpoint
+
+**Author:** Fenster (Backend Dev)  
+**Date:** 2026-03-02
+
+## Context
+
+The `/api/admin/init` endpoint seeded 14 fictional demo users (Alex Chen, Jordan Rivera, Morgan Taylor, etc.) and ~130 user_skill assignments into the database. In production, this mixed fake data with the 5 real team members imported via `/api/admin/sync-skills` CSV sync, polluting the skills graph and user list.
+
+## Decision
+
+Removed all `INSERT INTO users` and `INSERT INTO user_skills` statements for fictional users from the init endpoint. The skill categories and skills catalog (the real data) are preserved. Users are now populated exclusively via `/api/admin/sync-skills` with real CSV data.
+
+## Rationale
+
+- Init should set up the schema and skill catalog, not fake user data
+- Production had 14 phantom users appearing in the graph alongside real team members
+- The CSV sync endpoint already handles user population correctly
+- `database/seed.sql` retains demo data for local dev (now labeled LOCAL DEV ONLY)
+
+## Impact
+
+- `/api/admin/init` no longer creates any users or user_skills — only schema + skill catalog
+- Production DB must be populated via `/api/admin/sync-skills` after init
+- No test impact (all 75 tests pass — none depended on the seed users)
+- `database/seed.sql` unchanged except for clarifying header comment
+
+---
+
+### Default Graph to L400-Only with Level Toggles
+
+**Author:** Verbal (Frontend Dev)  
+**Date:** 2026-03-02
+
+## Context
+
+The graph view was unreadable — 5 people × 146 skills at all proficiency levels created a dense ball of edges. Users couldn't extract any signal from the visualization.
+
+## Decision
+
+Added a proficiency level filter that defaults to showing **only L400 (expert)** connections. Users can toggle on L300, L200, L100 individually. Skill nodes with no visible connections at the selected levels are hidden entirely — no orphan nodes cluttering the view.
+
+A "Show All / Expert Only" quick toggle provides fast switching between sparse (expert) and full views.
+
+## Rationale
+
+- **Sparse by default:** L400 connections are the most valuable signal (who are the experts?). Starting sparse lets users opt-in to density.
+- **Filter at data level:** Links and nodes are filtered before D3 rendering, not via CSS/DOM hiding. This gives D3 a cleaner force simulation with fewer nodes.
+- **Minimum one level:** At least one level must remain selected to prevent an empty graph.
+
+## Impact
+
+- Graph loads sparse and readable by default
+- Users can progressively reveal more connections
+- No backend changes required — filtering is purely client-side
+
+---
+
+### Single Source of Truth for Proficiency Level Colors and Descriptions
+
+**Author:** Verbal (Frontend Dev)
+**Date:** 2026-03-02
+
+## Context
+
+Proficiency level colors (L100–L400) were defined independently in three frontend components:
+
+- **ProficiencyBadge.jsx** — Fluent UI palette (red/orange/blue/green)
+- **CoverageDashboard.jsx** — Tailwind-like palette (blue/green/yellow/red)
+- **TrendsChart.jsx** — Flat UI palette (red/orange/blue/green) — unused
+
+The Experimental view (CoverageDashboard) had completely different L100–L400 colors than the Matrix view (ProficiencyBadge), creating visual inconsistency.
+
+Proficiency level labels ("L100 - Foundational", etc.) were also hardcoded separately in UserProfile.jsx.
+
+## Decision
+
+1. **ProficiencyBadge.jsx is the single source of truth** for proficiency level metadata: colors, labels, and descriptions.
+2. Added a `LEVEL_COLORS` export (derived from `PROFICIENCY_CONFIG`) for chart-friendly color lookup.
+3. CoverageDashboard now imports `LEVEL_COLORS` from ProficiencyBadge.
+4. Removed dead `LEVEL_COLORS` from TrendsChart.
+5. UserProfile dropdown now generates options from `PROFICIENCY_CONFIG`.
+6. Added a source citation comment referencing the Microsoft L100–L400 taxonomy and CSU Tech Intensity Skill Proficiency Standards.
+
+## Rationale
+
+- One canonical source prevents color/label drift across views.
+- The Fluent UI palette from ProficiencyBadge is consistent with Microsoft design standards.
+- Descriptions are adapted from the Microsoft standard for a skills-tracker context; exact internal wording is on SharePoint (inaccessible externally).
+
+## Impact
+
+- All views now show consistent L100–L400 colors.
+- Future components should import from `ProficiencyBadge` rather than defining their own level colors.
+
+---
+
+### Production Diagnostic Report — 2026-03-02
+
+**Investigator:** Keaton (Lead)  
+**Requested by:** Eric Hansen  
+**Site:** https://ca-frontend-teamskills.greenwater-c5983efd.centralus.azurecontainerapps.io/
+
+## Executive Summary
+
+The "Loading profile" hang is caused by Azure PostgreSQL auto-pausing combined with missing connection timeouts in the backend's database pool. When the DB is paused, every API request hangs for 1-2 minutes waiting for a TCP connection that will never come. The data is real (from the SharePoint Skills Matrix CSV), but live SharePoint API sync is not yet configured.
+
+## Issue 1: "Loading your profile..." Hangs
+
+### What Users See
+1. Site loads → MSAL login redirect → login succeeds
+2. "Loading your profile..." spinner appears
+3. Hangs for 1-2+ minutes
+4. Eventually shows "Unable to load your profile. Please try again." with Retry/Sign out buttons
+
+### Root Cause Chain
+1. **Azure PostgreSQL Flexible Server auto-pauses** when idle (cost optimization)
+2. Frontend calls `GET /api/auth/me` and `GET /api/users` with Bearer token
+3. Backend Easy Auth passes (token valid)
+4. Express `requireAuth` middleware validates JWT ✅
+5. `findOrCreateUser()` calls `db.query('SELECT * FROM users WHERE entra_oid = $1')` 
+6. **`backend/db.js` has NO `connectionTimeoutMillis`** — pg Pool default is `0` (wait forever)
+7. TCP connection attempt to `20.29.99.102:5432` hangs until OS-level TCP timeout (~2 min)
+8. Eventually: `connect ETIMEDOUT 20.29.99.102:5432`
+9. `requireAuth` catch block returns 500: `{ error: 'Failed to load user profile' }`
+
+### Evidence
+- Container logs show repeated `lookup error: connect ETIMEDOUT 20.29.99.102:5432`
+- PostgreSQL server state was `Stopped` when investigated
+- Both `/api/auth/me` and `/api/users` hung with no response in browser network tab
+- After manually starting DB (`az postgres flexible-server start`), site loaded within seconds
+
+### Fix Required
+
+**Immediate (backend/db.js):**
+```javascript
+const pool = new Pool({
+  // ... existing config ...
+  connectionTimeoutMillis: 5000,    // Fail fast if DB unreachable
+  statement_timeout: 10000,         // Kill queries that hang
+  query_timeout: 10000,
+});
+```
+
+**Short-term:** Integrate the existing `wake-function/` — frontend should call the wake endpoint when backend returns 500/timeout, or the backend should call it on pool errors.
+
+**Long-term:** Consider disabling PostgreSQL auto-pause in production, or implement a scheduled ping to keep it alive.
+
+## Issue 2: SharePoint Sync Status
+
+### Finding: Data is REAL, Sync is MANUAL
+
+**The data in production is real team data**, not seed/test data:
+- Real team members: Almir Banjanovic, Brandon Babcock, Carl Solazzo, Elan Shudnow, Eric Hansen, Eugene Imbamba, Geraldine Caszo, Heena Ugale
+- Real job titles: Sr Solution Engineer, Prin Sol Engineer, Sol Engineer Leader
+- Real Azure skills with proficiency levels (L100-L400)
+
+**How it got there:** CSV import from the SharePoint list export, via `/api/admin/sync-skills` with `source: 'csv'`.
+
+**Live SharePoint sync is NOT working:**
+- `backend/services/sharepoint.js` has the code to sync via Graph API
+- But `/api/admin/sync-skills` with `source: 'sharepoint'` returns **501 Not Implemented**
+- Error message: "SharePoint sync not yet configured. Use source: 'csv' or configure SHAREPOINT_CLIENT_ID."
+- Required env vars not set: `SHAREPOINT_CLIENT_ID`, `SHAREPOINT_CLIENT_SECRET`, `SHAREPOINT_TENANT_ID`
+
+**Note:** The SharePoint list is in tenant `72f988bf` (Microsoft corp). Per team constraint "Zero Permissions in Microsoft Corp Tenant," configuring Graph API access to this SharePoint list may require an app registration that has `Sites.Read.All` delegated permission in that tenant — which we cannot create. CSV export/import may remain the only viable sync path.
+
+## Infrastructure Status
+
+| Resource | Name | Status |
+|----------|------|--------|
+| Resource Group | `rg-teamskills-prod` | Active |
+| Frontend Container App | `ca-frontend-teamskills` | Running ✅ |
+| Backend Container App | `ca-backend-gvojq4dgzbtk4` | Running ✅ |
+| PostgreSQL Flexible Server | `psql-gvojq4dgzbtk4` | Was **Stopped** → Manually started ✅ |
+| Wake Function | `wake-function/` | Code exists, deployment status unknown |
+
+**Note:** The resource group is `rg-teamskills-prod`, NOT `rg-teamskills`. Documentation/scripts referencing `rg-teamskills` will fail.
+
+## Recommended Actions
+
+| Priority | Action | Owner |
+|----------|--------|-------|
+| **P0** | Add `connectionTimeoutMillis: 5000` to `db.js` Pool config | Fenster (Backend) |
+| **P1** | Integrate wake-function into frontend timeout/error flow | Verbal (Frontend) + McManus (DevOps) |
+| **P1** | Add DB health check to backend startup and `/api/health` | Fenster (Backend) |
+| **P2** | Decide: disable PG auto-pause vs. implement keep-alive ping | Keaton (Architecture) |
+| **P2** | Document that CSV sync is the current data path (not live SharePoint API) | Keaton (Lead) |
+| **P3** | Evaluate SharePoint Graph API access given corp tenant constraint | Kobayashi (Auth) |
+
+---
+
+### 2026-03-02T18:55:00Z: Round Table Priority Review
+
+**By:** Eric Hansen (via Knights of the Round Table — Claude Opus, GPT-5.3-Codex, Gemini 3 Pro)  
+**What:** Three-model review of backlog priorities reached consensus on these key findings
+
+**Unanimous (High Confidence):**
+- health-check-db is urgent — /health lies when DB is down, dangerous with ACA liveness probes
+- cicd-subscription-set is cheap insurance (5 min, prevents wrong-subscription deploys)
+- bootstrap-sp-graph should be deferred until tenant admin access available
+- SharePoint sync service has zero tests — significant regression risk
+
+**Critical Discovery (NOT on original backlog):**
+- process.exit(-1) in backend/db.js kills the backend on transient DB errors — WILL crash in production with auto-pausing Flex Server
+- No SIGTERM handler — ACA scale-down kills in-flight requests
+- These are MORE urgent than any existing backlog item
+
+**Nuanced Finding:**
+- fetch-timeout (15s) would actively break the app during DB wake (45-60s) — wire-wake-url MUST come first
+- auto-migrate needs a real migration framework, not raw ALTER TABLE in scaled environment
+
+**Agreed Priority Order:**
+1. Fix process.exit(-1) + add SIGTERM handler (~20 min)
+2. health-check-db (~15 min)
+3. cicd-subscription-set (~5 min)
+4. wire-wake-url (~15 min)
+5. fetch-timeout with safe timeout value (~20 min)
+6. test-new-code (1-2 hrs)
+7. cicd-rollback or ACA canary (2 hrs)
+8. auto-migrate with proper framework (1 hr)
+9. e2e-regression (30 min)
+10. bootstrap-sp-graph (deferred)
+
+**Why:** Three independent AI models analyzed from Devil's Advocate, Explorer, and Steelman perspectives. Consensus was strong on items 1-5.
+
+---
+
+### 2026-03-02T20:15:00Z: User Directive — Authentication is MANDATORY on Production
+
+**By:** Eric Hansen (via Copilot)  
+**What:** Production absolutely needs a login. 100%. Always will. The data is PII (real employee names + skills proficiency levels). Never suggest removing auth or running in "demo mode" in production. This is non-negotiable.  
+**Why:** User request — captured for team memory. Skills matrix data is PII. Exposing it without authentication would be a security and privacy violation.
+
+---
+
+### Staging Auth Strategy — Cross-Tenant Barrier Analysis
+
+**Author:** Kobayashi (Auth/Security)  
+**Date:** 2026-03-01  
+**Status:** Analysis and recommendation (revised post "Zero Permissions" constraint)
+
+(See full analysis at `.squad/decisions/inbox/kobayashi-staging-auth-strategy.md`)
+
+**Revised Recommendation:** Option 2 — Skip Auth in Staging (with backend NODE_ENV=staging write protection + isolated DB with synthetic data) is the only viable path given zero permissions in tenant 72f988bf.
+
+**Decision Summary:**
+- ~~Option 1: Stable Staging URL~~ — IMPOSSIBLE (requires Portal access to tenant 72f988bf)
+- ~~Option 3: New App Registration~~ — Over-engineered for solo dev with one active PR at a time
+- **Option 2 (Recommended):** Deploy staging without MSAL; frontend demo mode + backend write protection gates access
+
+---
+
+### Replace azd with Direct Azure CLI for Production Deployment
+
+**Author:** McManus (DevOps)  
+**Date:** 2026-07-25  
+**Status:** Accepted
+
+## Context
+
+The CI/CD production deploy job uses `azd provision` + `azd deploy` (introduced in the "CI/CD Rewrite: Azure Developer CLI" decision). This worked in theory but fails in practice because the production infrastructure is **brownfield** — created incrementally over time, not by azd.
+
+### Specific Failures
+
+1. **Resource naming divergence:** `azd provision` with `AZURE_ENV_NAME=prod` generates a `resourceToken` (`ywmkgjccarkve`) that produces resource names like `ca-backend-ywmkgjccarkve`, but the actual production backend is `ca-backend-gvojq4dgzbtk4`. azd creates entirely new resources instead of updating existing ones.
+
+2. **ACR pull failure:** The newly-created Container App can't pull images from ACR because the managed identity AcrPull role assignment hasn't been created yet (chicken-and-egg problem in Bicep ordering).
+
+3. **Service principal permission errors:** The CI/CD service principal lacks `Microsoft.Authorization/roleAssignments/write` on storage and postgres resources, causing the wake-function Bicep module to fail when creating role assignments.
+
+### Why azd Can't Manage This Infrastructure
+
+azd's resource naming is deterministic based on `AZURE_ENV_NAME` + subscription + location. The existing production resources were created with a different naming scheme (some manually, some by earlier Bicep runs with different parameters). There is no way to make azd "adopt" these existing resources without renaming everything in Azure — a risky, disruptive migration.
+
+## Decision
+
+Replace `azd provision` + `azd deploy` in the CI/CD workflow with direct Azure CLI commands that target existing resources by their actual names:
+
+1. `az acr build` to build and push images to the existing ACR
+2. `az containerapp update` to deploy new image tags to existing Container Apps
+3. Direct `az containerapp show` queries for smoke test URL discovery
+
+Resource names use the `${{ vars.X || 'fallback' }}` pattern — configurable via GitHub repository variables with working defaults matching current production.
+
+### GitHub Variables (optional overrides)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RESOURCE_GROUP` | `rg-teamskills-prod` | Production resource group |
+| `ACR_NAME` | `crywmkgjccarkve` | Azure Container Registry |
+| `BACKEND_APP` | `ca-backend-gvojq4dgzbtk4` | Backend Container App |
+| `FRONTEND_APP` | `ca-frontend-teamskills` | Frontend Container App |
+
+## What Changed
+
+- **Removed:** `azure/setup-azd@v2`, `azd auth login`, `azd env new/set`, `azd provision`, `azd deploy`
+- **Kept:** Lint job, test job, `azure/login@v2`, `environment: production`, smoke test logic, deployment summary
+- **Added:** `az acr build` (backend + frontend), `az containerapp update` (backend + frontend)
+- **Kept:** `azure.yaml` — still used for local development with azd, not CI/CD
+
+## Rationale
+
+### Why not fix azd instead?
+
+Fixing azd would require either:
+- Renaming all production Azure resources to match azd's naming scheme (risky, causes downtime)
+- Implementing azd's `infra.provider: custom` with manual resource mapping (complex, fragile)
+- Both options are more work and more risk than direct CLI commands
+
+### Why direct CLI is better for this case
+
+- **Explicit targeting:** Commands reference exact resource names, no naming algorithm surprises
+- **No permission escalation needed:** `az containerapp update` and `az acr build` don't create role assignments
+- **Simpler failure modes:** Each step does one thing; failures are obvious and debuggable
+- **Existing pattern:** The PR staging workflow already uses direct Azure CLI (arm-deploy + az commands)
+
+### What we lose
+
+- **No automatic infrastructure updates:** Bicep changes (env vars, auth config, scaling rules) require manual deployment. This is acceptable because:
+  - Infrastructure changes are infrequent
+  - They can be applied manually via `az containerapp update` or Azure Portal
+  - The Bicep files remain as documentation/reference
+- **azd consistency:** Local dev uses azd, CI uses CLI — two deployment paths. Acceptable trade-off given azd's incompatibility with brownfield resources.
+
+## Consequences
+
+- Production deployments will target the correct existing resources reliably
+- The ACR pull and role assignment errors are eliminated (no new resources created)
+- Infrastructure changes require separate manual steps (not automated in CI)
+- Bicep files in `infra/` remain as reference but are not executed in CI
+
+## Supersedes
+
+This decision supersedes "CI/CD Rewrite: Azure Developer CLI (azd)" from 2026-02-27 for production deployment. The analysis in that decision about container-apps-deploy-action's limitations was correct, but azd proved incompatible with brownfield infrastructure.
