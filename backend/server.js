@@ -73,9 +73,20 @@ app.use('/api/matrix', matrixRouter);
 app.use('/api/proposals', proposalsRouter);
 app.use('/api/trends', trendsRouter);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check with DB connectivity verification
+app.get('/health', async (req, res) => {
+  try {
+    const { pool } = require('./db');
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('Health check failed:', error.message);
+    res.status(503).json({ 
+      status: 'unavailable', 
+      error: 'Database connection failed',
+      timestamp: new Date().toISOString() 
+    });
+  }
 });
 
 // Error handling middleware
@@ -90,10 +101,29 @@ app.use((err, req, res, _next) => {
 });
 
 // Only start server if not in test mode
+let server;
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
 }
+
+// Graceful shutdown on SIGTERM (Azure Container Apps scale-down/redeploy)
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, closing server gracefully...');
+  if (server) {
+    server.close(() => {
+      console.log('HTTP server closed');
+    });
+  }
+  try {
+    const { pool } = require('./db');
+    await pool.end();
+    console.log('Database pool closed');
+  } catch (err) {
+    console.error('Error closing database pool:', err);
+  }
+  process.exit(0);
+});
 
 module.exports = app;
