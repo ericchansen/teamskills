@@ -12,7 +12,8 @@ const pool = new Pool({
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
-  process.exit(-1);
+  // Do not exit — Azure PostgreSQL auto-pause causes transient errors
+  // Container restart would break in-flight requests
 });
 
 module.exports = {
