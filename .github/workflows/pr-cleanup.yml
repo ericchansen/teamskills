@@ -30,6 +30,27 @@ jobs:
         with:
           creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_TENANT_ID }}"}'
 
+      - name: Remove SPA redirect URI from Entra ID
+        if: vars.AZURE_AD_CLIENT_ID != ''
+        run: |
+          APP_CLIENT_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
+          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
+          
+          echo "=== Removing SPA redirect URIs for PR #${PR_NUMBER} ==="
+          
+          # Get current SPA redirect URIs
+          CURRENT_URIS=$(az ad app show --id "$APP_CLIENT_ID" --query "spa.redirectUris" -o json)
+          
+          # Remove URIs containing this PR number
+          NEW_URIS=$(echo "$CURRENT_URIS" | jq -c "[.[] | select(. | test(\"pr${PR_NUMBER}\") | not)]")
+          
+          # Update app registration
+          az ad app update --id "$APP_CLIENT_ID" --set spa.redirectUris="$NEW_URIS"
+          
+          echo "✅ Removed SPA redirect URIs for PR #${PR_NUMBER}"
+          echo "Remaining SPA redirect URIs:"
+          echo "$NEW_URIS" | jq -r '.[]'
+
       - name: Delete PR staging resources
         id: cleanup
         run: |

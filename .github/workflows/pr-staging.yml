@@ -136,6 +136,27 @@ jobs:
           fi
           echo "Response: ${RESPONSE}"
 
+      - name: Register SPA redirect URI in Entra ID
+        if: vars.AZURE_AD_CLIENT_ID != ''
+        run: |
+          APP_CLIENT_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
+          FRONTEND_URL="${{ steps.deploy.outputs.frontendUrl }}"
+          
+          echo "=== Registering SPA redirect URI: ${FRONTEND_URL} ==="
+          
+          # Get current SPA redirect URIs
+          CURRENT_URIS=$(az ad app show --id "$APP_CLIENT_ID" --query "spa.redirectUris" -o json)
+          
+          # Add new URI and deduplicate
+          NEW_URIS=$(echo "$CURRENT_URIS" | jq -c ". + [\"${FRONTEND_URL}\"] | unique")
+          
+          # Update app registration
+          az ad app update --id "$APP_CLIENT_ID" --set spa.redirectUris="$NEW_URIS"
+          
+          echo "✅ Registered ${FRONTEND_URL} as SPA redirect URI"
+          echo "Current SPA redirect URIs:"
+          echo "$NEW_URIS" | jq -r '.[]'
+
       - name: Smoke test staging deployment
         run: |
           FRONTEND_URL="${{ steps.deploy.outputs.frontendUrl }}"
