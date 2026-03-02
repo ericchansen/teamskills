@@ -12,6 +12,17 @@
 
 ## Learnings
 
+### 2026-03-02 — SPA Redirect URI Auto-Management for PR Staging
+- **PR staging environments** deploy with dynamic FQDNs like `https://ca-frontend-pr31.redground-066e115e.centralus.azurecontainerapps.io`
+- **MSAL redirectUri** correctly uses `window.location.origin` but Entra ID app registration needs pre-registered URIs
+- **Fix implemented**: Added `az ad app update --set spa.redirectUris=[...]` steps to both workflows
+  - `pr-staging.yml`: After deploy, add frontend URL to SPA redirect URIs using jq unique merge
+  - `pr-cleanup.yml`: Before resource deletion, remove URIs matching `pr${PR_NUMBER}` pattern
+- **Permissions required**: SP needs `Application.ReadWrite.OwnedBy` Graph permission OR must be listed as app owner
+- **Race condition handling**: jq unique operation deduplicates if multiple PRs deploy simultaneously
+- **NOT using `--web-redirect-uris`**: SPA apps require `spa.redirectUris`, not web platform URIs
+- **Pattern**: `az ad app show --id $CLIENT_ID --query spa.redirectUris -o json` → jq transform → `az ad app update`
+
 ### 2026-03-02 — PR #25/#27/#28 Security Review
 - **Multi-tenant JWKS** (PR #27): Switched from tenant-specific to `common` JWKS endpoint and removed issuer validation. This is correct for AzureADMultipleOrgs — audience check (`api://{clientId}`) is sufficient since only tokens minted for this app pass. JWKS cache reduced 24h→4h is good hygiene for key rotation.
 - **InteractionRequiredAuthError** (PR #27): Frontend now falls back to `acquireTokenRedirect` when silent token acquisition fails. Previously swallowed the error and returned null, leaving user in a broken state.
