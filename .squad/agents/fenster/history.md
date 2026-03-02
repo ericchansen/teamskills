@@ -18,3 +18,7 @@
 - `/admin/status` now requires `requireAuth + requireAdmin` (fixed). Error handler uses generic message instead of leaking `error.message`.
 - `GET /api/users` and `GET /api/users/:id` now use explicit column list excluding `entra_oid` (fixed).
 - ESLint config uses `argsIgnorePattern: '^_'` but this only covers function args, not catch clause variables. Use bare `catch {}` (no binding) when the error object isn't needed.
+- **CRITICAL:** `process.exit(-1)` in `db.js` pool error handler was killing the entire backend on transient Azure PostgreSQL auto-pause errors. Fixed to log only. Azure PostgreSQL Flexible Server auto-pauses to save costs — transient connection errors during wake-up are EXPECTED.
+- `/health` endpoint now verifies actual DB connectivity (returns 503 if DB unreachable). The previous implementation always returned 200, even when DB was down — Azure Container Apps liveness probes need truthful health checks.
+- Added SIGTERM handler to `server.js` for graceful shutdown. When ACA scales down or redeploys, SIGTERM allows in-flight requests to complete before killing the container. Without this, users see "loading profile" hang.
+- SharePoint sync (`backend/services/sharepoint.js`) is fully implemented but NOT wired to any cron/scheduler. The `/api/admin/sync-skills` endpoint exists and requires `INIT_SECRET`, but must be triggered manually (e.g., via cURL or scheduled job). Production has NO automated sync — all skills come from the initial seed data in `/api/admin/init`.
