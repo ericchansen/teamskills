@@ -28,3 +28,13 @@
 - **PR staging workflow hardcoded values:** Extracted `ACR_NAME` and `ACR_RESOURCE_GROUP` from hardcoded values to `${{ vars.ACR_NAME || 'fallback' }}` pattern in `pr-staging.yml`. Allows override via GitHub repository variables while keeping current values as defaults.
 - **azd incompatible with brownfield prod infra:** `azd provision` generates a `resourceToken` from env name that creates NEW resources (e.g., `ca-backend-ywmkgjccarkve`) instead of updating existing ones (`ca-backend-gvojq4dgzbtk4`). Also hits permission errors on role assignments and ACR pull chicken-and-egg. Root cause: prod resources were created incrementally, not by azd, so naming schemes don't match. No fix short of renaming all Azure resources.
 - **Replaced azd with direct Azure CLI in CI/CD:** Production deploy now uses `az acr build` + `az containerapp update` targeting exact existing resource names via `${{ vars.X || 'fallback' }}` pattern. Removed `azure/setup-azd@v2`, `azd auth login`, `azd env new/set`, `azd provision`, `azd deploy`. Kept lint/test jobs, `azure/login@v2`, `environment: production`, smoke test, deployment summary. `azure.yaml` stays for local dev. Decision documented in `.squad/decisions/inbox/mcmanus-cicd-direct-cli.md`.
+
+## ⛔ CRITICAL CONSTRAINT (2026-03-02)
+**ZERO PERMISSIONS in Microsoft corp tenant 72f988bf. Nobody on this team can do ANYTHING there — not programmatically, not manually, not via Portal. Eric does NOT have admin permissions. This is PERMANENT.**
+
+Implications:
+- CANNOT modify redirect URIs on the Entra app (app ID 69c41897)
+- CANNOT use az ad, Bicep Microsoft.Graph, or Terraform AzureAD against this tenant
+- CANNOT ask Eric to manually fix things in Portal — he doesn't have permissions either
+- All CI/CD automation targeting tenant 72f988bf WILL FAIL
+- Code in pr-staging.yml and pr-cleanup.yml that uses az ad app update must be REMOVED
