@@ -103,7 +103,7 @@ jobs:
       - name: Build and push backend image
         run: |
           az acr build \
-            --registry ${{ vars.ACR_NAME || 'crywmkgjccarkve' }} \
+            --registry ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }} \
             --image backend:${{ github.sha }} \
             --image backend:latest \
             --file Dockerfile.backend \
@@ -117,7 +117,7 @@ jobs:
             --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
           az acr build \
-            --registry ${{ vars.ACR_NAME || 'crywmkgjccarkve' }} \
+            --registry ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }} \
             --image frontend:${{ github.sha }} \
             --image frontend:latest \
             --file Dockerfile.frontend \
@@ -131,7 +131,7 @@ jobs:
           az containerapp update \
             --name ${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }} \
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
-            --image ${{ vars.ACR_NAME || 'crywmkgjccarkve' }}.azurecr.io/backend:${{ github.sha }} \
+            --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/backend:${{ github.sha }} \
             --set-env-vars \
               AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
               AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
@@ -142,7 +142,7 @@ jobs:
           az containerapp update \
             --name ${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }} \
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
-            --image ${{ vars.ACR_NAME || 'crywmkgjccarkve' }}.azurecr.io/frontend:${{ github.sha }}
+            --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/frontend:${{ github.sha }}
 
       - name: Smoke test - Validate auth configuration
         run: |
@@ -212,6 +212,6 @@ jobs:
           echo "| Variable | Default |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|---------|" >> $GITHUB_STEP_SUMMARY
           echo "| \`RESOURCE_GROUP\` | \`rg-teamskills-prod\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`ACR_NAME\` | \`crywmkgjccarkve\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`ACR_NAME\` | \`crgvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`BACKEND_APP\` | \`ca-backend-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`FRONTEND_APP\` | \`ca-frontend-teamskills\` |" >> $GITHUB_STEP_SUMMARY
