@@ -144,6 +144,23 @@ jobs:
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
             --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/frontend:${{ github.sha }}
 
+      - name: Wait for new revisions to provision
+        run: |
+          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
+          BACKEND_APP="${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }}"
+
+          BACKEND_URL="https://$(az containerapp show -n "$BACKEND_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+
+          echo "Waiting for backend to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf "${BACKEND_URL}/health" | grep -q '"ok"'; then
+              echo "✅ Backend is ready!"
+              break
+            fi
+            echo "Attempt $i/30: Backend not ready yet, waiting 10s..."
+            sleep 10
+          done
+
       - name: Smoke test - Validate auth configuration
         run: |
           RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
@@ -157,7 +174,7 @@ jobs:
           echo "Backend: $BACKEND_URL"
 
           echo "=== Smoke Test: Health Check ==="
-          HEALTH=$(curl -sf "${BACKEND_URL}/api/health" || echo '{"status":"unreachable"}')
+          HEALTH=$(curl -sf "${BACKEND_URL}/health" || echo '{"status":"unreachable"}')
           echo "Health: ${HEALTH}"
           if ! echo "$HEALTH" | grep -q '"ok"'; then
             echo "❌ Backend health check failed!"
