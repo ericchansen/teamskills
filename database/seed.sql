@@ -1,5 +1,5 @@
--- Seed data for Team Skills Tracker
--- Demo data with fictional team members
+-- ⚠️  LOCAL DEV ONLY — This file contains fictional demo data.
+-- Do NOT use in production. Production users come from /api/admin/sync-skills (CSV import).
 -- To load your real team data, use: database/seed-team.sql (not in source control)
 
 -- ============================================
