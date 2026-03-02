@@ -290,19 +290,19 @@ async function syncPivotToDatabase(pivotData) {
 
   // Phase 2: Upsert users and their skills
   for (const row of rows) {
-    // Generate a placeholder email from the display name
-    const emailSlug = row.name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
-    const email = `${emailSlug}@placeholder.local`;
-
-    // Upsert user by email
-    let userResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+    // Match existing user by display name (case-insensitive) to avoid duplicates
+    let userResult = await db.query('SELECT id FROM users WHERE LOWER(name) = LOWER($1)', [row.name]);
     if (userResult.rows.length > 0) {
+      // Update team but preserve existing email and entra_oid
       await db.query(
-        'UPDATE users SET name = $1, team = $2 WHERE email = $3',
-        [row.name, row.team, email]
+        'UPDATE users SET team = $1 WHERE id = $2',
+        [row.team, userResult.rows[0].id]
       );
       stats.users.updated++;
     } else {
+      // No existing user — create with placeholder email
+      const emailSlug = row.name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+      const email = `${emailSlug}@placeholder.local`;
       userResult = await db.query(
         'INSERT INTO users (name, email, team) VALUES ($1, $2, $3) RETURNING id',
         [row.name, email, row.team]
