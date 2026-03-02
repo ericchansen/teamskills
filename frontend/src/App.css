@@ -5,16 +5,6 @@
   background: #0f0f1a;
 }
 
-/* Data disclaimer banner */
-.data-disclaimer {
-  background: #2d2a1a;
-  color: #d4c896;
-  padding: 0.6rem 1rem;
-  text-align: center;
-  font-size: 0.85rem;
-  border-bottom: 1px solid #4a4530;
-}
-
 .app-header {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   color: white;
@@ -91,6 +81,24 @@
   background-color: white;
   color: #0078d4;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.experimental-toggle {
+  border-left: 1px solid rgba(255, 255, 255, 0.2) !important;
+  margin-left: 4px;
+  padding-left: 12px !important;
+  opacity: 0.7;
+}
+
+.experimental-toggle:hover,
+.experimental-toggle.active {
+  opacity: 1;
+}
+
+.experimental-toggle.active {
+  background-color: rgba(255, 193, 7, 0.2) !important;
+  color: #ffc107 !important;
+  box-shadow: none !important;
 }
 
 .profile-btn,

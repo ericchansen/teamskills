@@ -22,6 +22,7 @@ function App() {
   const [demoUser, setDemoUser] = useState(null); // Fallback demo login
   const [users, setUsers] = useState([]);
   const [chatOpen, setChatOpen] = useState(false);
+  const [showExperimental, setShowExperimental] = useState(false);
   
   // Real authentication via MSAL
   const { 
@@ -222,9 +223,7 @@ function App() {
         onRetry={retryWake} 
       />
       
-      <div className="data-disclaimer">
-        📋 Data shown is guesstimates from Work IQ — not verified skill levels. Help improve accuracy by updating your own profile!
-      </div>
+      
       <header className="app-header">
         <div className="header-left">
           <h1>Team Skills Tracker</h1>
@@ -251,37 +250,49 @@ function App() {
               <span className="btn-icon">🕸️</span>
               Graph
             </button>
+            {showExperimental && (
+              <>
+                <button 
+                  className={view === 'radar' ? 'active' : ''} 
+                  onClick={() => setView('radar')}
+                  title="Radar chart comparing skill profiles"
+                >
+                  <span className="btn-icon">🎯</span>
+                  Radar
+                </button>
+                <button 
+                  className={view === 'coverage' ? 'active' : ''} 
+                  onClick={() => setView('coverage')}
+                  title="Skill coverage and bus factor dashboard"
+                >
+                  <span className="btn-icon">📈</span>
+                  Coverage
+                </button>
+                <button 
+                  className={view === 'trends' ? 'active' : ''} 
+                  onClick={() => setView('trends')}
+                  title="Proficiency trends over time"
+                >
+                  <span className="btn-icon">📉</span>
+                  Trends
+                </button>
+                <button 
+                  className={view === 'gaps' ? 'active' : ''} 
+                  onClick={() => setView('gaps')}
+                  title="Skill gap analysis vs targets"
+                >
+                  <span className="btn-icon">🔍</span>
+                  Gaps
+                </button>
+              </>
+            )}
             <button 
-              className={view === 'radar' ? 'active' : ''} 
-              onClick={() => setView('radar')}
-              title="Radar chart comparing skill profiles"
+              className={`experimental-toggle ${showExperimental ? 'active' : ''}`}
+              onClick={() => setShowExperimental(!showExperimental)}
+              title={showExperimental ? 'Hide experimental views' : 'Show experimental views'}
             >
-              <span className="btn-icon">🎯</span>
-              Radar
-            </button>
-            <button 
-              className={view === 'coverage' ? 'active' : ''} 
-              onClick={() => setView('coverage')}
-              title="Skill coverage and bus factor dashboard"
-            >
-              <span className="btn-icon">📈</span>
-              Coverage
-            </button>
-            <button 
-              className={view === 'trends' ? 'active' : ''} 
-              onClick={() => setView('trends')}
-              title="Proficiency trends over time"
-            >
-              <span className="btn-icon">📉</span>
-              Trends
-            </button>
-            <button 
-              className={view === 'gaps' ? 'active' : ''} 
-              onClick={() => setView('gaps')}
-              title="Skill gap analysis vs targets"
-            >
-              <span className="btn-icon">🔍</span>
-              Gaps
+              <span className="btn-icon">🧪</span>
+              Experimental
             </button>
           </div>
           
