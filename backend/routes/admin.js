@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { requireAuth, requireAdmin } = require('../auth');
+const sharepointSync = require('../services/sharepoint');
 
 // Database initialization endpoint (POST to prevent accidental execution)
 router.post('/init', async (req, res) => {
@@ -606,6 +607,40 @@ router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
 
     res.json({ message: 'Skill removed' });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: sync skills from CSV or SharePoint
+// POST /api/admin/sync-skills
+// Body: { source: 'csv' | 'sharepoint', secret: string }
+router.post('/sync-skills', async (req, res) => {
+  const { secret, source = 'csv' } = req.body;
+
+  // Require INIT_SECRET for security (same as /init)
+  const initSecret = process.env.INIT_SECRET;
+  if (!initSecret || secret !== initSecret) {
+    return res.status(401).json({ error: 'Unauthorized - INIT_SECRET required' });
+  }
+
+  try {
+    const options = {};
+
+    if (source === 'sharepoint') {
+      // SharePoint requires Graph API client — future enhancement
+      return res.status(501).json({ 
+        error: 'SharePoint sync not yet configured. Use source: "csv" or configure SHAREPOINT_CLIENT_ID.',
+        hint: 'Set SHAREPOINT_CLIENT_ID, SHAREPOINT_CLIENT_SECRET, and SHAREPOINT_TENANT_ID env vars.'
+      });
+    }
+
+    const stats = await sharepointSync.sync(source, options);
+    res.json({ 
+      message: 'Skill sync completed',
+      ...stats
+    });
+  } catch (error) {
+    console.error('Sync error:', error);
     res.status(500).json({ error: error.message });
   }
 });
