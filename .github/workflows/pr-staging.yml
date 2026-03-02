@@ -99,8 +99,6 @@ jobs:
             acrName=${{ env.ACR_NAME }}
             acrResourceGroup=${{ env.ACR_RESOURCE_GROUP }}
             location=${{ env.LOCATION }}
-            azureAdClientId=${{ vars.AZURE_AD_CLIENT_ID || '' }}
-            azureAdTenantId=${{ vars.AZURE_AD_TENANT_ID || '' }}
           failOnStdErr: false
 
       - name: Wait for backend to be ready
@@ -136,38 +134,16 @@ jobs:
           fi
           echo "Response: ${RESPONSE}"
 
-      - name: Login to Entra ID tenant for app registration
-        if: vars.AZURE_AD_CLIENT_ID != '' && vars.AZURE_AD_TENANT_ID != ''
-        uses: azure/login@v2
-        with:
-          creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_AD_TENANT_ID }}"}'
-
-      - name: Register SPA redirect URI in Entra ID
-        if: vars.AZURE_AD_CLIENT_ID != '' && vars.AZURE_AD_TENANT_ID != ''
+      - name: Set Application ID URI for staging app
         run: |
-          APP_CLIENT_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
-          FRONTEND_URL="${{ steps.deploy.outputs.frontendUrl }}"
-          
-          echo "=== Registering SPA redirect URI: ${FRONTEND_URL} ==="
-          
-          # Get current SPA redirect URIs
-          CURRENT_URIS=$(az ad app show --id "$APP_CLIENT_ID" --query "spa.redirectUris" -o json)
-          
-          # Add new URI and deduplicate
-          NEW_URIS=$(echo "$CURRENT_URIS" | jq -c ". + [\"${FRONTEND_URL}\"] | unique")
-          
-          # Update app registration
-          az ad app update --id "$APP_CLIENT_ID" --set spa.redirectUris="$NEW_URIS"
-          
-          echo "✅ Registered ${FRONTEND_URL} as SPA redirect URI"
-          echo "Current SPA redirect URIs:"
-          echo "$NEW_URIS" | jq -r '.[]'
-
-      - name: Re-login to Azure resource tenant
-        if: vars.AZURE_AD_CLIENT_ID != '' && vars.AZURE_AD_TENANT_ID != ''
-        uses: azure/login@v2
-        with:
-          creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_TENANT_ID }}"}'
+          STAGING_APP_ID="${{ steps.deploy.outputs.stagingAppId }}"
+          if [ -n "$STAGING_APP_ID" ]; then
+            az ad app update --id "$STAGING_APP_ID" \
+              --identifier-uris "api://$STAGING_APP_ID"
+            echo "✅ Set identifier URI: api://$STAGING_APP_ID"
+          else
+            echo "⚠️ No staging app ID output — skipping identifier URI setup"
+          fi
 
       - name: Smoke test staging deployment
         run: |

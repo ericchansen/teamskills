@@ -4,6 +4,8 @@
 
 targetScope = 'resourceGroup'
 
+extension microsoftGraphV1
+
 @description('PR number for unique resource naming')
 param prNumber string
 
@@ -22,12 +24,6 @@ param acrName string
 
 @description('Existing Container Registry resource group')
 param acrResourceGroup string = 'rg-teamskills-prod'
-
-@description('Entra ID client ID for authentication (optional)')
-param azureAdClientId string = ''
-
-@description('Entra ID tenant ID for authentication (optional)')
-param azureAdTenantId string = ''
 
 var resourceToken = 'pr${prNumber}'
 var tags = { 
@@ -116,6 +112,34 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-06-0
   }
 }
 
+// Staging Entra App Registration — per-PR, fully managed via Bicep Microsoft Graph extension
+resource stagingApp 'Microsoft.Graph/applications@v1.0' = {
+  displayName: 'Team Skills Tracker (Staging PR${prNumber})'
+  uniqueName: 'teamskills-staging-pr${prNumber}'
+  signInAudience: 'AzureADMultipleOrgs'
+
+  spa: {
+    redirectUris: [
+      'https://ca-frontend-${resourceToken}.${containerAppsEnvironment.properties.defaultDomain}'
+    ]
+  }
+
+  api: {
+    oauth2PermissionScopes: [
+      {
+        id: guid('teamskills-staging-pr${prNumber}-access-as-user')
+        adminConsentDescription: 'Access Team Skills API on behalf of the signed-in user'
+        adminConsentDisplayName: 'Access as user'
+        userConsentDescription: 'Access Team Skills API on your behalf'
+        userConsentDisplayName: 'Access as user'
+        type: 'User'
+        value: 'access_as_user'
+        isEnabled: true
+      }
+    ]
+  }
+}
+
 // Backend Container App
 resource backend 'Microsoft.App/containerApps@2023-05-01' = {
   name: 'ca-backend-${resourceToken}'
@@ -169,8 +193,8 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'PGDATABASE', value: 'teamskills' }
             { name: 'PGSSLMODE', value: 'require' }
             { name: 'INIT_SECRET', value: 'staging-init-${prNumber}' }
-            { name: 'AZURE_AD_CLIENT_ID', value: azureAdClientId }
-            { name: 'AZURE_AD_TENANT_ID', value: azureAdTenantId }
+            { name: 'AZURE_AD_CLIENT_ID', value: stagingApp.appId }
+            { name: 'AZURE_AD_TENANT_ID', value: tenant().tenantId }
           ]
           resources: {
             cpu: json('0.25')
@@ -222,8 +246,8 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           image: '${containerRegistry.properties.loginServer}/frontend:${imageTag}'
           env: [
             { name: 'VITE_API_URL', value: 'https://ca-backend-${resourceToken}.${containerAppsEnvironment.properties.defaultDomain}' }
-            { name: 'VITE_AZURE_AD_CLIENT_ID', value: azureAdClientId }
-            { name: 'VITE_AZURE_AD_TENANT_ID', value: azureAdTenantId }
+            { name: 'VITE_AZURE_AD_CLIENT_ID', value: stagingApp.appId }
+            { name: 'VITE_AZURE_AD_TENANT_ID', value: tenant().tenantId }
           ]
           resources: {
             cpu: json('0.25')
@@ -243,6 +267,7 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
 output frontendUrl string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output backendUrl string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output initSecret string = 'staging-init-${prNumber}'
+output stagingAppId string = stagingApp.appId
 
 // NOTE: Easy Auth explicitly disabled on backend — Express middleware handles JWT validation directly.
 // This is the standard pattern for SPA + API: MSAL sends Bearer tokens, Express validates via JWKS.
