@@ -280,8 +280,8 @@ async function syncPivotToDatabase(pivotData) {
       stats.skills.existing++;
     } else {
       const result = await db.query(
-        'INSERT INTO skills (name, target_level) VALUES ($1, $2) RETURNING id',
-        [skillName, 'L200']
+        'INSERT INTO skills (name) VALUES ($1) RETURNING id',
+        [skillName]
       );
       skillIdMap.set(skillName, result.rows[0].id);
       stats.skills.created++;
