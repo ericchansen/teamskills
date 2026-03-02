@@ -87,55 +87,67 @@ jobs:
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     environment: production
     
+    # Deploy using direct Azure CLI instead of azd.
+    # Reason: Production infrastructure is brownfield (created incrementally, not by azd).
+    # azd provision generates a resourceToken from AZURE_ENV_NAME that creates NEW resources
+    # instead of updating existing ones. Direct CLI targets the exact existing resources.
+    # See .squad/decisions/inbox/mcmanus-cicd-direct-cli.md for full rationale.
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Azure Developer CLI
-        uses: azure/setup-azd@v2
-
-      - name: Log in to Azure (azd)
-        run: |
-          azd auth login \
-            --client-id "${{ vars.AZURE_CLIENT_ID }}" \
-            --client-secret "${{ secrets.AZURE_CLIENT_SECRET }}" \
-            --tenant-id "${{ vars.AZURE_TENANT_ID }}"
 
       - name: Log in to Azure CLI
         uses: azure/login@v2
         with:
           creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_TENANT_ID }}"}'
 
-      - name: Configure azd environment
+      - name: Build and push backend image
         run: |
-          # Create or select production environment (must match existing rg-prod resources)
-          azd env new prod --subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}" --location centralus || azd env select prod
-          
-          # Set environment variables needed by Bicep parameters
-          azd env set AZURE_ENV_NAME prod
-          azd env set AZURE_LOCATION centralus
-          azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
-          azd env set AZURE_AD_CLIENT_ID "${{ vars.AZURE_AD_CLIENT_ID }}"
-          azd env set AZURE_AD_TENANT_ID "${{ vars.AZURE_AD_TENANT_ID }}"
-          azd env set AZURE_POSTGRES_PASSWORD "${{ secrets.POSTGRES_PASSWORD }}"
+          az acr build \
+            --registry ${{ vars.ACR_NAME || 'crywmkgjccarkve' }} \
+            --image backend:${{ github.sha }} \
+            --image backend:latest \
+            --file Dockerfile.backend \
+            .
 
-      - name: Provision infrastructure
-        run: azd provision --no-prompt
+      - name: Build and push frontend image
+        run: |
+          BACKEND_URL="https://$(az containerapp show \
+            --name ${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }} \
+            --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
+            --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
-      - name: Deploy application
-        run: azd deploy --no-prompt
+          az acr build \
+            --registry ${{ vars.ACR_NAME || 'crywmkgjccarkve' }} \
+            --image frontend:${{ github.sha }} \
+            --image frontend:latest \
+            --file Dockerfile.frontend \
+            --build-arg VITE_API_URL=$BACKEND_URL \
+            --build-arg VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
+            --build-arg VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
+            .
+
+      - name: Deploy backend
+        run: |
+          az containerapp update \
+            --name ${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }} \
+            --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
+            --image ${{ vars.ACR_NAME || 'crywmkgjccarkve' }}.azurecr.io/backend:${{ github.sha }}
+
+      - name: Deploy frontend
+        run: |
+          az containerapp update \
+            --name ${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }} \
+            --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
+            --image ${{ vars.ACR_NAME || 'crywmkgjccarkve' }}.azurecr.io/frontend:${{ github.sha }}
 
       - name: Smoke test - Validate auth configuration
         run: |
-          # Get deployed URLs from azd environment outputs (populated by azd provision)
-          FRONTEND_URL=$(azd env get-value FRONTEND_URI 2>/dev/null || echo "")
-          BACKEND_URL=$(azd env get-value BACKEND_URI 2>/dev/null || echo "")
-          
-          # Fallback: discover from Azure if azd outputs aren't available
-          if [ -z "$FRONTEND_URL" ] || [ -z "$BACKEND_URL" ]; then
-            RG=$(azd env get-value AZURE_RESOURCE_GROUP 2>/dev/null || echo "rg-prod")
-            FRONTEND_URL="https://$(az containerapp show -n $(az containerapp list -g "$RG" --query "[?contains(name,'frontend')].name" -o tsv) -g "$RG" --query "properties.configuration.ingress.fqdn" -o tsv)"
-            BACKEND_URL="https://$(az containerapp show -n $(az containerapp list -g "$RG" --query "[?contains(name,'backend')].name" -o tsv) -g "$RG" --query "properties.configuration.ingress.fqdn" -o tsv)"
-          fi
+          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
+          BACKEND_APP="${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }}"
+          FRONTEND_APP="${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }}"
+
+          BACKEND_URL="https://$(az containerapp show -n "$BACKEND_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+          FRONTEND_URL="https://$(az containerapp show -n "$FRONTEND_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
           echo "Frontend: $FRONTEND_URL"
           echo "Backend: $BACKEND_URL"
@@ -170,7 +182,6 @@ jobs:
 
           echo "✅ Auth configuration verified!"
 
-          # Export URLs for summary step
           echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_ENV
           echo "BACKEND_URL=$BACKEND_URL" >> $GITHUB_ENV
 
@@ -182,4 +193,13 @@ jobs:
           echo "**Backend:** ${{ env.BACKEND_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Deployment Method:** Azure Developer CLI (azd)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Method:** Direct Azure CLI" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### GitHub Variables (override defaults via repo settings)" >> $GITHUB_STEP_SUMMARY
+          echo "| Variable | Default |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`RESOURCE_GROUP\` | \`rg-teamskills-prod\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`ACR_NAME\` | \`crywmkgjccarkve\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`BACKEND_APP\` | \`ca-backend-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`FRONTEND_APP\` | \`ca-frontend-teamskills\` |" >> $GITHUB_STEP_SUMMARY
