@@ -32,6 +32,18 @@ function SkillGraph({ onUserSelect }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [rawData, setRawData] = useState(null);
+  const [activeLevels, setActiveLevels] = useState(['L400']);
+
+  const toggleLevel = useCallback((level) => {
+    setActiveLevels(prev => {
+      if (prev.includes(level)) {
+        // Don't allow deselecting all levels
+        if (prev.length === 1) return prev;
+        return prev.filter(l => l !== level);
+      }
+      return [...prev, level];
+    });
+  }, []);
 
   // Convert level to numeric weight for coverage scoring
   const levelToWeight = (level) => {
@@ -160,7 +172,7 @@ function SkillGraph({ onUserSelect }) {
         });
       });
 
-      // Add person-group links with averaged proficiency
+      // Add person-group links with averaged proficiency (filtered by active levels)
       users.forEach(user => {
         const categoryNames = [...new Set(skills.map(s => s.category_name))];
         
@@ -179,13 +191,15 @@ function SkillGraph({ onUserSelect }) {
           if (levels.length > 0) {
             const avgLevel = levels.reduce((a, b) => a + b, 0) / levels.length;
             const level = numToLevel(avgLevel);
-            links.push({
-              source: `p${user.id}`,
-              target: `g${catName}`,
-              level: level,
-              color: LINK_COLOR,
-              strength: level === 'L400' ? 0.8 : level === 'L300' ? 0.5 : 0.3
-            });
+            if (level && activeLevels.includes(level)) {
+              links.push({
+                source: `p${user.id}`,
+                target: `g${catName}`,
+                level: level,
+                color: LINK_COLOR,
+                strength: level === 'L400' ? 0.8 : level === 'L300' ? 0.5 : 0.3
+              });
+            }
           }
         });
       });
@@ -222,12 +236,12 @@ function SkillGraph({ onUserSelect }) {
         });
       });
 
-      // Add person-skill links
+      // Add person-skill links (filtered by active levels)
       users.forEach(user => {
         skills.forEach(skill => {
           const key = `${user.id}-${skill.id}`;
           const userSkill = matrix.userSkills[key];
-          if (userSkill && userSkill.proficiency_level) {
+          if (userSkill && userSkill.proficiency_level && activeLevels.includes(userSkill.proficiency_level)) {
             links.push({
               source: `p${user.id}`,
               target: `s${skill.id}`,
@@ -241,8 +255,12 @@ function SkillGraph({ onUserSelect }) {
       });
     }
 
-    setGraphData({ nodes, links, users, skills, categories, matrix });
-  }, [rawData, skillViewBy]);
+    // Hide skill nodes that have no visible connections (orphans)
+    const connectedSkillIds = new Set(links.map(l => l.target));
+    const filteredNodes = nodes.filter(n => n.type === 'person' || connectedSkillIds.has(n.id));
+
+    setGraphData({ nodes: filteredNodes, links, users, skills, categories, matrix });
+  }, [rawData, skillViewBy, activeLevels]);
 
   // Track container dimensions for ResizeObserver-triggered re-renders
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -515,6 +533,33 @@ function SkillGraph({ onUserSelect }) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+        </div>
+
+        <div className="graph-level-filter">
+          <span className="level-filter-label">Show levels:</span>
+          {['L400', 'L300', 'L200', 'L100'].map(level => (
+            <button
+              key={level}
+              className={`level-toggle level-${level} ${activeLevels.includes(level) ? 'active' : ''}`}
+              onClick={() => toggleLevel(level)}
+              title={`${activeLevels.includes(level) ? 'Hide' : 'Show'} ${level} connections`}
+            >
+              {level}
+            </button>
+          ))}
+          <button
+            className="level-toggle level-quick-toggle"
+            onClick={() => {
+              if (activeLevels.length === 4) {
+                setActiveLevels(['L400']);
+              } else {
+                setActiveLevels(['L400', 'L300', 'L200', 'L100']);
+              }
+            }}
+            title={activeLevels.length === 4 ? 'Show expert only' : 'Show all levels'}
+          >
+            {activeLevels.length === 4 ? 'Expert Only' : 'Show All'}
+          </button>
         </div>
         
         <div className="skill-view-toggle">

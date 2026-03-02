@@ -26,8 +26,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   z-index: 10;
   pointer-events: none;
+  flex-wrap: wrap;
 }
 
 .graph-controls > * {
@@ -78,6 +80,63 @@
   padding: 4px;
   border-radius: 6px;
   border: 1px solid #555555;
+}
+
+/* Level filter */
+.graph-level-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #3a3a3a;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #555555;
+}
+
+.level-filter-label {
+  font-size: 0.8rem;
+  color: #aaaaaa;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.level-toggle {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #777777;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.level-toggle.active {
+  color: #ffffff;
+}
+
+.level-toggle.active.level-L400 { background: #107c10; }
+.level-toggle.active.level-L300 { background: #0078d4; }
+.level-toggle.active.level-L200 { background: #ca5010; }
+.level-toggle.active.level-L100 { background: #d13438; }
+
+.level-toggle:hover:not(.active) {
+  color: #cccccc;
+  background: #444444;
+}
+
+.level-quick-toggle {
+  margin-left: 4px;
+  border-left: 1px solid #555555;
+  padding-left: 10px;
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+
+.level-quick-toggle.active {
+  background: #555555;
 }
 
 .skill-view-toggle button,
