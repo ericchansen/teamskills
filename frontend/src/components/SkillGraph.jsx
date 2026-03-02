@@ -244,25 +244,26 @@ function SkillGraph({ onUserSelect }) {
     setGraphData({ nodes, links, users, skills, categories, matrix });
   }, [rawData, skillViewBy]);
 
-  // Track container dimensions via ResizeObserver for reliable sizing
+  // Track container dimensions for ResizeObserver-triggered re-renders
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (loading || !containerRef.current) return;
     const observer = new ResizeObserver(entries => {
       const { width, height } = entries[0].contentRect;
       if (width > 0 && height > 0) setDimensions({ width, height });
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [loading]);
 
   // Initialize and update D3 graph
   useEffect(() => {
     if (loading || error || !containerRef.current) return;
-    if (dimensions.width === 0 || dimensions.height === 0) return;
 
     const container = containerRef.current;
-    const { width, height } = dimensions;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    if (width === 0 || height === 0) return;
 
     // Clear existing SVG
     d3.select(container).selectAll('svg').remove();
