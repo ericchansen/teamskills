@@ -2,7 +2,7 @@
 
 **Author:** Kobayashi (Auth/Security)  
 **Date:** 2026-03-02  
-**Status:** Implemented
+**Status:** ⚠️ BLOCKED — cross-tenant permissions barrier discovered. See mcmanus-cross-tenant-constraint.md
 
 ## Context
 

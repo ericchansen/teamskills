@@ -289,3 +289,44 @@ Keep the `backendAuth` resource on the backend Container App unchanged — the A
 - MSAL in the React app remains the single authentication mechanism for users
 - Backend API remains protected by Easy Auth (unchanged)
 - The `azureAdClientSecret` secret and related params on the frontend container app are now unused but harmless; can be cleaned up in a follow-up
+
+---
+
+### ⛔ CONSTRAINT: Zero Permissions in Microsoft Corp Tenant (72f988bf) — PERMANENT
+
+**Author:** McManus (DevOps) + Eric Hansen  
+**Date:** 2026-03-02  
+**Status:** Active constraint — PERMANENT  
+**Priority:** BLOCKING — affects all Entra ID automation decisions
+
+**The team has ZERO permissions in tenant `72f988bf` (Microsoft corp). Nobody on this team can do anything there — not programmatically, not manually, not via Portal. This is non-negotiable.**
+
+What this rules out:
+1. ~~Automated `az ad app update` in CI/CD~~ — SP can't auth to 72f988bf
+2. ~~Manual Portal changes to the Entra app~~ — No admin permissions there
+3. ~~Tenant-switching login steps~~ — SP is single-tenant
+4. ~~Bicep `Microsoft.Graph/applications`~~ — Deploys target wrong tenant
+5. ~~Terraform AzureAD provider~~ — Same cross-tenant auth issue
+6. ~~Asking Eric to manually add redirect URIs~~ — He doesn't have permissions either
+
+**What we CAN do:**
+- Manage Azure resources in tenant `9c74def4` (ACR, Container Apps, PostgreSQL, etc.)
+- Create NEW app registrations in tenant `9c74def4`
+- Skip auth in staging environments
+- Use the existing Entra app for prod (redirect URI already set, URL is stable)
+
+**Viable staging auth options (only 2):**
+1. **Skip auth in staging** — deploy without MSAL, test functionality only
+2. **New app registration in tenant 9c74def4** — separate Entra app we fully own, Bicep-managed
+
+**Previous decisions invalidated:** "Auto-manage Entra ID Redirect URIs for PR Staging" (above) is BLOCKED and will not work at runtime.
+
+---
+
+### Previous Decision BLOCKED: Auto-Manage Entra ID SPA Redirect URIs
+
+**Author:** Kobayashi (Auth/Security)  
+**Date:** 2026-03-02  
+**Status:** ⚠️ BLOCKED — See "Zero Permissions in Tenant 72f988bf" above
+
+The implementation in pr-staging.yml and pr-cleanup.yml (adding/removing SPA redirect URIs via `az ad app update`) exists in code but WILL NOT WORK because the CI/CD service principal cannot authenticate to tenant 72f988bf. This code should be removed.
