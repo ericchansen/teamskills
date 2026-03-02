@@ -611,6 +611,31 @@ router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: reset all users (wipe duplicates, start fresh)
+router.post('/reset-users', async (req, res) => {
+  const { secret } = req.body;
+
+  const initSecret = process.env.INIT_SECRET;
+  if (!initSecret || secret !== initSecret) {
+    return res.status(401).json({ error: 'Unauthorized - INIT_SECRET required' });
+  }
+
+  try {
+    // Delete in dependency order: history → skills → users
+    await db.query('DELETE FROM user_skills_history');
+    await db.query('DELETE FROM user_skills');
+    await db.query('DELETE FROM users');
+
+    res.json({
+      message: 'All users, user_skills, and user_skills_history deleted. Re-initialize with /api/admin/init or sync.',
+      status: 'success'
+    });
+  } catch (error) {
+    console.error('Reset users error:', error);
+    res.status(500).json({ error: 'Failed to reset users' });
+  }
+});
+
 // Admin: sync skills from CSV or SharePoint
 // POST /api/admin/sync-skills
 // Body: { source: 'csv' | 'pivot-csv' | 'sharepoint', secret: string, csvContent?: string, filePath?: string }
