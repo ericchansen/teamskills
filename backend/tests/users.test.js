@@ -23,7 +23,7 @@ describe('Users API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockUsers);
-      expect(db.query).toHaveBeenCalledWith('SELECT id, name, email, title, department, is_admin, created_at, updated_at FROM users ORDER BY name');
+      expect(db.query).toHaveBeenCalledWith('SELECT id, name, email, role, team, is_admin, created_at, updated_at FROM users ORDER BY name');
     });
   });
 
