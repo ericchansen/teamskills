@@ -8,6 +8,8 @@ const pool = new Pool({
   password: process.env.PGPASSWORD || process.env.DB_PASSWORD || 'postgres',
   port: process.env.PGPORT || process.env.DB_PORT || 5432,
   ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: true } : false,
+  connectionTimeoutMillis: 5000,  // Fail fast if DB unreachable (e.g. auto-paused)
+  statement_timeout: 30000,       // Kill queries that hang >30s
 });
 
 pool.on('error', (err) => {
