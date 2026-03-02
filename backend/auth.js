@@ -98,6 +98,21 @@ async function findOrCreateUser(claims) {
     }
   }
 
+  // Try to find by display name (links CSV-imported users who have placeholder emails)
+  result = await db.query(
+    'SELECT * FROM users WHERE LOWER(name) = LOWER($1)',
+    [name]
+  );
+
+  if (result.rows.length > 0) {
+    const user = result.rows[0];
+    await db.query(
+      'UPDATE users SET entra_oid = $1, email = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+      [oid, email, user.id]
+    );
+    return { ...user, entra_oid: oid, email };
+  }
+
   // Create new user
   result = await db.query(
     `INSERT INTO users (name, email, entra_oid, role, team) 
