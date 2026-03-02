@@ -25,10 +25,9 @@ const SHAREPOINT_SITE = 'microsoft.sharepoint.com:/teams/SDPAccountsShared';
 const SHAREPOINT_LIST_NAME = 'Skills Matrix MVP';
 
 /**
- * Parse the local CSV file into normalized skill records
+ * Parse raw CSV content string into normalized skill records
  */
-function parseCSV(csvPath) {
-  const content = fs.readFileSync(csvPath, 'utf-8');
+function parseCSVContent(content) {
   const lines = content.split('\n').filter(line => line.trim());
   
   const headers = parseCSVLine(lines[0]);
@@ -44,6 +43,14 @@ function parseCSV(csvPath) {
   }
   
   return records;
+}
+
+/**
+ * Parse the local CSV file into normalized skill records
+ */
+function parseCSV(csvPath) {
+  const content = fs.readFileSync(csvPath, 'utf-8');
+  return parseCSVContent(content);
 }
 
 /**
@@ -221,6 +228,8 @@ async function sync(source = 'csv', options = {}) {
       throw new Error('Graph client required for SharePoint sync. Configure SHAREPOINT_CLIENT_ID and SHAREPOINT_CLIENT_SECRET env vars.');
     }
     records = await fetchFromSharePoint(options.graphClient);
+  } else if (options.csvContent) {
+    records = parseCSVContent(options.csvContent);
   } else {
     const csvPath = options.csvPath || path.join(__dirname, '..', '..', 'cloud-solutions-engineer-skills.csv');
     if (!fs.existsSync(csvPath)) {
@@ -233,4 +242,4 @@ async function sync(source = 'csv', options = {}) {
   return { source, ...stats };
 }
 
-module.exports = { sync, parseCSV, fetchFromSharePoint, syncToDatabase, ensureSchemaExtensions };
+module.exports = { sync, parseCSV, parseCSVContent, fetchFromSharePoint, syncToDatabase, ensureSchemaExtensions };

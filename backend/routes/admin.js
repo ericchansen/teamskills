@@ -615,7 +615,7 @@ router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/admin/sync-skills
 // Body: { source: 'csv' | 'sharepoint', secret: string }
 router.post('/sync-skills', async (req, res) => {
-  const { secret, source = 'csv' } = req.body;
+  const { secret, source = 'csv', csvContent } = req.body;
 
   // Require INIT_SECRET for security (same as /init)
   const initSecret = process.env.INIT_SECRET;
@@ -625,6 +625,9 @@ router.post('/sync-skills', async (req, res) => {
 
   try {
     const options = {};
+    if (csvContent) {
+      options.csvContent = csvContent;
+    }
 
     if (source === 'sharepoint') {
       // SharePoint requires Graph API client — future enhancement
