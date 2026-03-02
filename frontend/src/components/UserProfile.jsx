@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import ProficiencyBadge from './ProficiencyBadge';
+import ProficiencyBadge, { PROFICIENCY_CONFIG } from './ProficiencyBadge';
 import AddSkillModal from './AddSkillModal';
 import ConfirmModal from './ConfirmModal';
 import apiFetch from '../api';
@@ -180,10 +180,9 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
                             onChange={(e) => handleUpdateProficiency(skill.skill_id, e.target.value)}
                             className="proficiency-select"
                           >
-                            <option value="L100">L100 - Foundational</option>
-                            <option value="L200">L200 - Intermediate</option>
-                            <option value="L300">L300 - Advanced</option>
-                            <option value="L400">L400 - Expert</option>
+                            {Object.entries(PROFICIENCY_CONFIG).map(([key, cfg]) => (
+                              <option key={key} value={key}>{cfg.label}</option>
+                            ))}
                           </select>
                           <button 
                             className="delete-btn"

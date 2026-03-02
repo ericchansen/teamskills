@@ -1,14 +1,8 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import apiFetch from '../api';
+import { LEVEL_COLORS } from './ProficiencyBadge';
 import './CoverageDashboard.css';
-
-const LEVEL_COLORS = {
-  L100: '#3b82f6',
-  L200: '#22c55e',
-  L300: '#f59e0b',
-  L400: '#ef4444',
-};
 
 function CoverageDashboard() {
   const svgRef = useRef(null);
