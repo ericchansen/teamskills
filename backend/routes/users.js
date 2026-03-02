@@ -6,7 +6,7 @@ const { requireAuth, requireAdmin } = require('../auth');
 // GET all users
 router.get('/', async (req, res) => {
   try {
-    const result = await db.query('SELECT id, name, email, title, department, is_admin, created_at, updated_at FROM users ORDER BY name');
+    const result = await db.query('SELECT id, name, email, role, team, is_admin, created_at, updated_at FROM users ORDER BY name');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query('SELECT id, name, email, title, department, is_admin, created_at, updated_at FROM users WHERE id = $1', [id]);
+    const result = await db.query('SELECT id, name, email, role, team, is_admin, created_at, updated_at FROM users WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
