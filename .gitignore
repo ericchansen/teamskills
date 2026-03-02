@@ -16,3 +16,6 @@ docker-compose.override.yml
 
 # Skills CSV data (contains PII - never commit)
 cloud-solutions-engineer-skills.csv
+
+# PII data files (never commit)
+.data/
