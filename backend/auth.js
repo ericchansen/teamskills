@@ -129,6 +129,7 @@ async function requireAuth(req, res, next) {
       return res.status(503).json({ error: 'Authentication not configured. Contact administrator.' });
     }
     // Auth not configured — allow all requests (demo mode)
+    req.user = { id: 1, name: 'Demo User', email: 'demo@example.com', is_admin: true };
     return next();
   }
 
@@ -164,6 +165,11 @@ async function requireAuth(req, res, next) {
  * Allows requests without token, but attaches user if token provided
  */
 async function optionalAuth(req, res, next) {
+  if (!isAuthConfigured()) {
+    req.user = { id: 1, name: 'Demo User', email: 'demo@example.com', is_admin: true };
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

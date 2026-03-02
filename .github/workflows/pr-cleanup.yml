@@ -30,36 +30,6 @@ jobs:
         with:
           creds: '{"clientId":"${{ vars.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ vars.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ vars.AZURE_TENANT_ID }}"}'
 
-      - name: Remove Entra ID redirect URIs
-        if: vars.AZURE_AD_CLIENT_ID != ''
-        run: |
-          APP_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
-          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
-
-          # Clean up web redirect URIs (backend Easy Auth callbacks)
-          EXISTING_WEB=$(az ad app show --id "$APP_ID" --query "web.redirectUris[]" -o tsv)
-          REMAINING_WEB=$(echo "$EXISTING_WEB" | grep -v "pr${PR_NUMBER}" || true)
-          if [ -z "$REMAINING_WEB" ]; then
-            echo "No web redirect URIs remaining — clearing all"
-            az ad app update --id "$APP_ID" --web-redirect-uris
-          else
-            WEB_ARGS=$(echo "$REMAINING_WEB" | tr '\n' ' ')
-            echo "Remaining web redirect URIs:"
-            echo "$REMAINING_WEB"
-            az ad app update --id "$APP_ID" --web-redirect-uris $WEB_ARGS
-          fi
-
-          # Clean up SPA redirect URIs (frontend MSAL)
-          OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
-          EXISTING_SPA=$(az ad app show --id "$APP_ID" --query "spa.redirectUris[]" -o tsv)
-          REMAINING_SPA=$(echo "$EXISTING_SPA" | grep -v "pr${PR_NUMBER}" || true)
-          SPA_JSON=$(echo "$REMAINING_SPA" | jq -R -s 'split("\n") | map(select(length > 0))')
-          az rest --method PATCH \
-            --url "https://graph.microsoft.com/v1.0/applications/${OBJECT_ID}" \
-            --headers "Content-Type=application/json" \
-            --body "{\"spa\":{\"redirectUris\":${SPA_JSON}}}"
-          echo "✅ PR-specific redirect URIs removed (web + SPA)"
-
       - name: Delete PR staging resources
         id: cleanup
         run: |
