@@ -145,68 +145,66 @@ jobs:
             echo "⚠️ No staging app ID output — skipping identifier URI setup"
           fi
 
-      - name: Configure OBO for SharePoint sync
-        id: obo_setup
-        run: |
-          STAGING_APP_ID="${{ steps.deploy.outputs.stagingAppId }}"
-          PR_NUMBER="${{ steps.setup.outputs.pr_number }}"
-          RESOURCE_TOKEN="pr${PR_NUMBER}"
-          
-          if [ -z "$STAGING_APP_ID" ]; then
-            echo "⚠️ No staging app ID — skipping OBO setup"
-            echo "client_secret=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Create a client secret for OBO flow
-          echo "Creating client secret for OBO..."
-          SECRET_JSON=$(az ad app credential reset \
-            --id "$STAGING_APP_ID" \
-            --display-name "OBO Staging Secret" \
-            --years 1 \
-            --query password -o tsv 2>/dev/null || echo "")
-          
-          if [ -z "$SECRET_JSON" ]; then
-            echo "⚠️ Failed to create client secret — OBO sync will be disabled"
-            echo "client_secret=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          echo "::add-mask::${SECRET_JSON}"
-          echo "client_secret=${SECRET_JSON}" >> $GITHUB_OUTPUT
-          echo "✅ Client secret created"
-          
-          # Grant admin consent for Sites.ReadWrite.All
-          echo "Granting admin consent for Graph permissions..."
-          SP_ID=$(az ad sp show --id "$STAGING_APP_ID" --query id -o tsv 2>/dev/null || echo "")
-          if [ -z "$SP_ID" ]; then
-            az ad sp create --id "$STAGING_APP_ID" > /dev/null 2>&1
-          fi
-          az ad app permission admin-consent --id "$STAGING_APP_ID" 2>/dev/null || \
-            echo "⚠️ Admin consent may require manual grant"
-          echo "✅ Admin consent granted (or already granted)"
-
-      - name: Update backend with OBO client secret
-        if: steps.obo_setup.outputs.client_secret != ''
+      - name: Override auth with prod app credentials
+        if: vars.PROD_APP_CLIENT_ID != ''
         run: |
           PR_NUMBER="${{ steps.setup.outputs.pr_number }}"
           RESOURCE_TOKEN="pr${PR_NUMBER}"
-          CLIENT_SECRET="${{ steps.obo_setup.outputs.client_secret }}"
+          PROD_CLIENT_ID="${{ vars.PROD_APP_CLIENT_ID }}"
+          PROD_TENANT_ID="${{ vars.PROD_APP_TENANT_ID }}"
+          PROD_SECRET="${{ secrets.PROD_APP_CLIENT_SECRET }}"
+          FRONTEND_URL="${{ steps.deploy.outputs.frontendUrl }}"
+          RG="${{ env.STAGING_RESOURCE_GROUP }}"
           
-          echo "Adding AZURE_AD_CLIENT_SECRET to backend container..."
+          echo "🔄 Overriding staging auth with prod app credentials..."
+          echo "   Prod Client ID: ${PROD_CLIENT_ID}"
+          echo "   Prod Tenant ID: ${PROD_TENANT_ID}"
+          
+          # Add staging frontend URL as SPA redirect URI on prod app
+          echo "Adding staging redirect URI to prod app..."
+          EXISTING_URIS=$(az ad app show --id "$PROD_CLIENT_ID" \
+            --query "spa.redirectUris" -o tsv 2>/dev/null || echo "")
+          if echo "$EXISTING_URIS" | grep -q "$FRONTEND_URL"; then
+            echo "  ↳ Redirect URI already registered"
+          else
+            az rest --method PATCH \
+              --uri "https://graph.microsoft.com/v1.0/applications/\$(az ad app show --id $PROD_CLIENT_ID --query id -o tsv)" \
+              --headers "Content-Type=application/json" \
+              --body "{\"spa\":{\"redirectUris\":[$(echo "$EXISTING_URIS" | sed 's/^/"/;s/$/"/' | paste -sd, -),\"${FRONTEND_URL}\"]}}" \
+              2>/dev/null || echo "⚠️ Could not add redirect URI — add manually in Azure Portal"
+          fi
+          
+          # Override backend container: client ID, tenant ID, and OBO secret
+          echo "Updating backend container auth..."
           az containerapp secret set \
             --name "ca-backend-${RESOURCE_TOKEN}" \
-            --resource-group "${{ env.STAGING_RESOURCE_GROUP }}" \
-            --secrets "obo-client-secret=${CLIENT_SECRET}" \
+            --resource-group "$RG" \
+            --secrets "obo-client-secret=${PROD_SECRET}" \
             --output none
           
           az containerapp update \
             --name "ca-backend-${RESOURCE_TOKEN}" \
-            --resource-group "${{ env.STAGING_RESOURCE_GROUP }}" \
-            --set-env-vars "AZURE_AD_CLIENT_SECRET=secretref:obo-client-secret" \
+            --resource-group "$RG" \
+            --set-env-vars \
+              "AZURE_AD_CLIENT_ID=${PROD_CLIENT_ID}" \
+              "AZURE_AD_TENANT_ID=${PROD_TENANT_ID}" \
+              "AZURE_AD_CLIENT_SECRET=secretref:obo-client-secret" \
             --output none
+          echo "✅ Backend updated with prod auth"
           
-          echo "✅ Backend updated with OBO client secret"
+          # Override frontend container: client ID and tenant ID
+          echo "Updating frontend container auth..."
+          az containerapp update \
+            --name "ca-frontend-${RESOURCE_TOKEN}" \
+            --resource-group "$RG" \
+            --set-env-vars \
+              "VITE_AZURE_AD_CLIENT_ID=${PROD_CLIENT_ID}" \
+              "VITE_AZURE_AD_TENANT_ID=${PROD_TENANT_ID}" \
+            --output none
+          echo "✅ Frontend updated with prod auth"
+          
+          echo ""
+          echo "🎉 Staging now uses prod Entra app — sign in with your Microsoft account"
 
       - name: Smoke test staging deployment
         run: |
