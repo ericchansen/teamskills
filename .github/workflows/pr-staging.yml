@@ -146,13 +146,13 @@ jobs:
           fi
 
       - name: Override auth with prod app credentials
-        if: vars.PROD_APP_CLIENT_ID != ''
+        if: vars.AZURE_AD_CLIENT_ID != ''
         run: |
           PR_NUMBER="${{ steps.setup.outputs.pr_number }}"
           RESOURCE_TOKEN="pr${PR_NUMBER}"
-          PROD_CLIENT_ID="${{ vars.PROD_APP_CLIENT_ID }}"
-          PROD_TENANT_ID="${{ vars.PROD_APP_TENANT_ID }}"
-          PROD_SECRET="${{ secrets.PROD_APP_CLIENT_SECRET }}"
+          PROD_CLIENT_ID="${{ vars.AZURE_AD_CLIENT_ID }}"
+          PROD_TENANT_ID="${{ vars.AZURE_AD_TENANT_ID }}"
+          PROD_SECRET="${{ secrets.AZURE_AD_CLIENT_SECRET }}"
           FRONTEND_URL="${{ steps.deploy.outputs.frontendUrl }}"
           RG="${{ env.STAGING_RESOURCE_GROUP }}"
           
