@@ -40,3 +40,5 @@ Implications:
 - CANNOT ask Eric to manually fix things in Portal — he doesn't have permissions either
 - All CI/CD automation targeting tenant 72f988bf WILL FAIL
 - Code in pr-staging.yml and pr-cleanup.yml that uses az ad app update must be REMOVED
+
+- **PostgreSQL cold-start fix (keep-alive cron):** Azure PostgreSQL Flexible Server auto-pauses after inactivity, causing 15-60s hangs on first request. Added `.github/workflows/keep-alive.yml` — a GitHub Actions scheduled workflow that pings the backend `/health` endpoint every 10 minutes. The health check triggers a DB connection, keeping the Flex Server awake. Zero-cost (GitHub Actions free tier), zero-infra, no app code changes. If cron alone isn't enough, the `wake-function/` Azure Function can be layered on top later.
