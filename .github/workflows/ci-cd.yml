@@ -128,17 +128,22 @@ jobs:
 
       - name: Deploy backend
         run: |
-          az containerapp update \
-            --name ${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }} \
+          DEPLOY_ARGS="--name ${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }} \
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
             --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/backend:${{ github.sha }} \
             --set-env-vars \
               AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
               AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
-              NODE_ENV=production \
-              INIT_SECRET=secretref:init-secret \
-            --set-secrets \
-              init-secret="${{ secrets.INIT_SECRET }}"
+              NODE_ENV=production"
+
+          # Only set INIT_SECRET if the GitHub secret is configured
+          if [ -n "$INIT_SECRET" ]; then
+            DEPLOY_ARGS="$DEPLOY_ARGS INIT_SECRET=secretref:init-secret --set-secrets init-secret=$INIT_SECRET"
+          fi
+
+          az containerapp update $DEPLOY_ARGS
+        env:
+          INIT_SECRET: ${{ secrets.INIT_SECRET }}
 
       - name: Deploy frontend
         run: |
