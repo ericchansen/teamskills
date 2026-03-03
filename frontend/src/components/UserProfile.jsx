@@ -14,6 +14,23 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [updating, setUpdating] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, skillId: null, skillName: '' });
+  const [syncStatus, setSyncStatus] = useState({ configured: false, syncing: false, lastResult: null });
+
+  // Check if SharePoint sync is available
+  useEffect(() => {
+    async function checkSyncStatus() {
+      try {
+        const response = await apiFetch('/api/sharepoint/status');
+        if (response.ok) {
+          const data = await response.json();
+          setSyncStatus(prev => ({ ...prev, configured: data.configured }));
+        }
+      } catch {
+        // Sync not available — ignore
+      }
+    }
+    checkSyncStatus();
+  }, []);
 
   const fetchUserData = useCallback(async () => {
     if (!userId) return;
@@ -115,6 +132,48 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
     onSkillsUpdated?.();
   };
 
+  const handleSharePointPull = async () => {
+    setSyncStatus(prev => ({ ...prev, syncing: true, lastResult: null }));
+    try {
+      const response = await apiFetch('/api/sharepoint/pull', { method: 'POST' });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`Synced from SharePoint: ${data.users?.created || 0} new, ${data.users?.updated || 0} updated`);
+        setSyncStatus(prev => ({ ...prev, lastResult: 'pull-success' }));
+        await Promise.all([fetchUserData(), fetchUserSkills()]);
+        onSkillsUpdated?.();
+      } else {
+        toast.error(data.error || 'SharePoint pull failed');
+        setSyncStatus(prev => ({ ...prev, lastResult: 'pull-error' }));
+      }
+    } catch (err) {
+      toast.error('SharePoint sync failed');
+      setSyncStatus(prev => ({ ...prev, lastResult: 'pull-error' }));
+    } finally {
+      setSyncStatus(prev => ({ ...prev, syncing: false }));
+    }
+  };
+
+  const handleSharePointPush = async () => {
+    setSyncStatus(prev => ({ ...prev, syncing: true, lastResult: null }));
+    try {
+      const response = await apiFetch('/api/sharepoint/push', { method: 'POST' });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`Pushed ${data.fieldsUpdated || 0} skills to SharePoint`);
+        setSyncStatus(prev => ({ ...prev, lastResult: 'push-success' }));
+      } else {
+        toast.error(data.error || 'SharePoint push failed');
+        setSyncStatus(prev => ({ ...prev, lastResult: 'push-error' }));
+      }
+    } catch (err) {
+      toast.error('SharePoint push failed');
+      setSyncStatus(prev => ({ ...prev, lastResult: 'push-error' }));
+    } finally {
+      setSyncStatus(prev => ({ ...prev, syncing: false }));
+    }
+  };
+
   if (!userId) return <div className="no-user">Select a user to view their profile</div>;
   if (loading) return <div className="loading">Loading profile...</div>;
   if (error) return <div className="error">Error: {error}</div>;
@@ -139,9 +198,31 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
           {user.role} • {user.team} • {user.email}
         </p>
         {isOwnProfile && (
-          <button className="add-skill-btn" onClick={() => setShowAddModal(true)}>
-            + Add Skill
-          </button>
+          <div className="profile-actions">
+            <button className="add-skill-btn" onClick={() => setShowAddModal(true)}>
+              + Add Skill
+            </button>
+            {syncStatus.configured && (
+              <>
+                <button
+                  className="sync-btn sync-pull"
+                  onClick={handleSharePointPull}
+                  disabled={syncStatus.syncing}
+                  title="Pull latest skills from SharePoint for the team"
+                >
+                  {syncStatus.syncing ? '⏳' : '⬇'} Pull from SharePoint
+                </button>
+                <button
+                  className="sync-btn sync-push"
+                  onClick={handleSharePointPush}
+                  disabled={syncStatus.syncing}
+                  title="Push your skill levels to SharePoint"
+                >
+                  {syncStatus.syncing ? '⏳' : '⬆'} Push to SharePoint
+                </button>
+              </>
+            )}
+          </div>
         )}
         {!isOwnProfile && (
           <p className="view-only-notice">Viewing {user.name.split(' ')[0]}'s profile (read-only)</p>
