@@ -109,10 +109,24 @@ jobs:
             --file Dockerfile.backend \
             .
 
+      - name: Build and push agent image
+        run: |
+          az acr build \
+            --registry ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }} \
+            --image agent:${{ github.sha }} \
+            --image agent:latest \
+            --file Dockerfile.agent \
+            .
+
       - name: Build and push frontend image
         run: |
           BACKEND_URL="https://$(az containerapp show \
             --name ${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }} \
+            --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
+            --query 'properties.configuration.ingress.fqdn' -o tsv)"
+
+          AGENT_URL="https://$(az containerapp show \
+            --name ${{ vars.AGENT_APP || 'ca-agent-gvojq4dgzbtk4' }} \
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
             --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
@@ -124,6 +138,7 @@ jobs:
             --build-arg VITE_API_URL=$BACKEND_URL \
             --build-arg VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
             --build-arg VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
+            --build-arg VITE_AGENT_URL=$AGENT_URL \
             .
 
       - name: Deploy backend
@@ -145,19 +160,35 @@ jobs:
         env:
           INIT_SECRET: ${{ secrets.INIT_SECRET }}
 
+      - name: Deploy agent
+        run: |
+          az containerapp update \
+            --name ${{ vars.AGENT_APP || 'ca-agent-gvojq4dgzbtk4' }} \
+            --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
+            --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/agent:${{ github.sha }}
+
       - name: Deploy frontend
         run: |
+          AGENT_URL="https://$(az containerapp show \
+            --name ${{ vars.AGENT_APP || 'ca-agent-gvojq4dgzbtk4' }} \
+            --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
+            --query 'properties.configuration.ingress.fqdn' -o tsv)"
+
           az containerapp update \
             --name ${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }} \
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
-            --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/frontend:${{ github.sha }}
+            --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/frontend:${{ github.sha }} \
+            --set-env-vars \
+              VITE_AGENT_URL=$AGENT_URL
 
       - name: Wait for new revisions to provision
         run: |
           RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
           BACKEND_APP="${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }}"
+          AGENT_APP="${{ vars.AGENT_APP || 'ca-agent-gvojq4dgzbtk4' }}"
 
           BACKEND_URL="https://$(az containerapp show -n "$BACKEND_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+          AGENT_URL="https://$(az containerapp show -n "$AGENT_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
           echo "Waiting for backend to be ready..."
           for i in $(seq 1 30); do
@@ -169,14 +200,26 @@ jobs:
             sleep 10
           done
 
+          echo "Waiting for agent to be ready..."
+          for i in $(seq 1 15); do
+            if curl -sf "${AGENT_URL}/health" | grep -q '"healthy"'; then
+              echo "✅ Agent is ready!"
+              break
+            fi
+            echo "Attempt $i/15: Agent not ready yet, waiting 10s..."
+            sleep 10
+          done
+
       - name: Smoke test - Validate auth configuration
         run: |
           RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
           BACKEND_APP="${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }}"
           FRONTEND_APP="${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }}"
+          AGENT_APP="${{ vars.AGENT_APP || 'ca-agent-gvojq4dgzbtk4' }}"
 
           BACKEND_URL="https://$(az containerapp show -n "$BACKEND_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
           FRONTEND_URL="https://$(az containerapp show -n "$FRONTEND_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+          AGENT_URL="https://$(az containerapp show -n "$AGENT_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
           echo "Frontend: $FRONTEND_URL"
           echo "Backend: $BACKEND_URL"
@@ -219,8 +262,18 @@ jobs:
 
           echo "✅ Auth configuration verified!"
 
+          echo "=== Smoke Test: Agent Health ==="
+          AGENT_HEALTH=$(curl -sf "${AGENT_URL}/health" || echo '{"status":"unreachable"}')
+          echo "Agent health: ${AGENT_HEALTH}"
+          if ! echo "$AGENT_HEALTH" | grep -q '"healthy"'; then
+            echo "⚠️ Agent health check failed (non-blocking)"
+          else
+            echo "✅ Agent is healthy!"
+          fi
+
           echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_ENV
           echo "BACKEND_URL=$BACKEND_URL" >> $GITHUB_ENV
+          echo "AGENT_URL=$AGENT_URL" >> $GITHUB_ENV
 
       - name: Deployment summary
         run: |
@@ -228,6 +281,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Frontend:** ${{ env.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "**Backend:** ${{ env.BACKEND_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Agent:** ${{ env.AGENT_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -240,3 +294,4 @@ jobs:
           echo "| \`ACR_NAME\` | \`crgvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`BACKEND_APP\` | \`ca-backend-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`FRONTEND_APP\` | \`ca-frontend-teamskills\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`AGENT_APP\` | \`ca-agent-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY

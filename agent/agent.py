@@ -3,7 +3,7 @@ import logging
 from typing import Optional, AsyncIterator, Any
 
 from azure.identity import DefaultAzureCredential
-from agent_framework import ChatAgent
+from agent_framework import RawAgent
 from agent_framework.azure import AzureOpenAIChatClient
 
 from config import config
@@ -45,7 +45,7 @@ class SkillsAgent:
     """AI agent for team skills queries."""
     
     def __init__(self):
-        self._agent: Optional[ChatAgent] = None
+        self._agent: Optional[RawAgent] = None
         self._chat_client: Optional[AzureOpenAIChatClient] = None
         self._credential = None
     
@@ -71,8 +71,8 @@ class SkillsAgent:
             )
             
             # Create agent with tools
-            self._agent = ChatAgent(
-                chat_client=self._chat_client,
+            self._agent = RawAgent(
+                client=self._chat_client,
                 instructions=AGENT_INSTRUCTIONS,
                 tools=[
                     find_experts_by_skills,
@@ -103,7 +103,12 @@ class SkillsAgent:
         
         try:
             result = await self._agent.run(message)
-            return result.text if hasattr(result, 'text') else str(result)
+            logger.info(f"Agent result - text: {bool(result.text)}, value: {bool(result.value)}")
+            if result.text:
+                return result.text
+            if result.value:
+                return str(result.value)
+            return "No response generated."
         except Exception as e:
             logger.error(f"Agent run failed: {e}")
             return "I encountered an error processing your request. Please try again."
@@ -122,30 +127,13 @@ class SkillsAgent:
             return
         
         try:
-            # Stream the response
-            async for chunk in self._agent.run_stream(message):
-                # Emit different event types based on chunk type
-                if hasattr(chunk, 'tool_call'):
-                    yield {
-                        "type": "tool_call",
-                        "name": chunk.tool_call.name,
-                        "args": chunk.tool_call.arguments,
-                    }
-                elif hasattr(chunk, 'tool_result'):
-                    yield {
-                        "type": "tool_result",
-                        "name": chunk.tool_result.name,
-                        "result": str(chunk.tool_result.result)[:500],  # Truncate long results
-                    }
-                elif hasattr(chunk, 'text') and chunk.text:
+            # Stream the response using run(stream=True)
+            stream = self._agent.run(message, stream=True)
+            async for update in stream.updates:
+                if update.text:
                     yield {
                         "type": "content",
-                        "content": chunk.text,
-                    }
-                elif hasattr(chunk, 'thinking') and chunk.thinking:
-                    yield {
-                        "type": "thinking",
-                        "content": chunk.thinking,
+                        "content": update.text,
                     }
             
             yield {"type": "done"}

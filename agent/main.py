@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI):
     
     # Connect to database
     if config.database_url:
+        db.database_url = config.database_url
         try:
             await db.connect()
             logger.info("Database connected")
@@ -110,6 +111,7 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "agent",
+        "database_connected": db.is_connected,
     }
 
 
@@ -126,7 +128,7 @@ async def root():
 
 @app.post("/chat", response_model=ChatResponse)
 @limiter.limit(config.rate_limit)
-async def chat(request: ChatRequest, req: Request):
+async def chat(chat_request: ChatRequest, request: Request):
     """Non-streaming chat endpoint.
     
     Send a message and receive a complete response.
@@ -137,26 +139,23 @@ async def chat(request: ChatRequest, req: Request):
             detail="Agent service is not available. Check Azure OpenAI configuration."
         )
     
-    if not request.message.strip():
+    if not chat_request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
-    response = await skills_agent.run(request.message)
+    response = await skills_agent.run(chat_request.message)
     
     return ChatResponse(
         response=response,
-        conversation_id=request.conversation_id,
+        conversation_id=chat_request.conversation_id,
     )
 
 
 @app.post("/chat/stream")
 @limiter.limit(config.rate_limit)
-async def chat_stream(request: ChatRequest, req: Request):
+async def chat_stream(chat_request: ChatRequest, request: Request):
     """Streaming chat endpoint using Server-Sent Events.
     
     Send a message and receive streaming response with:
-    - thinking: Agent's reasoning process
-    - tool_call: When agent uses a tool
-    - tool_result: Result from tool execution
     - content: Response text chunks
     - done: Stream complete
     - error: If something went wrong
@@ -167,13 +166,13 @@ async def chat_stream(request: ChatRequest, req: Request):
             detail="Agent service is not available. Check Azure OpenAI configuration."
         )
     
-    if not request.message.strip():
+    if not chat_request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
     async def event_generator():
         """Generate SSE events from agent stream."""
         try:
-            async for event in skills_agent.run_stream(request.message):
+            async for event in skills_agent.run_stream(chat_request.message):
                 yield {
                     "event": event.get("type", "message"),
                     "data": json.dumps(event),

@@ -17,16 +17,45 @@ class Database:
         self._pool: Optional[asyncpg.Pool] = None
     
     async def connect(self) -> None:
-        """Create connection pool."""
-        if not self.database_url:
-            logger.warning("No DATABASE_URL configured, skipping database connection")
+        """Create connection pool using PG* env vars or database_url.
+        
+        Retries up to 3 times with exponential backoff if PG is temporarily unavailable.
+        """
+        import asyncio
+        
+        pg_host = os.environ.get("PGHOST", "")
+        pg_user = os.environ.get("PGUSER", "")
+        pg_password = os.environ.get("PGPASSWORD", "")
+        pg_database = os.environ.get("PGDATABASE", "")
+        pg_port = int(os.environ.get("PGPORT", "5432"))
+        
+        if not (pg_host and pg_user and pg_database) and not self.database_url:
+            logger.warning("No database configuration found, skipping connection")
             return
-        try:
-            self._pool = await asyncpg.create_pool(self.database_url, min_size=1, max_size=10)
-            logger.info(f"Database pool created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create database pool: {e}")
-            raise
+        
+        for attempt in range(3):
+            try:
+                if pg_host and pg_user and pg_database:
+                    self._pool = await asyncpg.create_pool(
+                        host=pg_host, port=pg_port, user=pg_user,
+                        password=pg_password, database=pg_database,
+                        ssl="require", min_size=1, max_size=5,
+                        command_timeout=30, timeout=15,
+                    )
+                else:
+                    self._pool = await asyncpg.create_pool(
+                        self.database_url, min_size=1, max_size=10
+                    )
+                logger.info("Database pool created successfully")
+                return
+            except Exception as e:
+                logger.error(
+                    f"DB connect attempt {attempt + 1}/3 failed: "
+                    f"{type(e).__name__}: {e}"
+                )
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+        logger.error("All DB connection attempts failed; pool is None")
     
     async def disconnect(self) -> None:
         """Close connection pool."""
@@ -43,8 +72,20 @@ class Database:
         async with self._pool.acquire() as conn:
             yield conn
     
+    async def ensure_connected(self) -> bool:
+        """Try to connect if not already connected."""
+        if self._pool is not None:
+            return True
+        try:
+            await self.connect()
+        except Exception:
+            pass
+        return self._pool is not None
+
     async def fetch_all(self, query: str, *args: Any) -> list[dict]:
         """Execute query and return all rows as dicts."""
+        if not self._pool:
+            await self.ensure_connected()
         if not self._pool:
             logger.warning("Database pool not available, returning empty list")
             return []
@@ -59,6 +100,8 @@ class Database:
     
     async def fetch_one(self, query: str, *args: Any) -> Optional[dict]:
         """Execute query and return one row as dict."""
+        if not self._pool:
+            await self.ensure_connected()
         if not self._pool:
             logger.warning("Database pool not available, returning None")
             return None
