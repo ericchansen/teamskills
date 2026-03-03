@@ -109,10 +109,11 @@ test.describe('User Profile - Logged In', () => {
       
       // Change to a different level
       const newValue = initialValue === 'L100' ? 'L200' : 'L100';
-      await firstSelect.selectOption(newValue);
 
-      // Wait a moment for the change to process
-      await page.waitForTimeout(1000);
+      // Wait for API response after changing proficiency to avoid race condition
+      const responsePromise = page.waitForResponse(resp => resp.url().includes('/api/user-skills') && resp.status() < 400);
+      await firstSelect.selectOption(newValue);
+      await responsePromise;
 
       // Verify the value changed
       const updatedValue = await firstSelect.inputValue();
