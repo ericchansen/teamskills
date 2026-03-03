@@ -138,6 +138,21 @@ resource stagingApp 'Microsoft.Graph/applications@v1.0' = {
       }
     ]
   }
+
+  // Declare required Graph delegated permissions for OBO SharePoint sync
+  requiredResourceAccess: [
+    {
+      // Microsoft Graph (well-known resource app ID)
+      resourceAppId: '00000003-0000-0000-c000-000000000000'
+      resourceAccess: [
+        {
+          // Sites.ReadWrite.All (delegated) — required for OBO SharePoint sync
+          id: '89fe6a52-be36-487e-b7d8-d061c450a026'
+          type: 'Scope'
+        }
+      ]
+    }
+  ]
 }
 
 // Backend Container App
