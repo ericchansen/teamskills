@@ -16,6 +16,10 @@ param resourceGroupName string = ''
 @secure()
 param postgresPassword string
 
+@description('Initialization secret for seeding/admin operations')
+@secure()
+param initSecret string = ''
+
 @description('Azure OpenAI model deployment name')
 param openAiModelDeploymentName string = 'gpt-4o'
 
@@ -104,6 +108,7 @@ module backend './app/backend.bicep' = {
     containerRegistryName: containerApps.outputs.registryName
     postgresHost: postgres.outputs.fqdn
     postgresPassword: postgresPassword
+    initSecret: initSecret
     frontendUrl: 'https://${abbrs.appContainerApps}frontend-${resourceToken}.${containerApps.outputs.defaultDomain}'
     azureAdClientId: azureAdClientId
     azureAdTenantId: azureAdTenantId

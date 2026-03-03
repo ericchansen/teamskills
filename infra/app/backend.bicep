@@ -23,6 +23,10 @@ param postgresPassword string
 @description('Frontend URL for CORS')
 param frontendUrl string = '*'
 
+@description('Initialization secret for seeding/admin operations')
+@secure()
+param initSecret string = ''
+
 @description('Microsoft Entra ID Client ID (optional)')
 param azureAdClientId string = ''
 
@@ -69,6 +73,10 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           name: 'postgres-password'
           value: postgresPassword
         }
+        {
+          name: 'init-secret'
+          value: initSecret
+        }
       ]
     }
     template: {
@@ -104,6 +112,10 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'PGPASSWORD'
               secretRef: 'postgres-password'
+            }
+            {
+              name: 'INIT_SECRET'
+              secretRef: 'init-secret'
             }
             {
               name: 'PGDATABASE'
