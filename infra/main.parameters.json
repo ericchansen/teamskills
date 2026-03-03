@@ -9,6 +9,9 @@
     "postgresPassword": {
       "value": "$(secretOrRandomPassword ${AZURE_POSTGRES_PASSWORD})"
     },
+    "initSecret": {
+      "value": "${INIT_SECRET}"
+    },
     "azureAdClientId": {
       "value": "${AZURE_AD_CLIENT_ID}"
     },

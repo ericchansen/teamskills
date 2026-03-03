@@ -175,6 +175,12 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
           name: 'postgres-password'
           value: postgresPassword
         }
+        {
+          // Staging uses a deterministic init secret derived from PR number.
+          // This is intentional — staging environments are ephemeral and don't hold real data.
+          name: 'init-secret'
+          value: 'staging-init-${prNumber}'
+        }
       ]
     }
     template: {
@@ -192,7 +198,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'PGPASSWORD', secretRef: 'postgres-password' }
             { name: 'PGDATABASE', value: 'teamskills' }
             { name: 'PGSSLMODE', value: 'require' }
-            { name: 'INIT_SECRET', value: 'staging-init-${prNumber}' }
+            { name: 'INIT_SECRET', secretRef: 'init-secret' }
             { name: 'AZURE_AD_CLIENT_ID', value: stagingApp.appId }
             { name: 'AZURE_AD_TENANT_ID', value: tenant().tenantId }
           ]
