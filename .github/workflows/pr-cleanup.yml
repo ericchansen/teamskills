@@ -56,18 +56,22 @@ jobs:
           # Delete Container Apps first (they depend on the environment)
           for APP in $(az containerapp list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
             echo "Deleting Container App: ${APP}"
-            az containerapp delete -g "$RG" -n "$APP" --yes --no-wait
+            az containerapp delete -g "$RG" -n "$APP" --yes
             DELETED=$((DELETED + 1))
           done
+
+          # Wait for container app deletions to fully process
+          echo "Waiting 30s for container app deletions to complete..."
+          sleep 30
 
           # Delete Container Apps Environment
           for ENV in $(az containerapp env list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
             echo "Deleting Container Apps Environment: ${ENV}"
-            az containerapp env delete -g "$RG" -n "$ENV" --yes --no-wait
+            az containerapp env delete -g "$RG" -n "$ENV" --yes
             DELETED=$((DELETED + 1))
           done
 
-          # Delete PostgreSQL Flexible Server
+          # Delete PostgreSQL Flexible Server (synchronous, no --no-wait needed)
           for PG in $(az postgres flexible-server list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null); do
             echo "Deleting PostgreSQL server: ${PG}"
             az postgres flexible-server delete -g "$RG" -n "$PG" --yes
@@ -83,6 +87,33 @@ jobs:
 
           echo "deleted_count=${DELETED}" >> $GITHUB_OUTPUT
           echo "Cleanup complete. Deleted ${DELETED} resources."
+
+      - name: Verify cleanup
+        run: |
+          PR_NUMBER=${{ steps.setup.outputs.pr_number }}
+          RG="${{ env.STAGING_RESOURCE_GROUP }}"
+          
+          echo "Verifying all PR #${PR_NUMBER} resources are deleted..."
+          
+          # Count remaining resources with the PR tag
+          REMAINING_APPS=$(az containerapp list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null | wc -l)
+          REMAINING_ENVS=$(az containerapp env list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null | wc -l)
+          REMAINING_PG=$(az postgres flexible-server list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null | wc -l)
+          REMAINING_LOGS=$(az monitor log-analytics workspace list -g "$RG" --query "[?tags.\"pr-number\"=='${PR_NUMBER}'].name" -o tsv 2>/dev/null | wc -l)
+          
+          TOTAL_REMAINING=$((REMAINING_APPS + REMAINING_ENVS + REMAINING_PG + REMAINING_LOGS))
+          
+          if [ $TOTAL_REMAINING -gt 0 ]; then
+            echo "❌ CLEANUP VERIFICATION FAILED"
+            echo "Found $TOTAL_REMAINING orphaned resources:"
+            echo "  - Container Apps: $REMAINING_APPS"
+            echo "  - Container App Environments: $REMAINING_ENVS"
+            echo "  - PostgreSQL Servers: $REMAINING_PG"
+            echo "  - Log Analytics Workspaces: $REMAINING_LOGS"
+            exit 1
+          else
+            echo "✅ Cleanup verified: All PR #${PR_NUMBER} resources successfully deleted"
+          fi
 
       - name: Update PR comment
         uses: actions/github-script@v7
