@@ -52,3 +52,11 @@
 - **Results:** 9 suites, 74 backend tests all pass. 3 suites, 24 frontend tests all pass. Lint clean.
 - **Pattern:** For route-level auth tests, set `AZURE_AD_CLIENT_ID`/`AZURE_AD_TENANT_ID` env vars before request and clean up in `afterEach`. The global `requireAuth` on `/api` rejects before route-level middleware for categories; admin routes have their own per-route auth since adminRouter is mounted before the global middleware.
 - **Note:** POST /api/categories goes through BOTH global `requireAuth` (on `/api`) AND route-level `requireAuth, requireAdmin`. GET /api/admin/status only goes through route-level auth since adminRouter is mounted before the global middleware.
+
+### 2025-07-24 — E2E test run and flaky test fix
+- Ran full E2E suite (13 tests, msedge project): 12 passed, 1 flaky on first run
+- **Flaky test:** `should change proficiency level for existing skill` in `userProfile.spec.js`
+- **Root cause:** Test used `page.waitForTimeout(1000)` instead of waiting for the API response after changing proficiency. Race condition: component re-renders from API response before assertion, resetting the dropdown value.
+- **Fix:** Replaced `waitForTimeout` with `page.waitForResponse(resp => resp.url().includes('/api/user-skills') && resp.status() < 400)` — same pattern used in `workflows.spec.js`
+- **After fix:** All 13 tests pass cleanly in 42s, no flaky tests
+- **Pattern:** Always wait for API responses after user actions that trigger server calls, never use `waitForTimeout` as a substitute

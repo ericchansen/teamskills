@@ -104,13 +104,15 @@ async function findOrCreateUser(claims) {
     [name]
   );
 
-  if (result.rows.length > 0) {
+  if (result.rows.length === 1) {
     const user = result.rows[0];
     await db.query(
       'UPDATE users SET entra_oid = $1, email = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
       [oid, email, user.id]
     );
     return { ...user, entra_oid: oid, email };
+  } else if (result.rows.length > 1) {
+    console.warn(`Multiple users found with name "${name}" — skipping name-based matching to avoid ambiguity`);
   }
 
   // Create new user

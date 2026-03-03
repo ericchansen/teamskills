@@ -95,6 +95,54 @@ describe('Auth Middleware', () => {
       expect(result.email).toBe('test@example.com');
     });
 
+    it('should not match by name when multiple users have the same name', async () => {
+      const duplicateUser1 = {
+        id: 10,
+        name: 'Test User',
+        email: 'test.user@placeholder.local',
+        entra_oid: null
+      };
+      const duplicateUser2 = {
+        id: 11,
+        name: 'Test User',
+        email: 'test.user2@placeholder.local',
+        entra_oid: null
+      };
+      const newUser = {
+        id: 12,
+        name: 'Test User',
+        email: 'test@example.com',
+        entra_oid: 'test-oid-12345',
+        role: 'Team Member',
+        team: null
+      };
+
+      // First query (by oid) returns nothing
+      db.query.mockResolvedValueOnce({ rows: [] });
+      // Second query (by email) returns nothing
+      db.query.mockResolvedValueOnce({ rows: [] });
+      // Third query (by name) returns multiple users
+      db.query.mockResolvedValueOnce({ rows: [duplicateUser1, duplicateUser2] });
+      // Fourth query (insert) creates new user
+      db.query.mockResolvedValueOnce({ rows: [newUser] });
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      const result = await findOrCreateUser(mockClaims);
+
+      expect(db.query).toHaveBeenCalledTimes(4);
+      expect(db.query).toHaveBeenNthCalledWith(4,
+        expect.stringContaining('INSERT INTO users'),
+        ['Test User', 'test@example.com', 'test-oid-12345', 'Team Member', null]
+      );
+      expect(result).toEqual(newUser);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Multiple users found with name "Test User"')
+      );
+
+      warnSpy.mockRestore();
+    });
+
     it('should create new user if not found', async () => {
       const newUser = {
         id: 3,
