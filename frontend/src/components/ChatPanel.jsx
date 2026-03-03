@@ -1,8 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { getConfig } from '../config';
 import './ChatPanel.css';
 
-const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8000';
+const AGENT_URL = getConfig('VITE_AGENT_URL');
+
+/** Returns true when the agent service URL is configured. */
+export function isAgentConfigured() {
+  return Boolean(getConfig('VITE_AGENT_URL'));
+}
 
 function ChatPanel({ isOpen, onToggle }) {
   const [messages, setMessages] = useState([]);

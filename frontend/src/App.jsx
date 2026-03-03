@@ -8,7 +8,7 @@ const TrendsChart = lazy(() => import('./components/TrendsChart'));
 const GapAnalysis = lazy(() => import('./components/GapAnalysis'));
 import UserProfile from './components/UserProfile';
 import ErrorBoundary from './components/ErrorBoundary';
-import ChatPanel from './components/ChatPanel';
+import ChatPanel, { isAgentConfigured } from './components/ChatPanel';
 import DatabaseWakeOverlay from './components/DatabaseWakeOverlay';
 import useDatabaseWake from './hooks/useDatabaseWake';
 import useAuth from './hooks/useAuth';
@@ -350,7 +350,7 @@ function App() {
         </div>
       )}
 
-      <main className={`app-main ${(view === 'graph' || view === 'radar' || view === 'coverage' || view === 'trends' || view === 'gaps') ? 'graph-view' : ''} ${chatOpen && view !== 'profile' ? 'chat-open' : ''}`}>
+      <main className={`app-main ${(view === 'graph' || view === 'radar' || view === 'coverage' || view === 'trends' || view === 'gaps') ? 'graph-view' : ''} ${chatOpen && view !== 'profile' && isAgentConfigured() ? 'chat-open' : ''}`}>
         <ErrorBoundary>
           {view === 'matrix' && <SkillMatrix onUserSelect={handleUserSelect} isAdmin={isAdmin} isAuthenticated={!!currentUser} />}
           <Suspense fallback={<div style={{ color: '#888', textAlign: 'center', padding: '3rem' }}>Loading visualization...</div>}>
@@ -386,8 +386,8 @@ function App() {
         }}
       />
       
-      {/* Chat Panel - shown on matrix and graph views */}
-      {view !== 'profile' && (
+      {/* Chat Panel - shown when agent service is configured */}
+      {view !== 'profile' && isAgentConfigured() && (
         <ChatPanel 
           isOpen={chatOpen} 
           onToggle={() => setChatOpen(!chatOpen)} 
