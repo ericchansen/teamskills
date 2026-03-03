@@ -115,9 +115,8 @@ test.describe('User Profile - Logged In', () => {
       await firstSelect.selectOption(newValue);
       await responsePromise;
 
-      // Verify the value changed
-      const updatedValue = await firstSelect.inputValue();
-      expect(updatedValue).toBe(newValue);
+      // Verify the value changed (auto-retrying assertion handles React re-renders)
+      await expect(firstSelect).toHaveValue(newValue);
     }
   });
 
