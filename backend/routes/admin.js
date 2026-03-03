@@ -4,15 +4,89 @@ const db = require('../db');
 const { requireAuth, requireAdmin } = require('../auth');
 const sharepointSync = require('../services/sharepoint');
 
-// Database initialization endpoint (POST to prevent accidental execution)
-router.post('/init', async (req, res) => {
+// --- In-memory rate limiter for admin endpoints ---
+const adminRateLimit = new Map();
+const ADMIN_RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const ADMIN_RATE_LIMIT_MAX = 5;
+
+function adminRateLimiter(req, res, next) {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const now = Date.now();
+  const windowStart = now - ADMIN_RATE_LIMIT_WINDOW_MS;
+
+  if (!adminRateLimit.has(ip)) {
+    adminRateLimit.set(ip, []);
+  }
+
+  const timestamps = adminRateLimit.get(ip).filter(t => t > windowStart);
+  adminRateLimit.set(ip, timestamps);
+
+  if (timestamps.length >= ADMIN_RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: 'Too many requests. Limit: 5 per minute on admin endpoints.' });
+  }
+
+  timestamps.push(now);
+  next();
+}
+
+// Expose for testing
+router._adminRateLimit = adminRateLimit;
+
+// Apply rate limiter to all admin routes
+router.use(adminRateLimiter);
+
+// --- Audit logging helper ---
+async function logAdminAction(action, performedBy, details, ipAddress) {
+  try {
+    await db.query(
+      `INSERT INTO admin_audit_log (action, performed_by, details, ip_address)
+       VALUES ($1, $2, $3, $4)`,
+      [action, performedBy, JSON.stringify(details), ipAddress]
+    );
+  } catch (err) {
+    // Audit logging should never block admin operations
+    console.error('Audit log write failed:', err.message);
+  }
+}
+
+// --- INIT_SECRET check middleware ---
+function checkInitSecret(req, res, next) {
   const { secret } = req.body;
-  
-  // Require INIT_SECRET environment variable for security
   const initSecret = process.env.INIT_SECRET;
   if (!initSecret || secret !== initSecret) {
     return res.status(401).json({ error: 'Unauthorized - INIT_SECRET required' });
   }
+  next();
+}
+
+// --- Admin email allowlist middleware ---
+function checkAdminAllowlist(req, res, next) {
+  const allowlist = process.env.ADMIN_EMAILS;
+  if (!allowlist) {
+    return next(); // No allowlist configured — backwards compatible
+  }
+
+  const allowedEmails = allowlist.split(',').map(e => e.trim().toLowerCase());
+  const userEmail = req.user?.email?.toLowerCase();
+
+  if (!userEmail || !allowedEmails.includes(userEmail)) {
+    return res.status(403).json({ error: 'Your email is not in the admin allowlist' });
+  }
+
+  next();
+}
+
+// Expose helpers for testing
+router._logAdminAction = logAdminAction;
+router._checkAdminAllowlist = checkAdminAllowlist;
+router._checkInitSecret = checkInitSecret;
+router._adminRateLimiter = adminRateLimiter;
+
+// Database initialization endpoint (POST to prevent accidental execution)
+// /init uses INIT_SECRET only — it runs before any users exist
+router.post('/init', checkInitSecret, async (req, res) => {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  await logAdminAction('init', 'INIT_SECRET', { endpoint: '/init' }, ip);
 
   try {
     // Check if tables already exist
@@ -145,6 +219,15 @@ router.post('/init', async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_user_skills_history_user ON user_skills_history(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_skills_history_skill ON user_skills_history(skill_id);
       CREATE INDEX IF NOT EXISTS idx_user_skills_history_changed ON user_skills_history(changed_at);
+
+      CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id SERIAL PRIMARY KEY,
+        action TEXT NOT NULL,
+        performed_by TEXT,
+        details JSONB,
+        ip_address TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
 
       CREATE OR REPLACE FUNCTION record_skill_history()
       RETURNS TRIGGER AS $$
@@ -441,13 +524,11 @@ router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // Admin: reset all users (wipe duplicates, start fresh)
-router.post('/reset-users', async (req, res) => {
-  const { secret } = req.body;
-
-  const initSecret = process.env.INIT_SECRET;
-  if (!initSecret || secret !== initSecret) {
-    return res.status(401).json({ error: 'Unauthorized - INIT_SECRET required' });
-  }
+// Defense-in-depth: requires BOTH valid Entra auth AND INIT_SECRET
+router.post('/reset-users', requireAuth, checkAdminAllowlist, checkInitSecret, async (req, res) => {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const performedBy = req.user?.email || 'unknown';
+  await logAdminAction('reset-users', performedBy, { endpoint: '/reset-users' }, ip);
 
   try {
     // Delete in dependency order: history → skills → users
@@ -468,14 +549,12 @@ router.post('/reset-users', async (req, res) => {
 // Admin: sync skills from CSV or SharePoint
 // POST /api/admin/sync-skills
 // Body: { source: 'csv' | 'pivot-csv' | 'sharepoint', secret: string, csvContent?: string, filePath?: string }
-router.post('/sync-skills', async (req, res) => {
-  const { secret, source = 'csv', csvContent, filePath } = req.body;
-
-  // Require INIT_SECRET for security (same as /init)
-  const initSecret = process.env.INIT_SECRET;
-  if (!initSecret || secret !== initSecret) {
-    return res.status(401).json({ error: 'Unauthorized - INIT_SECRET required' });
-  }
+// Defense-in-depth: requires BOTH valid Entra auth AND INIT_SECRET
+router.post('/sync-skills', requireAuth, checkAdminAllowlist, checkInitSecret, async (req, res) => {
+  const { source = 'csv', csvContent, filePath } = req.body;
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const performedBy = req.user?.email || 'unknown';
+  await logAdminAction('sync-skills', performedBy, { endpoint: '/sync-skills', source }, ip);
 
   try {
     const options = {};

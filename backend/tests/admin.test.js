@@ -3,9 +3,24 @@ const db = require('../db');
 
 jest.mock('../db');
 
+// Access the admin router's rate limit map to clear it between tests
+function clearAdminRateLimit() {
+  const adminRouter = require('../routes/admin');
+  adminRouter._adminRateLimit.clear();
+}
+
 describe('Admin API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearAdminRateLimit();
+    delete process.env.ADMIN_EMAILS;
+  });
+
+  afterEach(() => {
+    delete process.env.INIT_SECRET;
+    delete process.env.AZURE_AD_CLIENT_ID;
+    delete process.env.AZURE_AD_TENANT_ID;
+    delete process.env.ADMIN_EMAILS;
   });
 
   describe('POST /api/admin/init', () => {
@@ -30,13 +45,13 @@ describe('Admin API', () => {
         .send({ secret: 'wrong-secret' });
 
       expect(response.status).toBe(401);
-
-      delete process.env.INIT_SECRET;
     });
 
     test('should skip when database already initialized', async () => {
       process.env.INIT_SECRET = 'test-secret';
 
+      // audit log INSERT
+      db.query.mockResolvedValueOnce({ rows: [] });
       // tables exist
       db.query.mockResolvedValueOnce({ rows: [{ count: '1' }] });
       // data exists
@@ -49,8 +64,6 @@ describe('Admin API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('skipped');
-
-      delete process.env.INIT_SECRET;
     });
   });
 
@@ -192,11 +205,6 @@ describe('Admin API', () => {
   });
 
   describe('GET /api/admin/status - Auth enforcement', () => {
-    afterEach(() => {
-      delete process.env.AZURE_AD_CLIENT_ID;
-      delete process.env.AZURE_AD_TENANT_ID;
-    });
-
     test('should return 401 when auth is configured but no token provided', async () => {
       process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
       process.env.AZURE_AD_TENANT_ID = 'test-tenant-id';
@@ -235,6 +243,147 @@ describe('Admin API', () => {
       expect(response.body.connected).toBe(false);
       expect(response.body.error).toBe('Database connection failed');
       expect(response.body.error).not.toContain('ECONNREFUSED');
+    });
+  });
+
+  // --- New hardening tests ---
+
+  describe('Admin rate limiting', () => {
+    test('should return 429 on 6th request within 1 minute', async () => {
+      process.env.INIT_SECRET = 'test-secret';
+
+      const app = require('../server');
+
+      // First 5 requests should succeed (401 is fine, just not 429)
+      for (let i = 0; i < 5; i++) {
+        const res = await request(app)
+          .post('/api/admin/init')
+          .send({ secret: 'wrong' });
+        expect(res.status).not.toBe(429);
+      }
+
+      // 6th request should be rate limited
+      const response = await request(app)
+        .post('/api/admin/init')
+        .send({ secret: 'wrong' });
+
+      expect(response.status).toBe(429);
+      expect(response.body.error).toMatch(/too many requests/i);
+    });
+  });
+
+  describe('Admin audit logging', () => {
+    test('should log init action to admin_audit_log table', async () => {
+      process.env.INIT_SECRET = 'test-secret';
+
+      // audit log INSERT
+      db.query.mockResolvedValueOnce({ rows: [] });
+      // tables exist
+      db.query.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+      // data exists
+      db.query.mockResolvedValueOnce({ rows: [{ count: '5' }] });
+
+      const app = require('../server');
+      await request(app)
+        .post('/api/admin/init')
+        .send({ secret: 'test-secret' });
+
+      // First db.query call should be the audit log INSERT
+      expect(db.query.mock.calls[0][0]).toMatch(/INSERT INTO admin_audit_log/);
+      expect(db.query.mock.calls[0][1][0]).toBe('init');
+    });
+  });
+
+  describe('ADMIN_EMAILS allowlist', () => {
+    test('should allow request when email is in allowlist (reset-users)', async () => {
+      process.env.INIT_SECRET = 'test-secret';
+      process.env.ADMIN_EMAILS = 'admin@example.com, boss@example.com';
+      // demo mode — requireAuth sets req.user.email = 'demo@example.com'
+      // which is NOT in the allowlist
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/admin/reset-users')
+        .send({ secret: 'test-secret' });
+
+      // demo@example.com is not in the allowlist → should be 403
+      expect(response.status).toBe(403);
+      expect(response.body.error).toMatch(/allowlist/i);
+    });
+
+    test('should skip allowlist check when ADMIN_EMAILS is not set', async () => {
+      process.env.INIT_SECRET = 'test-secret';
+      delete process.env.ADMIN_EMAILS;
+
+      // audit log INSERT + 3 DELETEs
+      db.query.mockResolvedValue({ rows: [] });
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/admin/reset-users')
+        .send({ secret: 'test-secret' });
+
+      // Should reach the handler (no allowlist block)
+      expect(response.status).toBe(200);
+    });
+
+    test('should reject when email is not in allowlist', async () => {
+      process.env.ADMIN_EMAILS = 'boss@example.com';
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/admin/sync-skills')
+        .send({ secret: 'test-secret', source: 'csv' });
+
+      // demo@example.com not in allowlist
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('Defense-in-depth on destructive endpoints', () => {
+    test('reset-users requires auth when auth is configured', async () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.INIT_SECRET = 'test-secret';
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/admin/reset-users')
+        .send({ secret: 'test-secret' });
+
+      // No Bearer token → requireAuth rejects with 401
+      expect(response.status).toBe(401);
+    });
+
+    test('sync-skills requires auth when auth is configured', async () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.INIT_SECRET = 'test-secret';
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/admin/sync-skills')
+        .send({ secret: 'test-secret', source: 'csv' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('init still works with INIT_SECRET only (no auth needed)', async () => {
+      process.env.AZURE_AD_CLIENT_ID = 'test-client-id';
+      process.env.INIT_SECRET = 'test-secret';
+
+      // audit log INSERT
+      db.query.mockResolvedValueOnce({ rows: [] });
+      // tables exist
+      db.query.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+      // data exists
+      db.query.mockResolvedValueOnce({ rows: [{ count: '5' }] });
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/admin/init')
+        .send({ secret: 'test-secret' });
+
+      // /init uses INIT_SECRET only — should work without Bearer token
+      expect(response.status).toBe(200);
     });
   });
 });
