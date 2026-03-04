@@ -48,8 +48,9 @@ async function pullFromSharePoint() {
 
   try {
     const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
       signal: controller.signal
     });
 

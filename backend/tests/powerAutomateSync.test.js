@@ -58,7 +58,7 @@ describe('Power Automate Sync Service', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://flow.example.com/pull?sig=abc',
-        expect.objectContaining({ method: 'GET' })
+        expect.objectContaining({ method: 'POST' })
       );
       expect(result).toEqual(items);
     });
