@@ -191,24 +191,35 @@ jobs:
           AGENT_URL="https://$(az containerapp show -n "$AGENT_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
           echo "Waiting for backend to be ready..."
+          BACKEND_READY=false
           for i in $(seq 1 30); do
             if curl -sf "${BACKEND_URL}/health" | grep -q '"ok"'; then
               echo "✅ Backend is ready!"
+              BACKEND_READY=true
               break
             fi
             echo "Attempt $i/30: Backend not ready yet, waiting 10s..."
             sleep 10
           done
+          if [ "$BACKEND_READY" != "true" ]; then
+            echo "❌ Backend failed to become ready after 30 attempts (5 minutes)"
+            exit 1
+          fi
 
           echo "Waiting for agent to be ready..."
+          AGENT_READY=false
           for i in $(seq 1 15); do
             if curl -sf "${AGENT_URL}/health" | grep -q '"healthy"'; then
               echo "✅ Agent is ready!"
+              AGENT_READY=true
               break
             fi
             echo "Attempt $i/15: Agent not ready yet, waiting 10s..."
             sleep 10
           done
+          if [ "$AGENT_READY" != "true" ]; then
+            echo "⚠️ Agent failed to become ready (non-blocking)"
+          fi
 
       - name: Smoke test - Validate auth configuration
         run: |

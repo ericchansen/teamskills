@@ -621,38 +621,59 @@ Production backend is configured with `minReplicas: 1` to prevent cold starts. S
 
 **Symptom:** CI/CD smoke test fails with `{"status":"unreachable"}`. Wait loop exhausts all 30 attempts (5 minutes).
 
-**Recent Occurrence:** CI/CD run 22681175346 (commit `90c54c9`) — backend never became healthy after merge of SharePoint OBO PR (`628ed55`).
+**Recent Occurrence:** CI/CD runs 22681175346 and 22686579591 — backend never became healthy after merge of SharePoint OBO PR (`628ed55`) and Node 22 fix (PR #44).
 
-**Investigation:**
-1. Images built successfully (npm install ran during `az acr build`)
-2. `az containerapp update` succeeded
-3. Wait loop tried 30 times, all failed
-4. Agent became healthy immediately (proving network/DNS is fine)
+**Root Cause (Resolved March 2026):**
+Two issues combined to cause the failure:
 
-**Likely Causes:**
+1. **Node version mismatch** — `@azure/msal-node@5.0.6` requires `node >= 20`, but `Dockerfile.backend` used `node:18-alpine`. CI tests passed because GitHub Actions used Node 22 (`actions/setup-node`), masking the Docker image incompatibility. **Fix:** PR #44 upgraded to `node:22-alpine`.
 
-#### 1. Container Crash Loop
+2. **PostgreSQL server stopped** — The Azure Flexible Server was in "Stopped" state, causing every health check to return "Connection terminated due to connection timeout." The Node.js server started fine but the `/health` endpoint queries the database and returned 503. **Fix:** `az postgres flexible-server start --name psql-gvojq4dgzbtk4 --resource-group rg-teamskills-prod`.
 
-New dependencies (e.g., `@azure/msal-node` from SharePoint PR) might cause:
-- Missing native modules
-- Import errors at module load time
-- Version incompatibilities
+**Investigation Steps (in order of likelihood):**
+
+#### 1. Database Stopped/Unreachable (Most Common)
+
+PostgreSQL Flexible Server may be stopped, paused, or unreachable.
+
+**Check database state:**
+```bash
+az postgres flexible-server show \
+  --name psql-gvojq4dgzbtk4 \
+  --resource-group rg-teamskills-prod \
+  --query "state" -o tsv
+```
+
+**Fix if stopped:**
+```bash
+az postgres flexible-server start \
+  --name psql-gvojq4dgzbtk4 \
+  --resource-group rg-teamskills-prod
+```
+
+> **Note:** The keep-alive cron job (every 10 min) pings the backend health endpoint, but if the database is stopped, the keep-alive itself fails silently. Check keep-alive workflow runs for recent failures as an early warning.
+
+#### 2. Container Crash Loop
+
+New dependencies might cause crashes. Check container logs:
 
 **Check logs:**
 ```bash
 az containerapp logs show \
   --name ca-backend-gvojq4dgzbtk4 \
   --resource-group rg-teamskills-prod \
-  --type system \
-  --follow
+  --type console \
+  --tail 50 --follow false
 ```
 
 Look for:
 - `Error: Cannot find module ...`
-- Segmentation faults
+- `engines.node` version mismatches (e.g., `@azure/msal-node` requires `node >= 20`)
 - Uncaught exceptions during startup
 
-#### 2. Missing Environment Variables
+**Pro tip:** If the server logs `running on port 3001` but health checks fail, the issue is database connectivity, not a crash.
+
+#### 3. Missing Environment Variables
 
 New code paths may require env vars that weren't set during deploy.
 
@@ -667,27 +688,7 @@ if (!clientId || !clientSecret || !tenantId) {
 
 **Fix:** Ensure lazy initialization — don't instantiate clients until they're actually used.
 
-#### 3. Database Connection Timeout
-
-PostgreSQL may be stopped/paused, and health check times out before it wakes.
-
-**Check:**
-```bash
-az postgres flexible-server show \
-  --name <server-name> \
-  --resource-group rg-teamskills-prod \
-  --query "state" -o tsv
-```
-
-**Fix:** Start the server manually or wait for auto-wake.
-
 #### 4. New Route Initialization Error
-
-SharePoint routes added in PR `628ed55`:
-```javascript
-const sharepointRouter = require('./routes/sharepoint');
-app.use('/api/sharepoint', sharepointRouter);
-```
 
 If `require('./routes/sharepoint')` fails (e.g., import error), server crashes before health endpoint is registered.
 
@@ -698,21 +699,29 @@ Error loading route: ...
 
 **Resolution Steps:**
 
-1. **Check container logs immediately:**
+1. **Check database state first** (most common cause):
+   ```bash
+   az postgres flexible-server show \
+     --name psql-gvojq4dgzbtk4 \
+     --resource-group rg-teamskills-prod \
+     --query "state" -o tsv
+   ```
+
+2. **Check container logs:**
    ```bash
    az containerapp logs show \
      --name ca-backend-gvojq4dgzbtk4 \
      --resource-group rg-teamskills-prod \
      --type console \
-     --follow
+     --tail 50 --follow false
    ```
 
-2. **Check system logs for restarts:**
+3. **Check revision health state:**
    ```bash
-   az containerapp logs show \
+   az containerapp revision list \
      --name ca-backend-gvojq4dgzbtk4 \
      --resource-group rg-teamskills-prod \
-     --type system
+     --query "[].{name:name, state:properties.runningState, health:properties.healthState}" -o table
    ```
 
 3. **Inspect current environment variables:**
