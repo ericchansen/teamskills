@@ -56,6 +56,7 @@ const adminRouter = require('./routes/admin');
 const authRouter = require('./routes/authRoutes');
 const proposalsRouter = require('./routes/proposals');
 const trendsRouter = require('./routes/trends');
+const sharepointRouter = require('./routes/sharepoint');
 const { requireAuth } = require('./auth');
 
 // Pre-auth routes (have their own per-route authentication)
@@ -72,6 +73,7 @@ app.use('/api/user-skills', userSkillsRouter);
 app.use('/api/matrix', matrixRouter);
 app.use('/api/proposals', proposalsRouter);
 app.use('/api/trends', trendsRouter);
+app.use('/api/sharepoint', sharepointRouter);
 
 // Health check with DB connectivity verification
 app.get('/health', async (req, res) => {

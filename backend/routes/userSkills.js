@@ -2,6 +2,29 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { requireAuth, requireOwnership } = require('../auth');
+const { isOboConfigured, getGraphClientOnBehalfOf, extractBearerToken } = require('../services/oboClient');
+const { pushUserSkillsToSharePoint } = require('../services/sharepoint');
+
+/**
+ * Best-effort push of user's skills to SharePoint after a DB update.
+ * Failures are logged but never block the API response.
+ */
+async function tryPushToSharePoint(req) {
+  if (!isOboConfigured()) return;
+
+  const bearerToken = extractBearerToken(req);
+  if (!bearerToken || !req.user) return;
+
+  try {
+    const graphClient = await getGraphClientOnBehalfOf(bearerToken);
+    const result = await pushUserSkillsToSharePoint(graphClient, req.user);
+    if (result.status === 'success') {
+      console.log(`[SharePoint] Auto-pushed ${result.fieldsUpdated} fields for ${req.user.name}`);
+    }
+  } catch (err) {
+    console.warn('[SharePoint] Auto-push failed (non-blocking):', err.message);
+  }
+}
 
 // GET all skills for a user (public - no auth required)
 router.get('/:userId', async (req, res) => {
@@ -42,6 +65,9 @@ router.put('/', requireAuth, requireOwnership(req => req.body.user_id), async (r
     `, [user_id, skill_id, proficiency_level, notes]);
     
     res.json(result.rows[0]);
+
+    // Best-effort SharePoint sync (after response is sent)
+    tryPushToSharePoint(req);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update user skill' });
