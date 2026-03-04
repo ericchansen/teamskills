@@ -43,14 +43,19 @@ describe('Power Automate Sync Service', () => {
   });
 
   describe('pullFromSharePoint', () => {
-    test('calls flow URL and returns items array', async () => {
+    test('calls flow URL and returns items with columnMap for new format', async () => {
       process.env.SHAREPOINT_PULL_FLOW_URL = 'https://flow.example.com/pull?sig=abc';
-      const items = [
-        { Title: 'Jane Doe', Qualifier: 'Apps & AI', 'GitHub Copilot': 400 }
-      ];
+      const responseData = {
+        items: [{ Title: 'Jane Doe', field_1: { Value: '400' } }],
+        schema: {
+          schema: { items: { properties: {
+            field_1: { title: 'GitHub Copilot' }
+          }}}
+        }
+      };
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(items)
+        json: () => Promise.resolve(responseData)
       });
 
       const { pullFromSharePoint } = require('../../backend/services/powerAutomateSync');
@@ -60,10 +65,25 @@ describe('Power Automate Sync Service', () => {
         'https://flow.example.com/pull?sig=abc',
         expect.objectContaining({ method: 'POST' })
       );
-      expect(result).toEqual(items);
+      expect(result.items).toEqual(responseData.items);
+      expect(result.columnMap).toEqual({ field_1: 'GitHub Copilot' });
     });
 
-    test('unwraps { value: [...] } response', async () => {
+    test('returns null columnMap for legacy array format', async () => {
+      process.env.SHAREPOINT_PULL_FLOW_URL = 'https://flow.example.com/pull?sig=abc';
+      const items = [{ Title: 'Jane Doe', 'GitHub Copilot': 400 }];
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(items)
+      });
+
+      const { pullFromSharePoint } = require('../../backend/services/powerAutomateSync');
+      const result = await pullFromSharePoint();
+      expect(result.items).toEqual(items);
+      expect(result.columnMap).toBeNull();
+    });
+
+    test('unwraps { value: [...] } legacy response', async () => {
       process.env.SHAREPOINT_PULL_FLOW_URL = 'https://flow.example.com/pull?sig=abc';
       const items = [{ Title: 'Jane' }];
       mockFetch.mockResolvedValue({
@@ -73,7 +93,8 @@ describe('Power Automate Sync Service', () => {
 
       const { pullFromSharePoint } = require('../../backend/services/powerAutomateSync');
       const result = await pullFromSharePoint();
-      expect(result).toEqual(items);
+      expect(result.items).toEqual(items);
+      expect(result.columnMap).toBeNull();
     });
 
     test('throws on non-OK response', async () => {
@@ -108,37 +129,41 @@ describe('Power Automate Sync Service', () => {
   });
 
   describe('transformFlowItemsToPivotFormat', () => {
-    test('transforms SharePoint items to pivot format', () => {
+    test('transforms items with column mapping and object values', () => {
       const { transformFlowItemsToPivotFormat } = require('../../backend/services/powerAutomateSync');
 
       const items = [
         {
           ID: 1,
           Title: 'Jane Doe',
-          Alias: 'Jane Doe',
-          Qualifier: 'Apps & AI',
-          'GitHub Copilot': 400,
-          'Azure SRE Agent': 300,
-          Modified: '2024-01-01'
+          Your_x0020_Qualifier: { Value: 'Apps & AI' },
+          field_1: { Value: '400' },
+          field_2: { Value: '300' },
+          'field_1#Id': 3,
+          'field_2#Id': 2
         },
         {
           ID: 2,
           Title: 'John Smith',
-          Alias: 'John Smith',
-          Qualifier: 'Data',
-          'GitHub Copilot': 100,
-          'Azure SRE Agent': 100,
-          Modified: '2024-01-01'
+          Your_x0020_Qualifier: { Value: 'Data' },
+          field_1: { Value: '100' },
+          field_2: { Value: '100' },
+          'field_1#Id': 0,
+          'field_2#Id': 0
         }
       ];
 
-      const result = transformFlowItemsToPivotFormat(items);
+      const columnMap = {
+        field_1: 'GitHub Copilot',
+        field_2: 'Azure SRE Agent'
+      };
+
+      const result = transformFlowItemsToPivotFormat(items, columnMap);
 
       expect(result.skillNames).toContain('GitHub Copilot');
       expect(result.skillNames).toContain('Azure SRE Agent');
-      expect(result.skillNames).not.toContain('Title');
-      expect(result.skillNames).not.toContain('ID');
-      expect(result.skillNames).not.toContain('Modified');
+      expect(result.skillNames).not.toContain('field_1');
+      expect(result.skillNames).not.toContain('field_1#Id');
 
       expect(result.rows).toHaveLength(2);
       expect(result.rows[0]).toEqual({
@@ -153,6 +178,29 @@ describe('Power Automate Sync Service', () => {
       });
     });
 
+    test('works without column mapping (flat values)', () => {
+      const { transformFlowItemsToPivotFormat } = require('../../backend/services/powerAutomateSync');
+
+      const items = [
+        {
+          ID: 1,
+          Title: 'Jane Doe',
+          Qualifier: 'Apps & AI',
+          'GitHub Copilot': 400,
+          'Azure SRE Agent': 300,
+          Modified: '2024-01-01'
+        }
+      ];
+
+      const result = transformFlowItemsToPivotFormat(items, null);
+
+      expect(result.skillNames).toContain('GitHub Copilot');
+      expect(result.rows[0].skills).toEqual({
+        'GitHub Copilot': 'L400',
+        'Azure SRE Agent': 'L300'
+      });
+    });
+
     test('skips items without Title', () => {
       const { transformFlowItemsToPivotFormat } = require('../../backend/services/powerAutomateSync');
       const items = [
@@ -160,14 +208,14 @@ describe('Power Automate Sync Service', () => {
         { Title: 'Valid User', Qualifier: 'Test', 'Skill A': 200 }
       ];
 
-      const result = transformFlowItemsToPivotFormat(items);
+      const result = transformFlowItemsToPivotFormat(items, null);
       expect(result.rows).toHaveLength(1);
       expect(result.rows[0].name).toBe('Valid User');
     });
 
     test('handles empty items array', () => {
       const { transformFlowItemsToPivotFormat } = require('../../backend/services/powerAutomateSync');
-      const result = transformFlowItemsToPivotFormat([]);
+      const result = transformFlowItemsToPivotFormat([], null);
       expect(result.skillNames).toEqual([]);
       expect(result.rows).toEqual([]);
     });
@@ -180,32 +228,35 @@ describe('Power Automate Sync Service', () => {
           Qualifier: 'Test',
           'Skill A': 400,
           'Skill B': 50,     // too low
-          'Skill C': 'N/A',  // non-numJane
+          'Skill C': 'N/A',  // non-numeric
           'Skill D': null,   // null
           'Skill E': 500     // invalid level
         }
       ];
 
-      const result = transformFlowItemsToPivotFormat(items);
+      const result = transformFlowItemsToPivotFormat(items, null);
       expect(result.rows[0].skills).toEqual({ 'Skill A': 'L400' });
     });
 
-    test('filters OData metadata fields', () => {
+    test('filters OData metadata and #Id companion fields', () => {
       const { transformFlowItemsToPivotFormat } = require('../../backend/services/powerAutomateSync');
       const items = [
         {
           '@odata.type': '#SP.Data.SkillsListItem',
           '@odata.etag': '"1"',
           Title: 'Test User',
-          Qualifier: 'Test',
+          Your_x0020_Qualifier: { Value: 'Test' },
           ContentTypeId: '0x01',
           GUID: 'abc-123',
-          'Real Skill': 300
+          field_1: { Value: '300' },
+          'field_1#Id': 2
         }
       ];
 
-      const result = transformFlowItemsToPivotFormat(items);
+      const columnMap = { field_1: 'Real Skill' };
+      const result = transformFlowItemsToPivotFormat(items, columnMap);
       expect(result.skillNames).toEqual(['Real Skill']);
+      expect(result.rows[0].skills).toEqual({ 'Real Skill': 'L300' });
     });
   });
 

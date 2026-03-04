@@ -65,8 +65,8 @@ router.post('/pull', requireAuth, async (req, res) => {
 
     if (method === 'power-automate') {
       // Power Automate proxy: flow handles its own auth
-      const items = await pa.pullFromSharePoint();
-      pivotData = pa.transformFlowItemsToPivotFormat(items);
+      const { items, columnMap } = await pa.pullFromSharePoint();
+      pivotData = pa.transformFlowItemsToPivotFormat(items, columnMap);
     } else {
       // OBO flow: exchange user's token for Graph token
       const bearerToken = extractBearerToken(req);

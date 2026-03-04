@@ -33,9 +33,10 @@ function isPowerAutomateConfigured() {
 
 /**
  * Pull all skill data from SharePoint via Power Automate flow.
- * The flow should return a JSON array of SharePoint list items.
+ * The flow returns { items: [...], schema: { schema: { items: { properties: {...} } } } }.
+ * The schema contains column metadata with internal→display name mapping.
  * 
- * @returns {Promise<object[]>} Raw SharePoint list items from the flow
+ * @returns {Promise<{ items: object[], columnMap: object|null }>} Items and optional column mapping
  */
 async function pullFromSharePoint() {
   const url = PULL_FLOW_URL();
@@ -61,14 +62,18 @@ async function pullFromSharePoint() {
 
     const data = await response.json();
 
-    // Flow may return items directly as array, or wrapped in { value: [...] }
-    const items = Array.isArray(data) ? data : (data.value || data.items || []);
+    // New format: { items: [...], schema: { schema: { items: { properties: {...} } } } }
+    if (data.items && Array.isArray(data.items)) {
+      const columnMap = buildColumnMap(data.schema);
+      return { items: data.items, columnMap };
+    }
 
+    // Legacy format: array or { value: [...] }
+    const items = Array.isArray(data) ? data : (data.value || []);
     if (!Array.isArray(items)) {
       throw new Error('Power Automate flow returned unexpected format — expected array of items');
     }
-
-    return items;
+    return { items, columnMap: null };
   } catch (err) {
     if (err.name === 'AbortError') {
       throw new Error(`Power Automate pull flow timed out after ${FLOW_TIMEOUT_MS}ms`);
@@ -80,28 +85,45 @@ async function pullFromSharePoint() {
 }
 
 /**
+ * Build a mapping of internal field names to display names from GetTable schema.
+ * @param {object} schema - GetTable response (schema.schema.items.properties)
+ * @returns {object|null} Map of { internalName: displayTitle } or null
+ */
+function buildColumnMap(schema) {
+  try {
+    const properties = schema?.schema?.items?.properties;
+    if (!properties) return null;
+    const map = {};
+    for (const [key, def] of Object.entries(properties)) {
+      if (def.title && def.title !== key) {
+        map[key] = def.title;
+      }
+    }
+    return Object.keys(map).length > 0 ? map : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Transform Power Automate flow response items into the pivot format
  * expected by syncPivotToDatabase().
  * 
- * Power Automate's SharePoint "Get items" action returns items with
- * field values at the top level (not nested under .fields like Graph API).
- * 
- * Expected item shape from flow:
- *   { Title: "Jane Doe", Qualifier: "Apps & AI", "GitHub Copilot": 400, ... }
- * 
- * Metadata fields to skip (SharePoint internal fields):
- *   ID, Title, Qualifier, Alias, Modified, Created, Author, Editor,
- *   _ModerationStatus, ContentType, FileSystemObjectType, etc.
+ * PA's SharePoint "Get items" returns items with internal field names (field_1, field_2...)
+ * and Choice values as objects ({ Value: "200" }). The columnMap from GetTable provides
+ * the internal→display name mapping (field_1 → "GitHub Copilot").
  * 
  * @param {object[]} items - Raw items from the Power Automate flow
+ * @param {object|null} columnMap - Optional { internalName: displayTitle } mapping
  * @returns {{ skillNames: string[], rows: Array<{ name: string, team: string, skills: object }> }}
  */
-function transformFlowItemsToPivotFormat(items) {
+function transformFlowItemsToPivotFormat(items, columnMap) {
   // SharePoint/Power Automate metadata fields to exclude from skill columns
   const METADATA_FIELDS = new Set([
-    'ID', 'Id', 'id',
+    'ID', 'Id', 'id', 'ItemInternalId',
     'Title', 'Alias',
     'Qualifier',
+    'Your_x0020_Name', 'Your_x0020_Qualifier',
     'Modified', 'Created',
     'Author', 'Editor',
     'AuthorId', 'EditorId',
@@ -119,33 +141,41 @@ function transformFlowItemsToPivotFormat(items) {
     '__metadata'
   ]);
 
-  // Discover skill columns from the first item that has data
-  const skillNamesSet = new Set();
+  // Discover skill columns from items, mapping internal names to display names
+  const skillColumnsMap = new Map(); // internalName → displayName
   for (const item of items) {
     for (const key of Object.keys(item)) {
-      if (!METADATA_FIELDS.has(key) && !key.startsWith('@odata') && !key.startsWith('OData__')) {
-        skillNamesSet.add(key);
-      }
+      if (METADATA_FIELDS.has(key)) continue;
+      if (key.startsWith('@odata') || key.startsWith('OData__')) continue;
+      // Skip #Id companion fields (e.g., field_1#Id)
+      if (key.includes('#')) continue;
+      const displayName = columnMap?.[key] || key;
+      skillColumnsMap.set(key, displayName);
     }
   }
-  const skillNames = Array.from(skillNamesSet);
+
+  const skillNames = Array.from(new Set(skillColumnsMap.values()));
 
   const rows = [];
   for (const item of items) {
     const name = (item.Title || '').trim();
     if (!name) continue;
 
-    const team = (item.Qualifier || '').trim();
+    // Qualifier may be a flat string or a Choice object { Value: "Apps & AI" }
+    const qualRaw = item.Your_x0020_Qualifier || item.Qualifier;
+    const team = extractStringValue(qualRaw);
     const skills = {};
 
-    for (const skillName of skillNames) {
-      const raw = item[skillName];
+    for (const [internalName, displayName] of skillColumnsMap) {
+      const raw = item[internalName];
       if (raw == null || raw === '') continue;
-      const numVal = parseInt(String(raw), 10);
+      const strVal = extractStringValue(raw);
+      if (!strVal) continue;
+      const numVal = parseInt(strVal, 10);
       if (!numVal || numVal < 100) continue;
       const level = `L${numVal}`;
       if (['L100', 'L200', 'L300', 'L400'].includes(level)) {
-        skills[skillName] = level;
+        skills[displayName] = level;
       }
     }
 
@@ -153,6 +183,18 @@ function transformFlowItemsToPivotFormat(items) {
   }
 
   return { skillNames, rows };
+}
+
+/**
+ * Extract a string value from a field that may be a flat value or
+ * a SharePoint Choice/Lookup object { Value: "..." }.
+ */
+function extractStringValue(raw) {
+  if (raw == null || raw === '') return '';
+  if (typeof raw === 'string') return raw.trim();
+  if (typeof raw === 'number') return String(raw);
+  if (typeof raw === 'object' && raw.Value !== undefined) return String(raw.Value).trim();
+  return '';
 }
 
 /**
@@ -205,6 +247,8 @@ module.exports = {
   isPowerAutomateConfigured,
   pullFromSharePoint,
   transformFlowItemsToPivotFormat,
+  buildColumnMap,
+  extractStringValue,
   pushToSharePoint,
   FLOW_TIMEOUT_MS
 };
