@@ -56,6 +56,15 @@ router.post('/pull', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[SharePoint Pull] Error:', err.message);
 
+    if (err.message?.includes('AADSTS65001') || err.message?.includes('has not consented')) {
+      return res.status(403).json({
+        error: 'Admin consent required',
+        detail: 'A tenant admin must grant this app permission to access SharePoint. ' +
+          'Ask your admin to visit the admin consent URL for this application.',
+        consentRequired: true
+      });
+    }
+
     if (err.statusCode === 403 || err.message?.includes('Access denied')) {
       return res.status(403).json({
         error: 'You do not have access to this SharePoint site',
@@ -96,6 +105,15 @@ router.post('/push', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('[SharePoint Push] Error:', err.message);
+
+    if (err.message?.includes('AADSTS65001') || err.message?.includes('has not consented')) {
+      return res.status(403).json({
+        error: 'Admin consent required',
+        detail: 'A tenant admin must grant this app permission to access SharePoint. ' +
+          'Ask your admin to visit the admin consent URL for this application.',
+        consentRequired: true
+      });
+    }
 
     if (err.statusCode === 403 || err.message?.includes('Access denied')) {
       return res.status(403).json({

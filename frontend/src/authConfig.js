@@ -56,8 +56,7 @@ export const msalConfig = {
  * Scopes for API access
  */
 export const loginRequest = {
-  scopes: clientId ? [`api://${clientId}/access_as_user`] : [],
-  extraScopesToConsent: ['https://graph.microsoft.com/Sites.ReadWrite.All']
+  scopes: clientId ? [`api://${clientId}/access_as_user`] : []
 };
 
 /**

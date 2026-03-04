@@ -142,6 +142,9 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
         setSyncStatus(prev => ({ ...prev, lastResult: 'pull-success' }));
         await Promise.all([fetchUserData(), fetchUserSkills()]);
         onSkillsUpdated?.();
+      } else if (data.consentRequired) {
+        toast.error('Admin consent required — a tenant admin must grant SharePoint access for this app.');
+        setSyncStatus(prev => ({ ...prev, lastResult: 'pull-error' }));
       } else {
         toast.error(data.error || 'SharePoint pull failed');
         setSyncStatus(prev => ({ ...prev, lastResult: 'pull-error' }));
@@ -162,6 +165,9 @@ function UserProfile({ userId, isOwnProfile = false, onSkillsUpdated }) {
       if (response.ok) {
         toast.success(`Pushed ${data.fieldsUpdated || 0} skills to SharePoint`);
         setSyncStatus(prev => ({ ...prev, lastResult: 'push-success' }));
+      } else if (data.consentRequired) {
+        toast.error('Admin consent required — a tenant admin must grant SharePoint access for this app.');
+        setSyncStatus(prev => ({ ...prev, lastResult: 'push-error' }));
       } else {
         toast.error(data.error || 'SharePoint push failed');
         setSyncStatus(prev => ({ ...prev, lastResult: 'push-error' }));
