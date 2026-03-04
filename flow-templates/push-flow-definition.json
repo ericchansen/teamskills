@@ -1,0 +1,124 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    }
+  },
+  "triggers": {
+    "manual": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "method": "POST",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "userName": {
+              "type": "string"
+            },
+            "fields": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "userName",
+            "fields"
+          ]
+        }
+      }
+    }
+  },
+  "actions": {
+    "Get_items_by_userName": {
+      "runAfter": {},
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+          }
+        },
+        "method": "get",
+        "path": "/datasets/@{encodeURIComponent(encodeURIComponent('https://microsoft.sharepoint.com/teams/SDPAccountsShared'))}/tables/@{encodeURIComponent(encodeURIComponent('Skills Matrix MVP'))}/items",
+        "queries": {
+          "$filter": "Title eq '@{triggerBody()?['userName']}'"
+        }
+      }
+    },
+    "Condition": {
+      "actions": {
+        "Update_item": {
+          "runAfter": {},
+          "type": "ApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+              }
+            },
+            "method": "patch",
+            "path": "/datasets/@{encodeURIComponent(encodeURIComponent('https://microsoft.sharepoint.com/teams/SDPAccountsShared'))}/tables/@{encodeURIComponent(encodeURIComponent('Skills Matrix MVP'))}/items/@{encodeURIComponent(first(body('Get_items_by_userName')?['value'])?['ID'])}",
+            "body": "@triggerBody()?['fields']"
+          }
+        },
+        "Response_Success": {
+          "runAfter": {
+            "Update_item": [
+              "Succeeded"
+            ]
+          },
+          "type": "Response",
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "success": true
+            }
+          }
+        }
+      },
+      "runAfter": {
+        "Get_items_by_userName": [
+          "Succeeded"
+        ]
+      },
+      "else": {
+        "actions": {
+          "Response_Not_Found": {
+            "runAfter": {},
+            "type": "Response",
+            "kind": "Http",
+            "inputs": {
+              "statusCode": 404,
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "success": false,
+                "error": "User not found in Skills Matrix MVP list"
+              }
+            }
+          }
+        }
+      },
+      "expression": {
+        "and": [
+          {
+            "greater": [
+              "@length(body('Get_items_by_userName')?['value'])",
+              0
+            ]
+          }
+        ]
+      },
+      "type": "If"
+    }
+  },
+  "outputs": {}
+}
