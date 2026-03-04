@@ -5,6 +5,10 @@ on:
     types: [opened, synchronize, reopened]
     branches: [master, main]
 
+concurrency:
+  group: pr-staging-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
@@ -92,6 +96,7 @@ jobs:
         with:
           resourceGroupName: ${{ env.STAGING_RESOURCE_GROUP }}
           template: ./infra/staging/main.bicep
+          deploymentName: staging-pr${{ steps.setup.outputs.pr_number }}-${{ github.run_id }}
           parameters: >
             prNumber=${{ steps.setup.outputs.pr_number }}
             postgresPassword=${{ steps.pg_password.outputs.password }}
