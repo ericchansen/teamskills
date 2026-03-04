@@ -668,3 +668,73 @@ Fixing azd would require either:
 ## Supersedes
 
 This decision supersedes "CI/CD Rewrite: Azure Developer CLI (azd)" from 2026-02-27 for production deployment. The analysis in that decision about container-apps-deploy-action's limitations was correct, but azd proved incompatible with brownfield infrastructure.
+
+---
+
+### Power Automate Flow Templates for SharePoint Sync
+
+**Author:** Fenster (Backend Dev)  
+**Date:** 2026-03-04  
+**Status:** Implemented  
+**Commit:** 5e95f30
+
+## Context
+
+The backend has a `powerAutomateSync.js` service that calls HTTP-triggered Power Automate flows to sync skills data with SharePoint. We needed flow templates and a setup guide so users can actually create these flows.
+
+## Decision
+
+Created three deliverables:
+
+1. **Pull Flow Definition** (`flow-templates/pull-flow-definition.json`)
+   - HTTP GET trigger → SharePoint Get Items → Response with items array
+   - Returns all rows from "Skills Matrix MVP" list
+   - Uses Logic Apps schema 2016-06-01 (standard PA format)
+
+2. **Push Flow Definition** (`flow-templates/push-flow-definition.json`)
+   - HTTP POST trigger with JSON schema validation (`userName`, `fields`)
+   - SharePoint Get Items filtered by `Title eq userName`
+   - Conditional branch: if found → Update Item + 200 response, else → 404 response
+   - Update Item uses `@triggerBody()?['fields']` for dynamic skill columns
+
+3. **Setup Guide** (`docs/power-automate-setup.md`)
+   - Import from JSON (recommended) vs. manual creation
+   - Step-by-step with all SharePoint connection details
+   - Troubleshooting: Premium license requirement, auth issues, filter case-sensitivity
+   - Known limitation: SharePoint Update Item requires explicit field mapping for truly dynamic updates (documented REST API workaround)
+
+## Rationale
+
+- **JSON definitions enable one-click import** — users don't have to manually configure 10+ steps
+- **Dual paths (import + manual)** — caters to users who can't import or want to understand the flow internals
+- **SharePoint list structure documented** — pivot table format (rows = users, columns = skills) is non-obvious
+- **Troubleshooting section is exhaustive** — Premium license, access denied, 404s, and slow runs are the most common issues
+
+## Alternatives Considered
+
+1. **Microsoft Graph API instead of Power Automate**
+   - Pros: No Premium license, faster, more flexible
+   - Cons: Requires app registration, client secret management, more complex auth
+   - Decision: PA is simpler for non-developers to set up, and the backend already supports it
+
+2. **Single flow with method detection**
+   - Pros: Fewer flows to manage
+   - Cons: HTTP trigger can only listen on one method at a time in PA
+   - Decision: Two flows is the only option
+
+3. **Hardcode all skill columns in Update Item**
+   - Pros: Works out of the box
+   - Cons: Breaks when new skills are added to the catalog
+   - Decision: Documented the limitation and provided REST API workaround
+
+## Impact
+
+- **Team**: No code changes needed — templates are standalone artifacts
+- **User**: Can now set up SharePoint sync without reverse-engineering the backend expectations
+- **Testing**: Manual testing required (curl commands in guide) — no automated tests for PA flows
+
+## Notes
+
+- The SharePoint list URL and name are hardcoded in the flow definitions (`https://microsoft.sharepoint.com/teams/SDPAccountsShared`, `Skills Matrix MVP`) — users must update if their list differs
+- Premium license is REQUIRED for HTTP triggers — this should be called out in the prerequisites (already done)
+- The push flow's Update Item limitation is a known PA issue — REST API is the only workaround for truly dynamic fields
