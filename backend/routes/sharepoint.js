@@ -67,6 +67,27 @@ router.post('/pull', requireAuth, async (req, res) => {
       // Power Automate proxy: flow handles its own auth
       const { items, columnMap } = await pa.pullFromSharePoint();
       pivotData = pa.transformFlowItemsToPivotFormat(items, columnMap);
+
+      // Clean up junk skills from earlier buggy pulls (internal field names)
+      const junkCleanup = await db.query(`
+        DELETE FROM skills
+        WHERE name ~ '^field_\\d+(#Id)?$'
+          OR name ~ '^Your_x0020_'
+          OR name = 'ItemInternalId'
+        RETURNING id
+      `);
+      // Deduplicate skills with same name (keep lowest ID)
+      const dedupCleanup = await db.query(`
+        DELETE FROM skills
+        WHERE id NOT IN (
+          SELECT MIN(id) FROM skills GROUP BY name
+        )
+        RETURNING id
+      `);
+      const totalCleaned = (junkCleanup.rowCount || 0) + (dedupCleanup.rowCount || 0);
+      if (totalCleaned > 0) {
+        console.log(`[SharePoint Pull] Cleaned up ${totalCleaned} junk/duplicate skills`);
+      }
     } else {
       // OBO flow: exchange user's token for Graph token
       const bearerToken = extractBearerToken(req);
