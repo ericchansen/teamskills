@@ -99,6 +99,8 @@ jobs:
             acrName=${{ env.ACR_NAME }}
             acrResourceGroup=${{ env.ACR_RESOURCE_GROUP }}
             location=${{ env.LOCATION }}
+            sharepointPullFlowUrl=${{ secrets.SHAREPOINT_PULL_FLOW_URL }}
+            sharepointPushFlowUrl=${{ secrets.SHAREPOINT_PUSH_FLOW_URL }}
           failOnStdErr: false
 
       - name: Wait for backend to be ready

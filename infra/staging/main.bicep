@@ -19,6 +19,12 @@ param postgresPassword string
 @description('Container image tag (typically git SHA)')
 param imageTag string = 'latest'
 
+@description('SharePoint Pull Flow URL (Power Automate)')
+param sharepointPullFlowUrl string = ''
+
+@description('SharePoint Push Flow URL (Power Automate)')
+param sharepointPushFlowUrl string = ''
+
 @description('Existing Container Registry name (from production)')
 param acrName string
 
@@ -203,6 +209,9 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'INIT_SECRET', secretRef: 'init-secret' }
             { name: 'AZURE_AD_CLIENT_ID', value: stagingApp.appId }
             { name: 'AZURE_AD_TENANT_ID', value: tenant().tenantId }
+            { name: 'SHAREPOINT_SYNC_METHOD', value: sharepointPullFlowUrl != '' ? 'power-automate' : 'none' }
+            { name: 'SHAREPOINT_PULL_FLOW_URL', value: sharepointPullFlowUrl }
+            { name: 'SHAREPOINT_PUSH_FLOW_URL', value: sharepointPushFlowUrl }
           ]
           resources: {
             cpu: json('0.25')
