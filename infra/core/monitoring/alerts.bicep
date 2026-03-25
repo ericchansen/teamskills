@@ -342,7 +342,7 @@ resource backendMemoryAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
   location: 'global'
   tags: tags
   properties: {
-    description: 'Fires when backend memory usage exceeds 80% (>800Mi of 1Gi) sustained for 5 minutes.'
+    description: 'Fires when backend memory usage exceeds 80% (~819MiB of 1GiB) sustained for 5 minutes.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT5M'

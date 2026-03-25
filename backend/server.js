@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
   const { useAzureMonitor } = require('@azure/monitor-opentelemetry');
   useAzureMonitor();
@@ -10,7 +12,6 @@ const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 const pinoHttp = require('pino-http');
 const logger = require('./logger');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
