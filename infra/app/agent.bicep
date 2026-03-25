@@ -29,8 +29,8 @@ param azureOpenAiDeploymentName string
 @description('Azure OpenAI resource ID for RBAC')
 param azureOpenAiResourceId string = ''
 
-@description('Frontend URL for CORS')
-param frontendUrl string = '*'
+@description('Frontend URL for CORS (required — no wildcard default)')
+param frontendUrl string
 
 @description('Application Insights connection string for OpenTelemetry')
 param appInsightsConnectionString string = ''
@@ -136,7 +136,7 @@ resource agent 'Microsoft.App/containerApps@2023-05-01' = {
             {
               type: 'startup'
               httpGet: {
-                path: '/health'
+                path: '/health/ready'
                 port: 8000
               }
               periodSeconds: 5
@@ -145,7 +145,7 @@ resource agent 'Microsoft.App/containerApps@2023-05-01' = {
             {
               type: 'liveness'
               httpGet: {
-                path: '/health'
+                path: '/health/live'
                 port: 8000
               }
               periodSeconds: 30
@@ -154,7 +154,7 @@ resource agent 'Microsoft.App/containerApps@2023-05-01' = {
             {
               type: 'readiness'
               httpGet: {
-                path: '/health'
+                path: '/health/ready'
                 port: 8000
               }
               periodSeconds: 10

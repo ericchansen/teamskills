@@ -142,7 +142,19 @@ function TrendsChart() {
 
     seriesKeys.forEach((key, i) => {
       const points = chartData.series[key].sort((a, b) => a.date - b.date);
-      if (points.length < 2) return;
+      if (points.length === 0) return;
+
+      // For single data points, render a dot without a line
+      if (points.length === 1) {
+        svg.append('circle')
+          .attr('cx', x(points[0].date))
+          .attr('cy', y(points[0].level))
+          .attr('r', 5)
+          .attr('fill', colors(i))
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 1);
+        return;
+      }
 
       const line = d3.line()
         .x(d => x(d.date))
@@ -221,7 +233,14 @@ function TrendsChart() {
           </p>
         </div>
       ) : (
-        <div ref={chartRef} style={{ width: '100%', minHeight: '400px' }} />
+        <>
+          {chartData && Object.values(chartData.series).every(pts => pts.length < 2) && (
+            <div style={{ color: '#888', textAlign: 'center', padding: '8px', fontSize: '13px' }}>
+              📌 Only one data point per series — lines will appear as more changes are tracked.
+            </div>
+          )}
+          <div ref={chartRef} style={{ width: '100%', minHeight: '400px' }} />
+        </>
       )}
     </div>
   );

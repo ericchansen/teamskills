@@ -124,9 +124,35 @@ app.add_middleware(
 )
 
 
+@app.get("/health/live")
+async def liveness():
+    """Liveness probe — cheap, no dependencies."""
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/health/ready")
+async def readiness():
+    """Readiness probe — checks DB connectivity."""
+    from fastapi.responses import JSONResponse
+
+    db_health = await db.health_check()
+    status = "healthy" if db_health["connected"] else "unavailable"
+    status_code = 200 if db_health["connected"] else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "service": "agent",
+            "database_connected": db_health["connected"],
+            "database_latency_ms": db_health["latency_ms"],
+        },
+    )
+
+
 @app.get("/health")
 async def health_check():
-    """Health check with real DB round-trip verification."""
+    """Legacy health check — kept for backward compatibility."""
     from fastapi.responses import JSONResponse
 
     db_health = await db.health_check()

@@ -20,8 +20,8 @@ param postgresHost string
 @secure()
 param postgresPassword string
 
-@description('Frontend URL for CORS')
-param frontendUrl string = '*'
+@description('Frontend URL for CORS (required — no wildcard default)')
+param frontendUrl string
 
 @description('Initialization secret for seeding/admin operations')
 @secure()
@@ -149,7 +149,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               type: 'startup'
               httpGet: {
-                path: '/health'
+                path: '/health/ready'
                 port: 3001
               }
               periodSeconds: 5
@@ -158,7 +158,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               type: 'liveness'
               httpGet: {
-                path: '/health'
+                path: '/health/live'
                 port: 3001
               }
               periodSeconds: 30
@@ -167,7 +167,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               type: 'readiness'
               httpGet: {
-                path: '/health'
+                path: '/health/ready'
                 port: 3001
               }
               periodSeconds: 10
