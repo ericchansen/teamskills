@@ -106,13 +106,22 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "service": "agent",
-        "database_connected": db.is_connected,
-    }
+    """Health check with real DB round-trip verification."""
+    from fastapi.responses import JSONResponse
+
+    db_health = await db.health_check()
+    status = "healthy" if db_health["connected"] else "unavailable"
+    status_code = 200 if db_health["connected"] else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "service": "agent",
+            "database_connected": db_health["connected"],
+            "database_latency_ms": db_health["latency_ms"],
+        },
+    )
 
 
 @app.get("/")

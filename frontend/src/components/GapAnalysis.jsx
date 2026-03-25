@@ -10,6 +10,7 @@ function GapAnalysis() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterGap, setFilterGap] = useState('all'); // all, gap, met, core
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const chartRef = useRef(null);
 
   const config = getConfig();
@@ -17,9 +18,15 @@ function GapAnalysis() {
 
   useEffect(() => {
     fetch(`${API}/api/matrix`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Server error (${r.status})`);
+        return r.json();
+      })
       .then(data => { setMatrixData(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(err => {
+        setError(err.message || 'Failed to load gap analysis');
+        setLoading(false);
+      });
   }, [API]);
 
   // Compute gap analysis
@@ -157,7 +164,7 @@ function GapAnalysis() {
   }, [filtered]);
 
   if (loading) return <div className="loading">Loading gap analysis...</div>;
-  if (!analysis) return <div className="error">Failed to load data</div>;
+  if (error || !analysis) return <div className="error">{error || 'Failed to load data'}</div>;
 
   const gapCount = analysis.skillGaps.filter(s => s.hasGap).length;
   const metCount = analysis.skillGaps.filter(s => !s.hasGap).length;

@@ -15,10 +15,54 @@ const pool = new Pool({
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
   // Do not exit — Azure PostgreSQL auto-pause causes transient errors
-  // Container restart would break in-flight requests
+  // Pool auto-removes the dead client and creates a new one on next checkout
 });
 
+// Error codes that indicate a transient connection issue worth retrying
+const TRANSIENT_ERROR_CODES = new Set([
+  'ECONNREFUSED',  // DB not listening (stopped/restarting)
+  'ECONNRESET',    // Connection dropped mid-flight
+  'ETIMEDOUT',     // Network timeout
+  'EPIPE',         // Broken pipe
+  '57P01',         // PG: admin_shutdown
+  '57P03',         // PG: cannot_connect_now (starting up)
+  '08006',         // PG: connection_failure
+  '08001',         // PG: sqlclient_unable_to_establish_sqlconnection
+  '08003',         // PG: connection_does_not_exist
+  '08004',         // PG: sqlserver_rejected_establishment_of_sqlconnection
+]);
+
+function isTransientError(err) {
+  return TRANSIENT_ERROR_CODES.has(err.code) ||
+    err.message?.includes('Connection terminated') ||
+    err.message?.includes('connection timeout') ||
+    err.message?.includes('the database system is starting up');
+}
+
+/**
+ * Execute a query with automatic retry on transient DB errors.
+ * Retries up to `maxRetries` times with exponential backoff.
+ */
+async function queryWithRetry(text, params, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await pool.query(text, params);
+    } catch (err) {
+      if (attempt < maxRetries && isTransientError(err)) {
+        const delayMs = Math.min(1000 * 2 ** attempt, 8000);
+        console.warn(
+          `[db] Transient error on attempt ${attempt + 1}/${maxRetries + 1}, ` +
+          `retrying in ${delayMs}ms: ${err.code || err.message}`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 module.exports = {
-  query: (text, params) => pool.query(text, params),
+  query: (text, params) => queryWithRetry(text, params),
   pool,
 };

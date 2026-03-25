@@ -128,6 +128,7 @@ module frontend './app/frontend.bicep' = {
     backendUrl: backend.outputs.uri
     azureAdClientId: azureAdClientId
     azureAdTenantId: azureAdTenantId
+    wakeFunctionUrl: wakeFunction.outputs.uri
   }
 }
 
