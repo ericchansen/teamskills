@@ -146,10 +146,15 @@ class SkillsAgent:
                     yield {"type": "content", "content": result.text}
                 elif result.value:
                     yield {"type": "content", "content": str(result.value)}
+                else:
+                    yield {"type": "content", "content": "No response generated."}
                 yield {"type": "done"}
             except Exception as fallback_err:
                 logger.error(f"Agent fallback also failed: {fallback_err}")
-                yield {"type": "error", "content": str(e)}
+                yield {
+                    "type": "error",
+                    "content": "An unexpected error occurred while processing your request. Please try again later.",
+                }
     
     async def cleanup(self) -> None:
         """Clean up agent resources."""
