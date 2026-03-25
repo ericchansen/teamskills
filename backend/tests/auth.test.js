@@ -3,7 +3,6 @@
  */
 
 const { findOrCreateUser, requireAdmin, requireOwnership, requireAuth, isAuthConfigured } = require('../auth');
-const logger = require('../logger');
 
 // Mock the database module
 jest.mock('../db', () => ({
@@ -68,49 +67,9 @@ describe('Auth Middleware', () => {
       expect(result.entra_oid).toBe('test-oid-12345');
     });
 
-    it('should link CSV-imported user by name when oid and email miss', async () => {
-      const csvUser = {
-        id: 5,
-        name: 'Test User',
-        email: 'test.user@placeholder.local',
-        entra_oid: null
-      };
-
-      // First query (by oid) returns nothing
-      db.query.mockResolvedValueOnce({ rows: [] });
-      // Second query (by email) returns nothing (placeholder email doesn't match)
-      db.query.mockResolvedValueOnce({ rows: [] });
-      // Third query (by name) returns CSV user
-      db.query.mockResolvedValueOnce({ rows: [csvUser] });
-      // Fourth query (update oid + email)
-      db.query.mockResolvedValueOnce({ rows: [] });
-
-      const result = await findOrCreateUser(mockClaims);
-
-      expect(db.query).toHaveBeenCalledTimes(4);
-      expect(db.query).toHaveBeenNthCalledWith(3,
-        'SELECT * FROM users WHERE LOWER(name) = LOWER($1)',
-        ['Test User']
-      );
-      expect(result.entra_oid).toBe('test-oid-12345');
-      expect(result.email).toBe('test@example.com');
-    });
-
-    it('should not match by name when multiple users have the same name', async () => {
-      const duplicateUser1 = {
-        id: 10,
-        name: 'Test User',
-        email: 'test.user@placeholder.local',
-        entra_oid: null
-      };
-      const duplicateUser2 = {
-        id: 11,
-        name: 'Test User',
-        email: 'test.user2@placeholder.local',
-        entra_oid: null
-      };
+    it('should create new user when oid and email miss (no name-based linking)', async () => {
       const newUser = {
-        id: 12,
+        id: 5,
         name: 'Test User',
         email: 'test@example.com',
         entra_oid: 'test-oid-12345',
@@ -122,27 +81,30 @@ describe('Auth Middleware', () => {
       db.query.mockResolvedValueOnce({ rows: [] });
       // Second query (by email) returns nothing
       db.query.mockResolvedValueOnce({ rows: [] });
-      // Third query (by name) returns multiple users
-      db.query.mockResolvedValueOnce({ rows: [duplicateUser1, duplicateUser2] });
-      // Fourth query (insert) creates new user
+      // Third query (insert) returns new user
       db.query.mockResolvedValueOnce({ rows: [newUser] });
-
-      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation();
 
       const result = await findOrCreateUser(mockClaims);
 
-      expect(db.query).toHaveBeenCalledTimes(4);
-      expect(db.query).toHaveBeenNthCalledWith(4,
+      expect(db.query).toHaveBeenCalledTimes(3);
+      expect(db.query).toHaveBeenNthCalledWith(3,
         expect.stringContaining('INSERT INTO users'),
         ['Test User', 'test@example.com', 'test-oid-12345', 'Team Member', null]
       );
       expect(result).toEqual(newUser);
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Test User' }),
-        expect.stringContaining('Multiple users found with name')
-      );
+    });
 
-      warnSpy.mockRestore();
+    it('should throw when no email claim is available for new user', async () => {
+      const claims = {
+        oid: 'test-oid-no-email',
+        sub: 'test-sub',
+        name: 'No Email User'
+      };
+
+      // First query (by oid) returns nothing
+      db.query.mockResolvedValueOnce({ rows: [] });
+
+      await expect(findOrCreateUser(claims)).rejects.toThrow('Cannot create user: no email or UPN claim in token');
     });
 
     it('should create new user if not found', async () => {
@@ -159,14 +121,12 @@ describe('Auth Middleware', () => {
       db.query.mockResolvedValueOnce({ rows: [] });
       // Second query (by email) returns nothing
       db.query.mockResolvedValueOnce({ rows: [] });
-      // Third query (by name) returns nothing
-      db.query.mockResolvedValueOnce({ rows: [] });
-      // Fourth query (insert) returns new user
+      // Third query (insert) returns new user
       db.query.mockResolvedValueOnce({ rows: [newUser] });
 
       const result = await findOrCreateUser(mockClaims);
 
-      expect(db.query).toHaveBeenCalledTimes(4);
+      expect(db.query).toHaveBeenCalledTimes(3);
       expect(result).toEqual(newUser);
     });
 
@@ -179,13 +139,12 @@ describe('Auth Middleware', () => {
 
       db.query.mockResolvedValueOnce({ rows: [] });
       db.query.mockResolvedValueOnce({ rows: [] });
-      db.query.mockResolvedValueOnce({ rows: [] });
       db.query.mockResolvedValueOnce({ rows: [{ id: 4, email: 'user@company.com' }] });
 
       await findOrCreateUser(claims);
 
       // Verify INSERT used preferred_username as email
-      expect(db.query).toHaveBeenNthCalledWith(4,
+      expect(db.query).toHaveBeenNthCalledWith(3,
         expect.stringContaining('INSERT INTO users'),
         ['Company User', 'user@company.com', 'another-oid', 'Team Member', null]
       );

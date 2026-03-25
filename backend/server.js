@@ -65,7 +65,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 // Routes
 const usersRouter = require('./routes/users');
@@ -96,7 +96,38 @@ app.use('/api/proposals', proposalsRouter);
 app.use('/api/trends', trendsRouter);
 app.use('/api/sharepoint', sharepointRouter);
 
-// Health check with DB connectivity verification and latency tracking
+// Liveness probe — cheap, no dependencies. Proves the process is alive.
+app.get('/health/live', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Readiness probe — checks DB connectivity. Only ready when DB is reachable.
+app.get('/health/ready', async (req, res) => {
+  const start = Date.now();
+  try {
+    const db = require('./db');
+    await db.query('SELECT 1');
+    const latencyMs = Date.now() - start;
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      database_latency_ms: latencyMs,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const latencyMs = Date.now() - start;
+    logger.error({ err: error, requestId: req.correlationId }, 'Readiness check failed');
+    res.status(503).json({
+      status: 'unavailable',
+      database: 'disconnected',
+      database_latency_ms: latencyMs,
+      error: 'Database connection failed',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// Legacy health endpoint — kept for backward compatibility (e.g. external monitors)
 app.get('/health', async (req, res) => {
   const start = Date.now();
   try {

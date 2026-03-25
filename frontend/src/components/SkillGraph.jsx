@@ -52,6 +52,11 @@ function SkillGraph({ onUserSelect }) {
     return num / 100; // L100=1, L200=2, L300=3, L400=4
   };
 
+  // Safely decode potentially URL-encoded skill names (e.g. "C%23" → "C#")
+  const decodeName = (name) => {
+    try { return decodeURIComponent(name); } catch { return name; }
+  };
+
   // Get coverage color based on weighted score
   const getCoverageColor = (score) => {
     if (score >= 8) return COVERAGE_COLORS.excellent;
@@ -225,7 +230,7 @@ function SkillGraph({ onUserSelect }) {
         nodes.push({
           id: `s${skill.id}`,
           skillId: skill.id,
-          name: skill.name,
+          name: decodeName(skill.name),
           type: 'skill',
           isGroup: false,
           category: categoryName,
@@ -498,7 +503,7 @@ function SkillGraph({ onUserSelect }) {
         const skill = graphData.skills?.find(sk => sk.id === s.skill_id);
         if (skill) {
           const category = graphData.categories?.find(c => c.id === skill.category_id);
-          byLevel[s.proficiency_level].push({ ...skill, category: category?.name });
+          byLevel[s.proficiency_level].push({ ...skill, name: decodeName(skill.name), category: category?.name });
         }
       }
     });

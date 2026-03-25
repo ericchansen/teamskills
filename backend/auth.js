@@ -48,17 +48,23 @@ function verifyToken(token) {
       algorithms: ['RS256']
     };
 
-    // Issuer validation is intentionally skipped for multi-tenant apps.
-    // Each tenant's tokens carry that tenant's issuer URL, so there is no single
-    // issuer to validate against. The audience check (api://{clientId}) is
-    // sufficient — only tokens explicitly requested for THIS app will pass.
-
     jwt.verify(token, getKey, options, (err, decoded) => {
       if (err) {
         reject(err);
-      } else {
-        resolve(decoded);
+        return;
       }
+
+      // Validate tenant ID if configured — prevents cross-tenant token acceptance
+      const allowedTenant = process.env.AZURE_AD_TENANT_ID;
+      if (allowedTenant) {
+        const tokenTid = decoded.tid;
+        if (tokenTid !== allowedTenant) {
+          reject(new Error(`Token from unauthorized tenant: ${tokenTid}`));
+          return;
+        }
+      }
+
+      resolve(decoded);
     });
   });
 }
@@ -99,24 +105,11 @@ async function findOrCreateUser(claims) {
     }
   }
 
-  // Try to find by display name (links CSV-imported users who have placeholder emails)
-  result = await db.query(
-    'SELECT * FROM users WHERE LOWER(name) = LOWER($1)',
-    [name]
-  );
-
-  if (result.rows.length === 1) {
-    const user = result.rows[0];
-    await db.query(
-      'UPDATE users SET entra_oid = $1, email = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-      [oid, email, user.id]
-    );
-    return { ...user, entra_oid: oid, email };
-  } else if (result.rows.length > 1) {
-    logger.warn({ name }, 'Multiple users found with name — skipping name-based matching to avoid ambiguity');
+  // Create new user (require email — fail gracefully if missing)
+  if (!email) {
+    throw new Error('Cannot create user: no email or UPN claim in token');
   }
 
-  // Create new user
   result = await db.query(
     `INSERT INTO users (name, email, entra_oid, role, team) 
      VALUES ($1, $2, $3, $4, $5) 
@@ -131,8 +124,6 @@ async function findOrCreateUser(claims) {
  * Check if Entra ID authentication is configured
  */
 function isAuthConfigured() {
-  // Only AZURE_AD_CLIENT_ID is required — tenant ID is used by the frontend
-  // for MSAL authority but is not needed for backend JWT validation.
   return !!process.env.AZURE_AD_CLIENT_ID;
 }
 
