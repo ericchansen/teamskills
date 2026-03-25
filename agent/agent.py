@@ -127,9 +127,8 @@ class SkillsAgent:
             return
         
         try:
-            # Stream the response using run(stream=True)
-            stream = self._agent.run(message, stream=True)
-            async for update in stream.updates:
+            # agent.run(message, stream=True) returns an async iterable of updates
+            async for update in self._agent.run(message, stream=True):
                 if update.text:
                     yield {
                         "type": "content",
@@ -140,7 +139,17 @@ class SkillsAgent:
             
         except Exception as e:
             logger.error(f"Agent stream failed: {e}")
-            yield {"type": "error", "content": str(e)}
+            # Fall back to non-streaming if streaming isn't supported
+            try:
+                result = await self._agent.run(message)
+                if result.text:
+                    yield {"type": "content", "content": result.text}
+                elif result.value:
+                    yield {"type": "content", "content": str(result.value)}
+                yield {"type": "done"}
+            except Exception as fallback_err:
+                logger.error(f"Agent fallback also failed: {fallback_err}")
+                yield {"type": "error", "content": str(e)}
     
     async def cleanup(self) -> None:
         """Clean up agent resources."""
