@@ -138,6 +138,35 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             cpu: json('0.5')
             memory: '1Gi'
           }
+          probes: [
+            {
+              type: 'startup'
+              httpGet: {
+                path: '/health'
+                port: 3001
+              }
+              periodSeconds: 5
+              failureThreshold: 30
+            }
+            {
+              type: 'liveness'
+              httpGet: {
+                path: '/health'
+                port: 3001
+              }
+              periodSeconds: 30
+              failureThreshold: 3
+            }
+            {
+              type: 'readiness'
+              httpGet: {
+                path: '/health'
+                port: 3001
+              }
+              periodSeconds: 10
+              failureThreshold: 3
+            }
+          ]
         }
       ]
       scale: {
