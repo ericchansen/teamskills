@@ -7,14 +7,21 @@ import './CoverageDashboard.css';
 function CoverageDashboard() {
   const svgRef = useRef(null);
   const [matrixData, setMatrixData] = useState(null);
+  const [error, setError] = useState(null);
   const [filterCategory, setFilterCategory] = useState('all');
   const [sortBy, setSortBy] = useState('name'); // 'name', 'coverage', 'busFactor'
 
   useEffect(() => {
     apiFetch('/api/matrix')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error (${res.status})`);
+        return res.json();
+      })
       .then(data => setMatrixData(data))
-      .catch(err => console.error('Failed to fetch matrix:', err));
+      .catch(err => {
+        console.error('Failed to fetch matrix:', err);
+        setError(err.message || 'Failed to load coverage data');
+      });
   }, []);
 
   const categories = useMemo(() => {
@@ -150,7 +157,7 @@ function CoverageDashboard() {
 
   }, [skillStats]);
 
-  if (!matrixData) return <div className="loading">Loading coverage data...</div>;
+  if (!matrixData) return <div className={error ? 'error' : 'loading'}>{error || 'Loading coverage data...'}</div>;
 
   return (
     <div className="coverage-dashboard">

@@ -9,6 +9,7 @@ function TrendsChart() {
   const [trendsData, setTrendsData] = useState([]);
   const [selectedUser, setSelectedUser] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const chartRef = useRef(null);
 
   const config = getConfig();
@@ -16,9 +17,15 @@ function TrendsChart() {
 
   useEffect(() => {
     fetch(`${API}/api/matrix`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Server error (${r.status})`);
+        return r.json();
+      })
       .then(data => { setMatrixData(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(err => {
+        setError(err.message || 'Failed to load trends data');
+        setLoading(false);
+      });
   }, [API]);
 
   useEffect(() => {
@@ -26,7 +33,10 @@ function TrendsChart() {
       ? `${API}/api/trends?userId=${selectedUser}`
       : `${API}/api/trends`;
     fetch(url)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Server error (${r.status})`);
+        return r.json();
+      })
       .then(setTrendsData)
       .catch(() => setTrendsData([]));
   }, [API, selectedUser]);
@@ -175,7 +185,7 @@ function TrendsChart() {
   }, [chartData]);
 
   if (loading) return <div className="loading">Loading trends...</div>;
-  if (!matrixData) return <div className="error">Failed to load data</div>;
+  if (error || !matrixData) return <div className="error">{error || 'Failed to load data'}</div>;
 
   return (
     <div className="trends-chart" style={{ padding: '20px' }}>

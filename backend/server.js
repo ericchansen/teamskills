@@ -75,18 +75,28 @@ app.use('/api/proposals', proposalsRouter);
 app.use('/api/trends', trendsRouter);
 app.use('/api/sharepoint', sharepointRouter);
 
-// Health check with DB connectivity verification
+// Health check with DB connectivity verification and latency tracking
 app.get('/health', async (req, res) => {
+  const start = Date.now();
   try {
     const { pool } = require('./db');
     await pool.query('SELECT 1');
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    const latencyMs = Date.now() - start;
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      database_latency_ms: latencyMs,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
+    const latencyMs = Date.now() - start;
     console.error('Health check failed:', error.message);
     res.status(503).json({ 
-      status: 'unavailable', 
+      status: 'unavailable',
+      database: 'disconnected',
+      database_latency_ms: latencyMs,
       error: 'Database connection failed',
-      timestamp: new Date().toISOString() 
+      timestamp: new Date().toISOString(),
     });
   }
 });

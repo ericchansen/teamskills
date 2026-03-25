@@ -22,6 +22,9 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID for Easy Auth (optional)')
 param azureAdTenantId string = ''
 
+@description('Wake Function URL for database auto-start')
+param wakeFunctionUrl string = ''
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -70,6 +73,10 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'VITE_AZURE_AD_TENANT_ID'
               value: azureAdTenantId
+            }
+            {
+              name: 'VITE_WAKE_FUNCTION_URL'
+              value: wakeFunctionUrl
             }
           ]
           resources: {

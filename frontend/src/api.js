@@ -35,29 +35,53 @@ async function getAccessToken() {
 }
 
 /**
- * Fetch wrapper that adds auth headers when available
+ * Fetch wrapper that adds auth headers and retries on transient errors.
+ * Retries up to 3 times with exponential backoff on 503 or network failures.
  */
 export const apiFetch = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+  const maxRetries = options._noRetry ? 0 : 3;
+
   // Get access token if authenticated
   const token = await getAccessToken();
-  
+
   // Merge headers
-  const headers = {
-    ...options.headers
-  };
-  
+  const headers = { ...options.headers };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
-  
-  return response;
+  const fetchOptions = { ...options, headers };
+  delete fetchOptions._noRetry;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, fetchOptions);
+
+      // Retry on 503 (DB unavailable) — don't retry other status codes
+      if (response.status === 503 && attempt < maxRetries) {
+        const delayMs = 1000 * 2 ** attempt; // 1s, 2s, 4s
+        console.warn(
+          `[API] 503 on ${endpoint}, retrying in ${delayMs}ms (${attempt + 1}/${maxRetries})`
+        );
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+
+      return response;
+    } catch (err) {
+      // Network error (fetch failed entirely) — retry
+      if (attempt < maxRetries) {
+        const delayMs = 1000 * 2 ** attempt;
+        console.warn(
+          `[API] Network error on ${endpoint}, retrying in ${delayMs}ms (${attempt + 1}/${maxRetries}): ${err.message}`
+        );
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
 };
 
 export default apiFetch;

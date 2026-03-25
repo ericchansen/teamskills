@@ -95,12 +95,17 @@ describe('SkillMatrix', () => {
   });
 
   test('displays error message on fetch failure', async () => {
-    fetch.mockRejectedValueOnce(new Error('Network error'));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fetch.mockRejectedValue(new Error('Network error'));
 
     render(<SkillMatrix onUserSelect={vi.fn()} />);
+
+    // Advance past all retry delays (1s + 2s + 4s)
+    await vi.advanceTimersByTimeAsync(8000);
 
     await waitFor(() => {
       expect(screen.getByText(/Error:/)).toBeInTheDocument();
     });
+    vi.useRealTimers();
   });
 });
