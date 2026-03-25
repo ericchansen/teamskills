@@ -79,7 +79,7 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: teamskills-frontend
     environment:
-      - VITE_API_URL=http://backend:3001
+      - VITE_API_URL=
       - VITE_AGENT_URL=http://agent:8000
     ports:
       - "3000:80"
@@ -96,7 +96,7 @@ services:
     stdin_open: true
     tty: true
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
       interval: 30s
       timeout: 5s
       retries: 3
