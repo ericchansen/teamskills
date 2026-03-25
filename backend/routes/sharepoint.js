@@ -16,6 +16,7 @@
 
 const express = require('express');
 const router = express.Router();
+const logger = require('../logger');
 const { requireAuth } = require('../auth');
 const { isOboConfigured, getGraphClientOnBehalfOf, extractBearerToken } = require('../services/oboClient');
 const sharepoint = require('../services/sharepoint');
@@ -62,7 +63,7 @@ router.post('/pull', requireAuth, async (req, res) => {
       ...stats
     });
   } catch (err) {
-    console.error('[SharePoint Pull] Error:', err.message);
+    logger.error({ err }, 'SharePoint Pull error');
 
     if (err.message?.includes('AADSTS65001') || err.message?.includes('has not consented')) {
       return res.status(403).json({
@@ -112,7 +113,7 @@ router.post('/push', requireAuth, async (req, res) => {
       ...result
     });
   } catch (err) {
-    console.error('[SharePoint Push] Error:', err.message);
+    logger.error({ err }, 'SharePoint Push error');
 
     if (err.message?.includes('AADSTS65001') || err.message?.includes('has not consented')) {
       return res.status(403).json({

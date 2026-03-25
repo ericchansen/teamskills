@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const logger = require('../logger');
 const { requireAuth, requireAdmin } = require('../auth');
 
 // GET all users
@@ -9,7 +10,7 @@ router.get('/', async (req, res) => {
     const result = await db.query('SELECT id, name, email, role, team, is_admin, created_at, updated_at FROM users ORDER BY name');
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
@@ -24,7 +25,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
@@ -39,7 +40,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
@@ -58,7 +59,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to update user' });
   }
 });
@@ -73,7 +74,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     }
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to delete user' });
   }
 });

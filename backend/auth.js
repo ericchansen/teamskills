@@ -8,6 +8,7 @@
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 const db = require('./db');
+const logger = require('./logger');
 
 // JWKS client for fetching Microsoft's signing keys.
 // Always use the 'common' endpoint — it serves keys for all tenants, which is
@@ -112,7 +113,7 @@ async function findOrCreateUser(claims) {
     );
     return { ...user, entra_oid: oid, email };
   } else if (result.rows.length > 1) {
-    console.warn(`Multiple users found with name "${name}" — skipping name-based matching to avoid ambiguity`);
+    logger.warn({ name }, 'Multiple users found with name — skipping name-based matching to avoid ambiguity');
   }
 
   // Create new user
@@ -162,7 +163,7 @@ async function requireAuth(req, res, next) {
   try {
     claims = await verifyToken(token);
   } catch (err) {
-    console.error('Auth error:', err.message);
+    logger.error({ err }, 'Auth error');
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
@@ -172,7 +173,7 @@ async function requireAuth(req, res, next) {
     req.claims = claims;
     next();
   } catch (err) {
-    console.error('User lookup error:', err.message);
+    logger.error({ err }, 'User lookup error');
     return res.status(500).json({ error: 'Failed to load user profile' });
   }
 }
@@ -204,7 +205,7 @@ async function optionalAuth(req, res, next) {
     req.claims = claims;
   } catch (err) {
     // Invalid token - continue without user (don't fail)
-    console.warn('Optional auth failed:', err.message);
+    logger.warn({ err }, 'Optional auth failed');
     req.user = null;
   }
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const logger = require('../logger');
 
 // GET matrix view (all users × skills)
 router.get('/', async (req, res) => {
@@ -40,8 +41,7 @@ router.get('/', async (req, res) => {
     
     res.json(matrix);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch matrix data' });
+    logger.error({ err }, 'Failed to fetch matrix data');
   }
 });
 

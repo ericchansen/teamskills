@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const logger = require('../logger');
 const { requireAuth, requireOwnership } = require('../auth');
 const { isOboConfigured, getGraphClientOnBehalfOf, extractBearerToken } = require('../services/oboClient');
 const { pushUserSkillsToSharePoint } = require('../services/sharepoint');
@@ -19,10 +20,10 @@ async function tryPushToSharePoint(req) {
     const graphClient = await getGraphClientOnBehalfOf(bearerToken);
     const result = await pushUserSkillsToSharePoint(graphClient, req.user);
     if (result.status === 'success') {
-      console.log(`[SharePoint] Auto-pushed ${result.fieldsUpdated} fields for ${req.user.name}`);
+      logger.info({ fieldsUpdated: result.fieldsUpdated, user: req.user.name }, 'SharePoint auto-push completed');
     }
   } catch (err) {
-    console.warn('[SharePoint] Auto-push failed (non-blocking):', err.message);
+    logger.warn({ err }, 'SharePoint auto-push failed (non-blocking)');
   }
 }
 
@@ -41,7 +42,7 @@ router.get('/:userId', async (req, res) => {
     `, [userId]);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to fetch user skills' });
   }
 });
@@ -69,7 +70,7 @@ router.put('/', requireAuth, requireOwnership(req => req.body.user_id), async (r
     // Best-effort SharePoint sync (after response is sent)
     tryPushToSharePoint(req);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to update user skill' });
   }
 });
@@ -87,7 +88,7 @@ router.delete('/', requireAuth, requireOwnership(req => req.body.user_id), async
     }
     res.json({ message: 'User skill deleted successfully' });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to delete user skill' });
   }
 });

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const logger = require('../logger');
 
 // GET /api/trends?userId=X — proficiency history for a user
 router.get('/', async (req, res) => {
@@ -47,7 +48,7 @@ router.get('/', async (req, res) => {
     const result = await db.query(query, params);
     res.json(result.rows);
   } catch (err) {
-    console.error('Error fetching trends:', err.message);
+    logger.error({ err }, 'Error fetching trends');
     res.status(500).json({ error: 'Failed to fetch trends' });
   }
 });

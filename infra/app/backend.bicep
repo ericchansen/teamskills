@@ -33,6 +33,9 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID (optional)')
 param azureAdTenantId string = ''
 
+@description('Application Insights connection string for OpenTelemetry')
+param appInsightsConnectionString string = ''
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -132,6 +135,10 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'AZURE_AD_TENANT_ID'
               value: azureAdTenantId
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsightsConnectionString
             }
           ]
           resources: {
