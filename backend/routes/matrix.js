@@ -42,6 +42,7 @@ router.get('/', async (req, res) => {
     res.json(matrix);
   } catch (err) {
     logger.error({ err }, 'Failed to fetch matrix data');
+    res.status(500).json({ error: 'Failed to fetch matrix data' });
   }
 });
 
