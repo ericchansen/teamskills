@@ -83,6 +83,32 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
             cpu: json('0.25')
             memory: '0.5Gi'
           }
+          probes: [
+            {
+              type: 'startup'
+              tcpSocket: {
+                port: 80
+              }
+              periodSeconds: 5
+              failureThreshold: 6
+            }
+            {
+              type: 'liveness'
+              tcpSocket: {
+                port: 80
+              }
+              periodSeconds: 30
+              failureThreshold: 3
+            }
+            {
+              type: 'readiness'
+              tcpSocket: {
+                port: 80
+              }
+              periodSeconds: 10
+              failureThreshold: 3
+            }
+          ]
         }
       ]
       scale: {
