@@ -79,8 +79,8 @@ app.use('/api/sharepoint', sharepointRouter);
 app.get('/health', async (req, res) => {
   const start = Date.now();
   try {
-    const { pool } = require('./db');
-    await pool.query('SELECT 1');
+    const db = require('./db');
+    await db.query('SELECT 1');
     const latencyMs = Date.now() - start;
     res.json({
       status: 'ok',

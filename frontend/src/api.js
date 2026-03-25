@@ -70,6 +70,10 @@ export const apiFetch = async (endpoint, options = {}) => {
 
       return response;
     } catch (err) {
+      // AbortError — user/controller cancelled; rethrow immediately
+      if (err.name === 'AbortError') {
+        throw err;
+      }
       // Network error (fetch failed entirely) — retry
       if (attempt < maxRetries) {
         const delayMs = 1000 * 2 ** attempt;
