@@ -1,8 +1,15 @@
+if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
+  const { useAzureMonitor } = require('@azure/monitor-opentelemetry');
+  useAzureMonitor();
+}
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
+const pinoHttp = require('pino-http');
+const logger = require('./logger');
 require('dotenv').config();
 
 const app = express();
@@ -17,6 +24,19 @@ app.use((req, res, next) => {
   res.setHeader('x-correlation-id', req.correlationId);
   next();
 });
+
+// Request logging
+app.use(pinoHttp({
+  logger,
+  genReqId: (req) => req.correlationId,
+  customLogLevel: (req, res, err) => {
+    if (res.statusCode >= 500 || err) return 'error';
+    if (res.statusCode >= 400) return 'warn';
+    return 'info';
+  },
+  customSuccessMessage: (req, res) => `${req.method} ${req.url} ${res.statusCode}`,
+  customErrorMessage: (req, res) => `${req.method} ${req.url} ${res.statusCode}`,
+}));
 
 // Security headers
 app.use(helmet());
@@ -34,7 +54,7 @@ app.use('/api/', limiter);
 // Middleware
 const FRONTEND_URL = process.env.FRONTEND_URL;
 if (!FRONTEND_URL || FRONTEND_URL === '*') {
-  console.warn('WARNING: FRONTEND_URL not set or is wildcard. CORS will be restrictive in production.');
+  logger.warn('FRONTEND_URL not set or is wildcard. CORS will be restrictive in production.');
 }
 const corsOrigin = process.env.NODE_ENV === 'production' && (!FRONTEND_URL || FRONTEND_URL === '*')
   ? false  // Reject all cross-origin requests if not configured in production
@@ -90,8 +110,8 @@ app.get('/health', async (req, res) => {
     });
   } catch (error) {
     const latencyMs = Date.now() - start;
-    console.error('Health check failed:', error.message);
-    res.status(503).json({ 
+    logger.error({ err: error, requestId: req.correlationId }, 'Health check failed');
+    res.status(503).json({
       status: 'unavailable',
       database: 'disconnected',
       database_latency_ms: latencyMs,
@@ -103,11 +123,7 @@ app.get('/health', async (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, _next) => {
-  // Log full error with correlation ID for debugging (server-side only)
-  console.error(`[${req.correlationId}] Server error:`, err.message);
-  if (process.env.NODE_ENV !== 'production') {
-    console.error(err.stack);
-  }
+  logger.error({ err, requestId: req.correlationId }, 'Unhandled server error');
   // Return generic message to client
   res.status(500).json({ error: 'Something went wrong!' });
 });
@@ -116,24 +132,24 @@ app.use((err, req, res, _next) => {
 let server;
 if (process.env.NODE_ENV !== 'test') {
   server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    logger.info({ port: PORT }, 'Server running');
   });
 }
 
 // Graceful shutdown on SIGTERM (Azure Container Apps scale-down/redeploy)
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, closing server gracefully...');
+  logger.info('SIGTERM received, closing server gracefully');
   if (server) {
     server.close(() => {
-      console.log('HTTP server closed');
+      logger.info('HTTP server closed');
     });
   }
   try {
     const { pool } = require('./db');
     await pool.end();
-    console.log('Database pool closed');
+    logger.info('Database pool closed');
   } catch (err) {
-    console.error('Error closing database pool:', err);
+    logger.error({ err }, 'Error closing database pool');
   }
   process.exit(0);
 });

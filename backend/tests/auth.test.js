@@ -3,6 +3,7 @@
  */
 
 const { findOrCreateUser, requireAdmin, requireOwnership, requireAuth, isAuthConfigured } = require('../auth');
+const logger = require('../logger');
 
 // Mock the database module
 jest.mock('../db', () => ({
@@ -126,7 +127,7 @@ describe('Auth Middleware', () => {
       // Fourth query (insert) creates new user
       db.query.mockResolvedValueOnce({ rows: [newUser] });
 
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation();
 
       const result = await findOrCreateUser(mockClaims);
 
@@ -137,7 +138,8 @@ describe('Auth Middleware', () => {
       );
       expect(result).toEqual(newUser);
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Multiple users found with name "Test User"')
+        expect.objectContaining({ name: 'Test User' }),
+        expect.stringContaining('Multiple users found with name')
       );
 
       warnSpy.mockRestore();

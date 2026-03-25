@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const logger = require('./logger');
 require('dotenv').config();
 
 const pool = new Pool({
@@ -13,7 +14,7 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
+  logger.error({ err }, 'Unexpected error on idle client');
   // Do not exit — Azure PostgreSQL auto-pause causes transient errors
   // Pool auto-removes the dead client and creates a new one on next checkout
 });
@@ -50,9 +51,9 @@ async function queryWithRetry(text, params, maxRetries = 3) {
     } catch (err) {
       if (attempt < maxRetries && isTransientError(err)) {
         const delayMs = Math.min(1000 * 2 ** attempt, 8000);
-        console.warn(
-          `[db] Transient error on attempt ${attempt + 1}/${maxRetries + 1}, ` +
-          `retrying in ${delayMs}ms: ${err.code || err.message}`
+        logger.warn(
+          { attempt: attempt + 1, maxAttempts: maxRetries + 1, delayMs, errorCode: err.code },
+          'Transient DB error, retrying'
         );
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;

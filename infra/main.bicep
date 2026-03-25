@@ -96,6 +96,18 @@ module openai './core/ai/openai.bicep' = {
   }
 }
 
+// Application Insights for observability
+module appInsights './core/monitoring/app-insights.bicep' = {
+  name: 'app-insights'
+  scope: rg
+  params: {
+    name: '${abbrs.insightsComponents}${resourceToken}'
+    location: location
+    tags: tags
+    logAnalyticsWorkspaceId: containerApps.outputs.logAnalyticsWorkspaceId
+  }
+}
+
 // Backend Container App
 module backend './app/backend.bicep' = {
   name: 'backend'
@@ -112,6 +124,7 @@ module backend './app/backend.bicep' = {
     frontendUrl: 'https://${abbrs.appContainerApps}frontend-${resourceToken}.${containerApps.outputs.defaultDomain}'
     azureAdClientId: azureAdClientId
     azureAdTenantId: azureAdTenantId
+    appInsightsConnectionString: appInsights.outputs.connectionString
   }
 }
 
@@ -148,6 +161,7 @@ module agent './app/agent.bicep' = {
     azureOpenAiDeploymentName: openAiModelDeploymentName
     azureOpenAiResourceId: openai.outputs.id
     frontendUrl: frontend.outputs.uri
+    appInsightsConnectionString: appInsights.outputs.connectionString
   }
 }
 
@@ -175,6 +189,7 @@ output POSTGRES_HOST string = postgres.outputs.fqdn
 output AZURE_OPENAI_ENDPOINT string = openai.outputs.endpoint
 output AZURE_OPENAI_DEPLOYMENT_NAME string = openAiModelDeploymentName
 output WAKE_FUNCTION_URI string = wakeFunction.outputs.uri
+output APPLICATIONINSIGHTS_CONNECTION_STRING string = appInsights.outputs.connectionString
 
 // AcrPull role assignments for Container Apps managed identity
 module backendAcrPull './core/security/acr-pull.bicep' = {

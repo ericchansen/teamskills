@@ -4,9 +4,32 @@ This service provides an AI-powered chat interface for querying team skills.
 """
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
+
+from pythonjsonlogger.json import JsonFormatter
+
+# Configure structured JSON logging before any other imports that use logging
+log_handler = logging.StreamHandler()
+log_handler.setFormatter(JsonFormatter(
+    fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+    rename_fields={"asctime": "timestamp", "levelname": "level", "name": "logger"},
+    static_fields={"service": "teamskills-agent"},
+))
+logging.basicConfig(level=logging.INFO, handlers=[log_handler])
+logger = logging.getLogger(__name__)
+
+# Initialize Azure Monitor OpenTelemetry if connection string is available
+_ai_conn_str = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
+if _ai_conn_str:
+    try:
+        from azure.monitor.opentelemetry import configure_azure_monitor
+        configure_azure_monitor(connection_string=_ai_conn_str)
+        logger.info("Azure Monitor OpenTelemetry configured")
+    except Exception as e:
+        logger.warning("Failed to configure Azure Monitor: %s", e)
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,9 +42,6 @@ from sse_starlette.sse import EventSourceResponse
 from config import config
 from db import db
 from agent import skills_agent
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)

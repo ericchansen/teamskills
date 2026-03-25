@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const logger = require('../logger');
 const { requireAuth, requireAdmin } = require('../auth');
 const sharepointSync = require('../services/sharepoint');
 
@@ -45,7 +46,7 @@ async function logAdminAction(action, performedBy, details, ipAddress) {
     );
   } catch (err) {
     // Audit logging should never block admin operations
-    console.error('Audit log write failed:', err.message);
+    logger.error({ err }, 'Audit log write failed');
   }
 }
 
@@ -248,7 +249,7 @@ router.post('/init', checkInitSecret, async (req, res) => {
     `;
 
     await db.query(schemaSQL);
-    console.log('Schema created successfully');
+    logger.info('Schema created successfully');
 
     // Seed data for skill categories
     await db.query(`
@@ -413,7 +414,7 @@ router.post('/init', checkInitSecret, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Database initialization error:', error);
+    logger.error({ err: error }, 'Database initialization error');
     res.status(500).json({ error: error.message });
   }
 });
@@ -541,7 +542,7 @@ router.post('/reset-users', requireAuth, checkAdminAllowlist, checkInitSecret, a
       status: 'success'
     });
   } catch (error) {
-    console.error('Reset users error:', error);
+    logger.error({ err: error }, 'Reset users error');
     res.status(500).json({ error: 'Failed to reset users' });
   }
 });
@@ -579,7 +580,7 @@ router.post('/sync-skills', requireAuth, checkAdminAllowlist, checkInitSecret, a
       ...stats
     });
   } catch (error) {
-    console.error('Sync error:', error);
+    logger.error({ err: error }, 'Sync error');
     res.status(500).json({ error: error.message });
   }
 });

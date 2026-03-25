@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const logger = require('../logger');
 const { requireAuth, requireAdmin } = require('../auth');
 
 // GET all skills
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to fetch skills' });
   }
 });
@@ -34,7 +35,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to fetch skill' });
   }
 });
@@ -52,7 +53,7 @@ router.get('/:id/related', async (req, res) => {
     `, [id]);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to fetch related skills' });
   }
 });
@@ -67,7 +68,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to create skill' });
   }
 });
@@ -86,7 +87,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to update skill' });
   }
 });
@@ -101,7 +102,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     }
     res.json({ message: 'Skill deleted successfully' });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, 'Request failed');
     res.status(500).json({ error: 'Failed to delete skill' });
   }
 });

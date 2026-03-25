@@ -32,6 +32,9 @@ param azureOpenAiResourceId string = ''
 @description('Frontend URL for CORS')
 param frontendUrl string = '*'
 
+@description('Application Insights connection string for OpenTelemetry')
+param appInsightsConnectionString string = ''
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -119,6 +122,10 @@ resource agent 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'FRONTEND_URL'
               value: frontendUrl
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsightsConnectionString
             }
           ]
           resources: {

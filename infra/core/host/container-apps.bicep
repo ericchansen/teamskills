@@ -64,3 +64,4 @@ output defaultDomain string = containerAppsEnvironment.properties.defaultDomain
 output registryName string = containerRegistry.name
 output registryLoginServer string = containerRegistry.properties.loginServer
 output registryId string = containerRegistry.id
+output logAnalyticsWorkspaceId string = logAnalytics.id
