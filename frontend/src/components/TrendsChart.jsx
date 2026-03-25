@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
-import { getConfig } from '../config';
+import apiFetch from '../api';
 
 const LEVEL_NUM = { L100: 100, L200: 200, L300: 300, L400: 400 };
 
@@ -12,11 +12,8 @@ function TrendsChart() {
   const [error, setError] = useState(null);
   const chartRef = useRef(null);
 
-  const config = getConfig();
-  const API = config.VITE_API_URL || 'http://localhost:3001';
-
   useEffect(() => {
-    fetch(`${API}/api/matrix`)
+    apiFetch('/api/matrix')
       .then(r => {
         if (!r.ok) throw new Error(`Server error (${r.status})`);
         return r.json();
@@ -26,20 +23,26 @@ function TrendsChart() {
         setError(err.message || 'Failed to load trends data');
         setLoading(false);
       });
-  }, [API]);
+  }, []);
 
   useEffect(() => {
     const url = selectedUser
-      ? `${API}/api/trends?userId=${selectedUser}`
-      : `${API}/api/trends`;
-    fetch(url)
+      ? `/api/trends?userId=${selectedUser}`
+      : `/api/trends`;
+    apiFetch(url)
       .then(r => {
         if (!r.ok) throw new Error(`Server error (${r.status})`);
         return r.json();
       })
-      .then(setTrendsData)
-      .catch(() => setTrendsData([]));
-  }, [API, selectedUser]);
+      .then(data => {
+        setTrendsData(data);
+        setError(null);
+      })
+      .catch(err => {
+        setError(err.message || 'Failed to load trends data');
+        setTrendsData([]);
+      });
+  }, [selectedUser]);
 
   // Process data for the chart
   const chartData = useMemo(() => {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
-import { getConfig } from '../config';
+import apiFetch from '../api';
 
 const LEVEL_NUM = { L100: 100, L200: 200, L300: 300, L400: 400 };
 const LEVEL_LABELS = { 100: 'L100', 200: 'L200', 300: 'L300', 400: 'L400' };
@@ -13,11 +13,8 @@ function GapAnalysis() {
   const [error, setError] = useState(null);
   const chartRef = useRef(null);
 
-  const config = getConfig();
-  const API = config.VITE_API_URL || 'http://localhost:3001';
-
   useEffect(() => {
-    fetch(`${API}/api/matrix`)
+    apiFetch('/api/matrix')
       .then(r => {
         if (!r.ok) throw new Error(`Server error (${r.status})`);
         return r.json();
@@ -27,7 +24,7 @@ function GapAnalysis() {
         setError(err.message || 'Failed to load gap analysis');
         setLoading(false);
       });
-  }, [API]);
+  }, []);
 
   // Compute gap analysis
   const analysis = useMemo(() => {

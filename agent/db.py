@@ -63,7 +63,7 @@ class Database:
                     )
                 logger.info("Database pool created successfully")
                 return
-            except Exception as e:
+            except _TRANSIENT_EXCEPTIONS as e:
                 delay = min(2 ** attempt, _MAX_BACKOFF_SECONDS)
                 logger.error(
                     "DB connect attempt %d/%d failed (%s: %s), "
@@ -73,6 +73,13 @@ class Database:
                 )
                 if attempt < max_retries - 1:
                     await asyncio.sleep(delay)
+            except Exception as e:
+                logger.error(
+                    "DB connect failed with non-transient error (%s: %s), "
+                    "not retrying",
+                    type(e).__name__, e,
+                )
+                raise
         logger.error(
             "All %d DB connection attempts failed; pool is None", max_retries
         )
@@ -86,7 +93,7 @@ class Database:
             except Exception:
                 pass
             self._pool = None
-        await self.connect(max_retries=3)
+        await self.connect()
 
     async def disconnect(self) -> None:
         """Close connection pool."""
