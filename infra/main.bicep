@@ -32,6 +32,9 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID for authentication (optional)')
 param azureAdTenantId string = ''
 
+@description('Email address for alert notifications (optional)')
+param alertEmailAddress string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
@@ -176,6 +179,21 @@ module wakeFunction './app/wake-function.bicep' = {
     postgresServerResourceId: postgres.outputs.id
     postgresServerName: postgres.outputs.name
     resourceToken: resourceToken
+  }
+}
+
+// Alert Rules (depends on App Insights and Container Apps)
+module alerts './core/monitoring/alerts.bicep' = {
+  name: 'alerts'
+  scope: rg
+  params: {
+    namePrefix: '${abbrs.insightsComponents}alert-${resourceToken}'
+    location: location
+    tags: tags
+    appInsightsId: appInsights.outputs.id
+    backendContainerAppId: backend.outputs.id
+    agentContainerAppId: agent.outputs.id
+    alertEmailAddress: alertEmailAddress
   }
 }
 

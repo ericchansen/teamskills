@@ -184,6 +184,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
   }
 }
 
+output id string = backend.id
 output uri string = 'https://${backend.properties.configuration.ingress.fqdn}'
 output name string = backend.name
 output principalId string = backend.identity.principalId
