@@ -204,6 +204,20 @@ function TrendsChart() {
 
   return (
     <div className="trends-chart" style={{ padding: '20px' }}>
+      <div style={{
+        background: 'rgba(255, 193, 7, 0.12)',
+        border: '1px solid rgba(255, 193, 7, 0.4)',
+        borderRadius: '8px',
+        padding: '12px 16px',
+        marginBottom: '16px',
+        color: '#e0c060',
+        fontSize: '14px',
+        lineHeight: '1.5',
+      }}>
+        <strong>⚠️ Not Currently Active</strong> — Trends tracking requires syncing with
+        the source dataset, which is not yet implemented. The data shown below (if any) is
+        a static backfill and does not reflect real changes over time.
+      </div>
       <div style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
         <label style={{ color: '#ccc' }}>View trends for:</label>
         <select
@@ -224,23 +238,27 @@ function TrendsChart() {
         </select>
       </div>
 
-      {trendsData.length === 0 ? (
+      {(!chartData || Object.values(chartData.series).every(pts => pts.length < 2)) ? (
         <div style={{ color: '#888', textAlign: 'center', padding: '60px 20px' }}>
-          <p style={{ fontSize: '18px' }}>📊 No trend data yet</p>
+          <p style={{ fontSize: '18px' }}>📊 Not enough data to chart</p>
           <p style={{ fontSize: '14px' }}>
-            Proficiency changes will be tracked automatically.
-            As team members update their skill levels, trends will appear here.
+            Trends require at least two data points per series to draw a line.
+            Currently there is only one snapshot (the initial backfill).
           </p>
-        </div>
-      ) : (
-        <>
-          {chartData && Object.values(chartData.series).every(pts => pts.length < 2) && (
-            <div style={{ color: '#888', textAlign: 'center', padding: '8px', fontSize: '13px' }}>
-              📌 Only one data point per series — lines will appear as more changes are tracked.
+          {chartData && (
+            <div style={{ marginTop: '24px', textAlign: 'left', maxWidth: '400px', margin: '24px auto 0' }}>
+              <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '8px' }}>Current snapshot:</p>
+              {Object.entries(chartData.series).map(([name, pts]) => (
+                <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #333', fontSize: '13px' }}>
+                  <span style={{ color: '#ccc' }}>{name}</span>
+                  <span style={{ color: '#8ab4f8' }}>L{pts[0]?.level || '?'}</span>
+                </div>
+              ))}
             </div>
           )}
-          <div ref={chartRef} style={{ width: '100%', minHeight: '400px' }} />
-        </>
+        </div>
+      ) : (
+        <div ref={chartRef} style={{ width: '100%', minHeight: '400px' }} />
       )}
     </div>
   );
