@@ -267,8 +267,6 @@ function TrendsChart() {
               })}
             </div>
           )}
-            </div>
-          )}
         </div>
       ) : (
         <div ref={chartRef} style={{ width: '100%', minHeight: '400px' }} />
