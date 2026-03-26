@@ -24,15 +24,61 @@ def mock_agent():
 @pytest.mark.asyncio
 async def test_health_check():
     """Test that health endpoint returns healthy status."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/health")
+    with patch("main.db.health_check", new_callable=AsyncMock) as mock_health:
+        mock_health.return_value = {"connected": True, "latency_ms": 1}
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/health")
     
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
     assert data["service"] == "agent"
     assert "timestamp" in data
+
+
+@pytest.mark.asyncio
+async def test_liveness_probe():
+    """Test that /health/live returns ok without DB dependency."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health/live")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "timestamp" in data
+
+
+@pytest.mark.asyncio
+async def test_readiness_probe_healthy():
+    """Test that /health/ready returns 200 when DB is connected."""
+    with patch("main.db.health_check", new_callable=AsyncMock) as mock_health:
+        mock_health.return_value = {"connected": True, "latency_ms": 2}
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/health/ready")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert data["database_connected"] is True
+    assert data["service"] == "agent"
+
+
+@pytest.mark.asyncio
+async def test_readiness_probe_unhealthy():
+    """Test that /health/ready returns 503 when DB is disconnected."""
+    with patch("main.db.health_check", new_callable=AsyncMock) as mock_health:
+        mock_health.return_value = {"connected": False, "latency_ms": 0}
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/health/ready")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "unavailable"
+    assert data["database_connected"] is False
 
 
 @pytest.mark.asyncio
