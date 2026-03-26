@@ -86,7 +86,8 @@ function GapAnalysis() {
         : 0;
       const maxLevel = loggedCount > 0 ? Math.max(...loggedProf) : 0;
       const atTarget = allProf.filter(p => p >= target).length;
-      const coveragePct = teamSize > 0 ? Math.round((atTarget / teamSize) * 100) : 0;
+      const coverageRaw = teamSize > 0 ? (atTarget / teamSize) * 100 : 0;
+      const coveragePct = Math.round(coverageRaw);
 
       // Determine "met" based on selected method
       let hasGap, metric, metricLabel;
@@ -104,7 +105,7 @@ function GapAnalysis() {
         case 'coverage':
           metric = coveragePct;
           metricLabel = `${coveragePct}%`;
-          hasGap = coveragePct < coverageThreshold;
+          hasGap = coverageRaw < coverageThreshold;
           break;
         case 'best':
           metric = maxLevel;
@@ -184,6 +185,7 @@ function GapAnalysis() {
       .data(gridVals)
       .enter()
       .append('line')
+      .attr('class', 'grid')
       .attr('x1', 0).attr('x2', width)
       .attr('y1', d => y(d)).attr('y2', d => y(d))
       .attr('stroke', '#333').attr('stroke-dasharray', '3,3');
