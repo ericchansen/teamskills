@@ -91,7 +91,6 @@ jobs:
     # Reason: Production infrastructure is brownfield (created incrementally, not by azd).
     # azd provision generates a resourceToken from AZURE_ENV_NAME that creates NEW resources
     # instead of updating existing ones. Direct CLI targets the exact existing resources.
-    # See .squad/decisions/inbox/mcmanus-cicd-direct-cli.md for full rationale.
     steps:
       - uses: actions/checkout@v4
 
