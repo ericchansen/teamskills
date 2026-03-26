@@ -241,19 +241,32 @@ function TrendsChart() {
       {(!chartData || Object.values(chartData.series).every(pts => pts.length < 2)) ? (
         <div style={{ color: '#888', textAlign: 'center', padding: '60px 20px' }}>
           <p style={{ fontSize: '18px' }}>📊 Not enough data to chart</p>
-          <p style={{ fontSize: '14px' }}>
-            Trends require at least two data points per series to draw a line.
-            Currently there is only one snapshot (the initial backfill).
-          </p>
+          {!chartData ? (
+            <p style={{ fontSize: '14px' }}>
+              No trend data has been recorded yet. Historical tracking requires periodic snapshots
+              of skill proficiency levels.
+            </p>
+          ) : (
+            <p style={{ fontSize: '14px' }}>
+              Trends require at least two data points per series to draw a line.
+              Currently there is only one snapshot (the initial backfill).
+            </p>
+          )}
           {chartData && (
             <div style={{ marginTop: '24px', textAlign: 'left', maxWidth: '400px', margin: '24px auto 0' }}>
               <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '8px' }}>Current snapshot:</p>
-              {Object.entries(chartData.series).map(([name, pts]) => (
-                <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #333', fontSize: '13px' }}>
-                  <span style={{ color: '#ccc' }}>{name}</span>
-                  <span style={{ color: '#8ab4f8' }}>L{pts[0]?.level || '?'}</span>
-                </div>
-              ))}
+              {Object.entries(chartData.series).map(([name, pts]) => {
+                const level = pts[0]?.level;
+                const levelLabel = level ? ({ 100: 'L100', 200: 'L200', 300: 'L300', 400: 'L400' }[level] || `~${level}`) : '?';
+                return (
+                  <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #333', fontSize: '13px' }}>
+                    <span style={{ color: '#ccc' }}>{name}</span>
+                    <span style={{ color: '#8ab4f8' }}>{levelLabel}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
             </div>
           )}
         </div>

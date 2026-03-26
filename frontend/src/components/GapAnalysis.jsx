@@ -93,12 +93,12 @@ function GapAnalysis() {
       switch (method) {
         case 'average':
           metric = avgLogged;
-          metricLabel = metric > 0 ? (LEVEL_LABELS[Math.round(metric / 100) * 100] || `~${metric}`) : '—';
+          metricLabel = metric > 0 ? (LEVEL_LABELS[metric] || `~${metric}`) : '—';
           hasGap = avgLogged < target;
           break;
         case 'averageAll':
           metric = avgAll;
-          metricLabel = metric > 0 ? (LEVEL_LABELS[Math.round(metric / 100) * 100] || `~${metric}`) : '—';
+          metricLabel = metric > 0 ? (LEVEL_LABELS[metric] || `~${metric}`) : '—';
           hasGap = avgAll < target;
           break;
         case 'coverage':
@@ -201,6 +201,7 @@ function GapAnalysis() {
         .data(filtered)
         .enter()
         .append('rect')
+        .attr('class', 'coverage-bar')
         .attr('x', d => x(d.name))
         .attr('y', d => y(d.coveragePct))
         .attr('width', x.bandwidth())
@@ -214,6 +215,7 @@ function GapAnalysis() {
         .data(filtered)
         .enter()
         .append('line')
+        .attr('class', 'target-marker')
         .attr('x1', d => x(d.name))
         .attr('x2', d => x(d.name) + x.bandwidth())
         .attr('y1', d => y(d.target))
@@ -226,6 +228,7 @@ function GapAnalysis() {
         .data(filtered)
         .enter()
         .append('rect')
+        .attr('class', 'actual-bar')
         .attr('x', d => x(d.name))
         .attr('y', d => y(d.metric))
         .attr('width', x.bandwidth())
@@ -288,7 +291,10 @@ function GapAnalysis() {
       {/* About This View */}
       <div style={{ marginBottom: '16px' }}>
         <button
+          type="button"
           onClick={() => setShowInfo(!showInfo)}
+          aria-expanded={showInfo}
+          aria-controls="gap-info-panel"
           style={{
             background: 'none', border: '1px solid #444', borderRadius: '6px',
             color: '#8ab4f8', cursor: 'pointer', padding: '6px 14px', fontSize: '13px',
@@ -297,7 +303,7 @@ function GapAnalysis() {
           {showInfo ? '▾' : '▸'} About this view
         </button>
         {showInfo && (
-          <div style={{
+          <div id="gap-info-panel" role="region" aria-label="About this view" style={{
             background: '#1a1a2e', border: '1px solid #333', borderRadius: '8px',
             padding: '16px', marginTop: '8px', color: '#bbb', fontSize: '13px', lineHeight: '1.7',
           }}>
@@ -326,7 +332,10 @@ function GapAnalysis() {
       {/* Methodology Settings */}
       <div style={{ marginBottom: '16px' }}>
         <button
+          type="button"
           onClick={() => setShowSettings(!showSettings)}
+          aria-expanded={showSettings}
+          aria-controls="gap-settings-panel"
           style={{
             background: 'none', border: '1px solid #444', borderRadius: '6px',
             color: '#e67e22', cursor: 'pointer', padding: '6px 14px', fontSize: '13px',
@@ -335,7 +344,7 @@ function GapAnalysis() {
           {showSettings ? '▾' : '▸'} ⚙ Methodology &amp; Settings
         </button>
         {showSettings && (
-          <div style={{
+          <div id="gap-settings-panel" role="region" aria-label="Methodology settings" style={{
             background: '#1e1e30', border: '1px solid #444', borderRadius: '8px',
             padding: '16px', marginTop: '8px',
           }}>
