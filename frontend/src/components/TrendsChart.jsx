@@ -256,7 +256,15 @@ function TrendsChart() {
             <div style={{ marginTop: '24px', textAlign: 'left', maxWidth: '400px', margin: '24px auto 0' }}>
               <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '8px' }}>Current snapshot:</p>
               {Object.entries(chartData.series).map(([name, pts]) => {
-                const level = pts[0]?.level;
+                const latestPoint = pts && pts.length
+                  ? pts.reduce((latest, point) => {
+                      if (!latest) return point;
+                      const ld = latest.date instanceof Date ? latest.date : new Date(latest.date);
+                      const pd = point.date instanceof Date ? point.date : new Date(point.date);
+                      return pd > ld ? point : latest;
+                    }, null)
+                  : null;
+                const level = latestPoint?.level;
                 const levelLabel = level ? ({ 100: 'L100', 200: 'L200', 300: 'L300', 400: 'L400' }[level] || `~${level}`) : '?';
                 return (
                   <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #333', fontSize: '13px' }}>
