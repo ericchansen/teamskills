@@ -105,6 +105,10 @@ describe('Auth Middleware', () => {
       db.query.mockResolvedValueOnce({ rows: [] });
 
       await expect(findOrCreateUser(claims)).rejects.toThrow('Cannot create user: no email or UPN claim in token');
+      await expect(findOrCreateUser(claims).catch(e => {
+        expect(e.isAuthError).toBe(true);
+        throw e;
+      })).rejects.toThrow();
     });
 
     it('should create new user if not found', async () => {

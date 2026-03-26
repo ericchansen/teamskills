@@ -149,7 +149,7 @@ resource backend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               type: 'startup'
               httpGet: {
-                path: '/health/ready'
+                path: '/health/live'
                 port: 3001
               }
               periodSeconds: 5

@@ -105,9 +105,11 @@ async function findOrCreateUser(claims) {
     }
   }
 
-  // Create new user (require email — fail gracefully if missing)
+  // Create new user (require email — reject as auth error if missing)
   if (!email) {
-    throw new Error('Cannot create user: no email or UPN claim in token');
+    const err = new Error('Cannot create user: no email or UPN claim in token');
+    err.isAuthError = true;
+    throw err;
   }
 
   result = await db.query(
@@ -164,6 +166,10 @@ async function requireAuth(req, res, next) {
     req.claims = claims;
     next();
   } catch (err) {
+    if (err.isAuthError) {
+      logger.warn({ err }, 'Auth claim missing');
+      return res.status(401).json({ error: 'Token is missing required claims (email or UPN)' });
+    }
     logger.error({ err }, 'User lookup error');
     return res.status(500).json({ error: 'Failed to load user profile' });
   }
