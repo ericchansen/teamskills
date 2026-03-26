@@ -114,8 +114,6 @@ This is a permanent organizational constraint — Eric (project lead) does not h
 
 **Consequence:** Staging CANNOT reuse the production app registration (`69c41897-2a3c-4956-b78d-56670cdb5750`). Instead, staging creates temporary app registrations in the team's own tenant (`9c74def4`), which we fully control.
 
-**See:** [`.squad/decisions.md`](../.squad/decisions.md#-constraint-zero-permissions-in-microsoft-corp-tenant-72f988bf--permanent) for full decision history and why this affects CI/CD automation.
-
 ---
 
 ## Troubleshooting

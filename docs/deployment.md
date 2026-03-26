@@ -216,8 +216,6 @@ This also causes permission errors on role assignments and ACR pull chicken-and-
 
 **Solution:** Use Azure CLI directly, targeting exact existing resource names.
 
-**Decision:** See `.squad/decisions/inbox/mcmanus-cicd-direct-cli.md`
-
 ### Deployment Steps
 
 #### Step 1: Azure Login
