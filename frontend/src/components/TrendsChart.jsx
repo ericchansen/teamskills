@@ -204,6 +204,20 @@ function TrendsChart() {
 
   return (
     <div className="trends-chart" style={{ padding: '20px' }}>
+      <div style={{
+        background: 'rgba(255, 193, 7, 0.12)',
+        border: '1px solid rgba(255, 193, 7, 0.4)',
+        borderRadius: '8px',
+        padding: '12px 16px',
+        marginBottom: '16px',
+        color: '#e0c060',
+        fontSize: '14px',
+        lineHeight: '1.5',
+      }}>
+        <strong>⚠️ Not Currently Active</strong> — Trends tracking requires syncing with
+        the source dataset, which is not yet implemented. The data shown below (if any) is
+        a static backfill and does not reflect real changes over time.
+      </div>
       <div style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
         <label style={{ color: '#ccc' }}>View trends for:</label>
         <select
