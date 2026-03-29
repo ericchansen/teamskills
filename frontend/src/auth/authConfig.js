@@ -37,7 +37,7 @@ export function buildMsalConfig(cfg) {
       navigateToLoginRequestUrl: true,
     },
     cache: {
-      cacheLocation: 'localStorage',
+      cacheLocation: 'sessionStorage',
       storeAuthStateInCookie: false,
     },
   };
