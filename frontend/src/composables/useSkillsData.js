@@ -21,6 +21,7 @@ const state = reactive({
   categoryNames: [],
   skillToCategory: {},
   skillIndex: {},
+  skillNameToId: {},
   isLoading: true,
   error: null,
   isLive: false,
@@ -100,7 +101,13 @@ function transformApiData(apiData) {
     };
   });
 
-  return { people, allSkills, skillCategories, categoryNames, skillToCategory, skillIndex };
+  // Build skill name → backend ID map for save operations
+  const skillNameToId = {};
+  for (const skill of skills) {
+    skillNameToId[skill.name] = skill.id;
+  }
+
+  return { people, allSkills, skillCategories, categoryNames, skillToCategory, skillIndex, skillNameToId };
 }
 
 // ── Public composable ────────────────────────────────

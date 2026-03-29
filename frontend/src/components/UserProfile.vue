@@ -83,7 +83,7 @@ import { useSkillsData } from '../composables/useSkillsData';
 import { useApi } from '../composables/useApi';
 
 const { user, isAuthenticated } = useAuth();
-const { people, allSkills, skillCategories, categoryNames, skillIndex, isLive, levels, load } =
+const { people, allSkills, skillCategories, categoryNames, skillIndex, skillNameToId, isLive, levels, load } =
   useSkillsData();
 const api = useApi();
 
@@ -197,14 +197,24 @@ async function setLevel(skillName, level) {
 
   saveTimeout = setTimeout(async () => {
     try {
-      // We need the skill_id — look it up from allSkills order
-      // The API expects { user_id, skill_id, proficiency_level, notes }
-      // We need a skill ID map. For now, use index + 1 as a heuristic,
-      // but ideally the matrix API should include skill IDs.
+      // Look up the real backend skill ID from the name → ID map
+      const skillId = skillNameToId.value[skillName];
+      if (!skillId) {
+        console.warn('No backend skill ID for', skillName);
+        saveStatus.value = '';
+        return;
+      }
+
+      // If toggled off (level 0), skip the save — no DELETE endpoint available
+      if (newLevel === 0) {
+        saveStatus.value = '';
+        return;
+      }
+
       await api.put('/api/user-skills', {
         user_id: user.value.id,
-        skill_id: idx + 1, // This assumes skill IDs are 1-indexed and match allSkills order
-        proficiency_level: newLevel > 0 ? `L${newLevel}` : 'L100',
+        skill_id: skillId,
+        proficiency_level: `L${newLevel}`,
         notes: '',
       });
       saveStatus.value = 'saved';

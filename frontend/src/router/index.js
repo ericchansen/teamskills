@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { useAuth } from '../composables/useAuth';
 import SkillsMatrix from '../components/SkillsMatrix.vue';
 import SkillsGraph from '../components/SkillsGraph.vue';
 import GapAnalysis from '../components/GapAnalysis.vue';
@@ -14,6 +15,15 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+router.beforeEach((to) => {
+  if (to.meta.requiresAuth) {
+    const { isAuthenticated } = useAuth();
+    if (!isAuthenticated.value) {
+      return { name: 'matrix' };
+    }
+  }
 });
 
 export default router;
