@@ -1,42 +1,29 @@
 <template>
   <div class="app-shell">
-    <header class="app-header">
-      <h1 class="app-title">
-        <span class="title-icon">◈</span> Team Skills Dashboard
-      </h1>
-      <nav class="tab-bar">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          :class="['tab-btn', { active: activeTab === tab.id }]"
-          @click="activeTab = tab.id"
-        >
-          {{ tab.label }}
-        </button>
-      </nav>
-    </header>
-
+    <AppHeader />
     <main class="app-content">
-      <SkillsMatrix v-if="activeTab === 'matrix'" />
-      <SkillsGraph v-if="activeTab === 'graph'" />
-      <GapAnalysis v-if="activeTab === 'gap'" />
+      <div v-if="isLoading" class="loading-screen">
+        <span class="loading-spinner">◌</span>
+        <span>Loading skills data…</span>
+      </div>
+      <router-view v-else />
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import SkillsMatrix from './components/SkillsMatrix.vue';
-import SkillsGraph from './components/SkillsGraph.vue';
-import GapAnalysis from './components/GapAnalysis.vue';
+import { onMounted } from 'vue';
+import AppHeader from './components/AppHeader.vue';
+import { useAuth } from './composables/useAuth';
+import { useSkillsData } from './composables/useSkillsData';
 
-const tabs = [
-  { id: 'matrix', label: 'Skills Matrix' },
-  { id: 'graph', label: 'Skills Graph' },
-  { id: 'gap', label: 'Gap Analysis' },
-];
+const { initialize: initAuth } = useAuth();
+const { isLoading, load: loadData } = useSkillsData();
 
-const activeTab = ref('matrix');
+onMounted(async () => {
+  await initAuth();
+  await loadData();
+});
 </script>
 
 <style scoped>
@@ -46,58 +33,30 @@ const activeTab = ref('matrix');
   min-height: 100vh;
 }
 
-.app-header {
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  padding: 16px 32px 0;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.app-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.title-icon {
-  color: var(--accent);
-  font-size: 1.4rem;
-}
-
-.tab-bar {
-  display: flex;
-  gap: 4px;
-}
-
-.tab-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  font-weight: 500;
-  padding: 10px 20px;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.tab-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
-.tab-btn.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-
 .app-content {
   flex: 1;
   padding: 24px 32px;
   overflow: auto;
+}
+
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  height: 60vh;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.loading-spinner {
+  font-size: 1.5rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

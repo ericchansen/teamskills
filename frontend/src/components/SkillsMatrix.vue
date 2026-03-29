@@ -24,14 +24,9 @@
 
 <script setup>
 import { ref, computed } from 'vue';
-import {
-  people,
-  skillCategories,
-  categoryNames,
-  allSkills,
-  levels,
-  getSkillLevel,
-} from '../data.js';
+import { useSkillsData } from '../composables/useSkillsData';
+
+const { people, skillCategories, categoryNames, allSkills, levels, getSkillLevel } = useSkillsData();
 
 const collapsedCategories = ref(new Set());
 
@@ -47,23 +42,24 @@ function toggleCategory(cat) {
 
 const visibleSkills = computed(() => {
   const result = [];
-  for (const cat of categoryNames) {
+  for (const cat of categoryNames.value) {
     if (!collapsedCategories.value.has(cat)) {
-      result.push(...skillCategories[cat]);
+      result.push(...(skillCategories.value[cat] || []));
     }
   }
   return result;
 });
 
-const personNames = people.map((p) => p.name);
+const personNames = computed(() => people.value.map((p) => p.name));
 
 const chartOption = computed(() => {
   const skills = visibleSkills.value;
+  const names = personNames.value;
 
   const data = [];
-  for (let yi = 0; yi < personNames.length; yi++) {
+  for (let yi = 0; yi < names.length; yi++) {
     for (let xi = 0; xi < skills.length; xi++) {
-      const val = getSkillLevel(people[yi], skills[xi]);
+      const val = getSkillLevel(people.value[yi], skills[xi]);
       data.push([xi, yi, val]);
     }
   }
@@ -73,7 +69,7 @@ const chartOption = computed(() => {
     tooltip: {
       formatter(params) {
         const [xi, yi, val] = params.data;
-        const person = personNames[yi];
+        const person = names[yi];
         const skill = skills[xi];
         const label = levels[val] || 'None';
         return `<b>${person}</b><br/>${skill}<br/>Level: <b>${val} – ${label}</b>`;
@@ -100,7 +96,7 @@ const chartOption = computed(() => {
     },
     yAxis: {
       type: 'category',
-      data: personNames,
+      data: names,
       axisLabel: {
         fontSize: 12,
         color: '#e4e6ed',

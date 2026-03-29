@@ -26,20 +26,16 @@
 
 <script setup>
 import { ref, computed } from 'vue';
-import {
-  people,
-  allSkills,
-  levels,
-  getSkillLevel,
-  skillToCategory,
-} from '../data.js';
+import { useSkillsData } from '../composables/useSkillsData';
+
+const { people, allSkills, levels, getSkillLevel, skillToCategory } = useSkillsData();
 
 const threshold = ref(400);
 
 const edgeCount = computed(() => {
   let count = 0;
-  for (const person of people) {
-    for (const skill of allSkills) {
+  for (const person of people.value) {
+    for (const skill of allSkills.value) {
       if (getSkillLevel(person, skill) >= threshold.value) count++;
     }
   }
@@ -51,7 +47,7 @@ const chartOption = computed(() => {
   const links = [];
 
   // People nodes
-  for (const person of people) {
+  for (const person of people.value) {
     nodes.push({
       id: `p:${person.name}`,
       name: person.name,
@@ -64,8 +60,8 @@ const chartOption = computed(() => {
 
   // Collect which skills are actually connected
   const usedSkills = new Set();
-  for (const person of people) {
-    for (const skill of allSkills) {
+  for (const person of people.value) {
+    for (const skill of allSkills.value) {
       const lvl = getSkillLevel(person, skill);
       if (lvl >= threshold.value) {
         usedSkills.add(skill);
