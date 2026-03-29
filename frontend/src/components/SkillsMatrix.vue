@@ -25,6 +25,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
+import { escapeHtml } from '../utils/escapeHtml';
 
 const { people, skillCategories, categoryNames, allSkills, levels, getSkillLevel } = useSkillsData();
 
@@ -69,8 +70,8 @@ const chartOption = computed(() => {
     tooltip: {
       formatter(params) {
         const [xi, yi, val] = params.data;
-        const person = names[yi];
-        const skill = skills[xi];
+        const person = escapeHtml(names[yi]);
+        const skill = escapeHtml(skills[xi]);
         const label = levels[val] || 'None';
         return `<b>${person}</b><br/>${skill}<br/>Level: <b>${val} – ${label}</b>`;
       },
@@ -106,7 +107,7 @@ const chartOption = computed(() => {
       axisTick: { show: false },
     },
     visualMap: {
-      min: 100,
+      min: 0,
       max: 400,
       calculable: true,
       orient: 'vertical',
@@ -115,9 +116,9 @@ const chartOption = computed(() => {
       itemHeight: 160,
       itemWidth: 16,
       inRange: {
-        color: ['#2a2e3e', '#1e3a5f', '#2563a8', '#4f8ff7'],
+        color: ['#1a1a2e', '#2a2e3e', '#1e3a5f', '#2563a8', '#4f8ff7'],
       },
-      text: ['400 · Expert', '100 · Awareness'],
+      text: ['400 · Expert', '0 · None'],
       textStyle: { color: '#e4e6ed', fontSize: 11 },
       textGap: 12,
     },
