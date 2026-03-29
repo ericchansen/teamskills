@@ -2,8 +2,8 @@
   <div class="gap-view">
     <div class="controls">
       <div class="control-group">
-        <label class="control-label">Mode:</label>
-        <select v-model="mode" class="mode-select">
+        <label for="mode-select" class="control-label">Mode:</label>
+        <select id="mode-select" v-model="mode" class="mode-select">
           <option value="expert">Expert Count (L400)</option>
           <option value="average">Average Level</option>
           <option value="coverage">Coverage (≥L200)</option>
@@ -11,8 +11,8 @@
       </div>
 
       <div class="control-group">
-        <label class="control-label">Category:</label>
-        <select v-model="selectedCategory" class="mode-select">
+        <label for="category-select" class="control-label">Category:</label>
+        <select id="category-select" v-model="selectedCategory" class="mode-select">
           <option value="__all__">All Categories</option>
           <option v-for="cat in categoryNames" :key="cat" :value="cat">
             {{ cat }}
@@ -147,10 +147,14 @@ const chartOption = computed(() => {
     series: [
       {
         type: 'bar',
-        data: [...values].reverse().map((v, i) => ({
-          value: v,
-          itemStyle: { color: [...colors].reverse()[i], borderRadius: [0, 4, 4, 0] },
-        })),
+        data: (() => {
+          const revValues = [...values].reverse();
+          const revColors = [...colors].reverse();
+          return revValues.map((v, i) => ({
+            value: v,
+            itemStyle: { color: revColors[i], borderRadius: [0, 4, 4, 0] },
+          }));
+        })(),
         barMaxWidth: 18,
         label: {
           show: true,

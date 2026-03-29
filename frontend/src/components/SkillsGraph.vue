@@ -1,8 +1,9 @@
 <template>
   <div class="graph-view">
     <div class="controls">
-      <label class="control-label">Min Level Threshold:</label>
+      <label for="threshold-slider" class="control-label">Min Level Threshold:</label>
       <input
+        id="threshold-slider"
         type="range"
         min="100"
         max="400"
@@ -27,6 +28,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
+import { escapeHtml } from '../utils/escapeHtml';
 
 const { people, allSkills, levels, getSkillLevel, skillToCategory } = useSkillsData();
 
@@ -97,13 +99,14 @@ const chartOption = computed(() => {
       formatter(params) {
         if (params.dataType === 'node') {
           const prefix = params.data.id.startsWith('p:') ? '👤 ' : '🛠 ';
+          const name = escapeHtml(params.data.name);
           const cat = params.data.id.startsWith('s:')
-            ? `<br/>Category: ${skillToCategory[params.data.name] || '—'}`
+            ? `<br/>Category: ${escapeHtml(skillToCategory.value[params.data.name] || '—')}`
             : '';
-          return `${prefix}<b>${params.data.name}</b>${cat}`;
+          return `${prefix}<b>${name}</b>${cat}`;
         }
         if (params.dataType === 'edge') {
-          return `${params.data.source.replace('p:', '')} → ${params.data.target.replace('s:', '')}<br/>Level: ${params.data.value} – ${levels[params.data.value]}`;
+          return `${escapeHtml(params.data.source.replace('p:', ''))} → ${escapeHtml(params.data.target.replace('s:', ''))}<br/>Level: ${params.data.value} – ${levels[params.data.value]}`;
         }
         return '';
       },
