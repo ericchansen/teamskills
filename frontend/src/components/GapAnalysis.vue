@@ -49,12 +49,9 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
-import {
-  people,
-  skillCategories,
-  categoryNames,
-  getSkillLevel,
-} from '../data.js';
+import { useSkillsData } from '../composables/useSkillsData';
+
+const { people, skillCategories, categoryNames, getSkillLevel } = useSkillsData();
 
 const modeDefaults = {
   expert:   { good: 2,   warn: 1,   step: 1  },
@@ -77,22 +74,22 @@ const modeStep = computed(() => modeDefaults[mode.value].step);
 
 const filteredSkills = computed(() => {
   if (selectedCategory.value === '__all__') {
-    return Object.values(skillCategories).flat();
+    return Object.values(skillCategories.value).flat();
   }
-  return skillCategories[selectedCategory.value] || [];
+  return skillCategories.value[selectedCategory.value] || [];
 });
 
 function calcMetric(skill) {
   if (mode.value === 'average') {
-    const total = people.reduce((sum, p) => sum + getSkillLevel(p, skill), 0);
-    return Math.round(total / people.length);
+    const total = people.value.reduce((sum, p) => sum + getSkillLevel(p, skill), 0);
+    return Math.round(total / people.value.length);
   }
   if (mode.value === 'expert') {
-    return people.filter((p) => getSkillLevel(p, skill) >= 400).length;
+    return people.value.filter((p) => getSkillLevel(p, skill) >= 400).length;
   }
   // coverage: percentage with ≥ L200
-  const count = people.filter((p) => getSkillLevel(p, skill) >= 200).length;
-  return Math.round((count / people.length) * 100);
+  const count = people.value.filter((p) => getSkillLevel(p, skill) >= 200).length;
+  return Math.round((count / people.value.length) * 100);
 }
 
 function barColor(val) {

@@ -11,6 +11,7 @@ import {
   DataZoomComponent,
 } from 'echarts/components';
 import App from './App.vue';
+import router from './router';
 import './style.css';
 
 use([
@@ -27,4 +28,5 @@ use([
 
 const app = createApp(App);
 app.component('v-chart', VChart);
+app.use(router);
 app.mount('#app');

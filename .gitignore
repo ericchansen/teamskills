@@ -19,3 +19,5 @@ cloud-solutions-engineer-skills.csv
 
 # PII data files (never commit)
 .data/
+
+__pycache__/
