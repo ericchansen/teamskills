@@ -32,6 +32,10 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID for authentication (optional)')
 param azureAdTenantId string = ''
 
+@description('Microsoft Entra ID Client Secret for Easy Auth (optional)')
+@secure()
+param azureAdClientSecret string = ''
+
 @description('Email address for alert notifications (optional)')
 param alertEmailAddress string = ''
 
@@ -144,6 +148,7 @@ module frontend './app/frontend.bicep' = {
     backendUrl: backend.outputs.uri
     azureAdClientId: azureAdClientId
     azureAdTenantId: azureAdTenantId
+    azureAdClientSecret: azureAdClientSecret
     wakeFunctionUrl: wakeFunction.outputs.uri
   }
 }

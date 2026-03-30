@@ -22,6 +22,10 @@ param azureAdClientId string = ''
 @description('Microsoft Entra ID Tenant ID for Easy Auth (optional)')
 param azureAdTenantId string = ''
 
+@description('Microsoft Entra ID Client Secret for Easy Auth (optional)')
+@secure()
+param azureAdClientSecret string = ''
+
 @description('Wake Function URL for database auto-start')
 param wakeFunctionUrl string = ''
 
@@ -55,6 +59,12 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           identity: 'system'
         }
       ]
+      secrets: !empty(azureAdClientSecret) ? [
+        {
+          name: 'azure-ad-client-secret'
+          value: azureAdClientSecret
+        }
+      ] : []
     }
     template: {
       containers: [
@@ -123,22 +133,41 @@ output uri string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output name string = frontend.name
 output principalId string = frontend.identity.principalId
 
-// NOTE: Easy Auth explicitly disabled on frontend — MSAL.js handles authentication directly in the browser.
-// This is the standard pattern for SPAs: MSAL acquires tokens client-side, sends to backend via Bearer header.
-// We must keep this resource to ensure Easy Auth stays disabled (removing it doesn't delete the config).
-// Always deployed unconditionally — if env vars are empty and this resource
-// isn't deployed, any pre-existing Easy Auth config would persist.
+// NOTE: Easy Auth on the frontend gates access to the SPA by tenant.
+// The app registration lives in the Microsoft Corp tenant, which we don't control.
+// Easy Auth ensures only users from that tenant can load the app at all.
+// Once past Easy Auth, MSAL.js acquires API tokens and the backend validates them.
+// When auth is not configured (no client ID), Easy Auth is disabled for demo/dev mode.
+// Always deployed unconditionally — removing this resource doesn't delete existing config.
 resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = {
   parent: frontend
   name: 'current'
   properties: {
     platform: {
-      enabled: false
+      enabled: !empty(azureAdClientId)
     }
     globalValidation: {
-      unauthenticatedClientAction: 'AllowAnonymous'
+      unauthenticatedClientAction: !empty(azureAdClientId) ? 'RedirectToLoginPage' : 'AllowAnonymous'
+      redirectToProvider: !empty(azureAdClientId) ? 'azureactivedirectory' : null
+      excludedPaths: !empty(azureAdClientId) ? [
+        '/config.js'
+      ] : []
     }
+    identityProviders: !empty(azureAdClientId) ? {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: azureAdClientId
+          clientSecretSettingName: 'azure-ad-client-secret'
+          openIdIssuer: 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${azureAdClientId}'
+            azureAdClientId
+          ]
+        }
+      }
+    } : {}
   }
 }
-
-
