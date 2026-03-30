@@ -144,6 +144,11 @@ jobs:
             --build-arg VITE_WAKE_FUNCTION_URL=$WAKE_URL \
             .
 
+      - name: Setup Node.js for wake function
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Provision wake function infrastructure
         run: |
           RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
@@ -165,7 +170,8 @@ jobs:
 
       - name: Deploy wake function code
         run: |
-          cd wake-function && npm ci --production && zip -r ../wake-function.zip . && cd ..
+          cd wake-function && npm ci --production && rm -f local.settings.json && cd ..
+          (cd wake-function && zip -r ../wake-function.zip .)
           az functionapp deployment source config-zip \
             --name "${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}" \
             --resource-group "${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}" \
