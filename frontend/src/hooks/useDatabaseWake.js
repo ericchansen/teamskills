@@ -1,7 +1,8 @@
 // Hook to wake PostgreSQL server if it's stopped
 import { useState, useEffect, useCallback } from 'react';
+import { getConfig } from '../config';
 
-const WAKE_FUNCTION_URL = import.meta.env.VITE_WAKE_FUNCTION_URL || '';
+const WAKE_FUNCTION_URL = getConfig('VITE_WAKE_FUNCTION_URL');
 
 export const useDatabaseWake = () => {
   const [dbStatus, setDbStatus] = useState('checking'); // checking, waking, ready, error
