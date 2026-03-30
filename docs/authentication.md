@@ -2,6 +2,39 @@
 
 This guide explains how to configure Microsoft Entra ID (Azure AD) authentication for the Team Skills Tracker.
 
+## Authentication Architecture
+
+The app uses a **two-layer authentication model**:
+
+### Layer 1: Easy Auth (Container Apps Ingress Gate)
+
+Easy Auth is configured on the **frontend** Container App to restrict access at the ingress level. When `azureAdClientId` is provided in the Bicep parameters, Easy Auth:
+
+- **Enables platform authentication** on the frontend Container App
+- **Redirects unauthenticated users** to the Microsoft login page
+- **Restricts access by tenant** — only users from the configured tenant can load the SPA
+- **Excludes `/config.js`** from authentication so runtime config is always accessible before MSAL initializes
+
+The app registration lives in the Microsoft Corp tenant (`72f988bf-86f1-41af-91ab-2d7cd011db47`), which the team uses but doesn't control. Easy Auth ensures only users from that tenant can access the app.
+
+### Layer 2: MSAL.js + Express Middleware (API Token Validation)
+
+Once past Easy Auth, **MSAL.js** handles API authentication:
+
+1. MSAL.js acquires an access token client-side (via popup or redirect)
+2. The frontend includes the token in API requests as a `Bearer` header
+3. The backend Express middleware validates the token via JWKS with tenant enforcement
+4. The backend finds or creates the user based on the token claims (`oid`, `email`, `name`)
+
+### Auth Mode Decision
+
+| Condition | Easy Auth | MSAL.js | Result |
+|-----------|-----------|---------|--------|
+| `azureAdClientId` is set | Enabled (RedirectToLoginPage) | Active | Full tenant-gated authentication |
+| `azureAdClientId` is empty | Disabled (AllowAnonymous) | Inactive | Demo mode with user picker dropdown |
+
+This is defined in [`infra/app/frontend.bicep`](../infra/app/frontend.bicep) — the `frontendAuth` resource conditionally enables Easy Auth based on whether `azureAdClientId` is provided.
+
 ## Overview
 
 When configured, users can sign in with their Microsoft work or personal accounts. User profiles are automatically created or linked on first login.
@@ -58,14 +91,27 @@ After registration, note these values from the **Overview** page:
    - **User consent description**: `Allow the app to access Team Skills on your behalf`
 4. Click **Add scope**
 
-## Step 5: Add Redirect URIs for Production
+## Step 5: Create a Client Secret (for Easy Auth)
+
+Easy Auth requires a client secret to validate tokens at the ingress:
+
+1. Go to **Certificates & secrets**
+2. Click **New client secret**
+3. Add a description (e.g., `Easy Auth - Team Skills Frontend`)
+4. Choose an expiry (recommended: 12 months)
+5. Click **Add** and copy the secret value immediately
+6. Pass this as the `azureAdClientSecret` parameter in your Bicep deployment
+
+> **Note:** Store the client secret securely. For CI/CD, add it as a GitHub Actions secret.
+
+## Step 6: Add Redirect URIs for Production
 
 1. Go to **Authentication**
 2. Under **Single-page application**, add your production URLs:
    - `https://your-frontend-url.azurecontainerapps.io`
 3. Click **Save**
 
-## Step 6: Configure Environment Variables
+## Step 7: Configure Environment Variables
 
 ### Backend (.env)
 
@@ -87,16 +133,20 @@ Add these as repository variables:
 - `AZURE_AD_CLIENT_ID`: Your application client ID
 - `AZURE_AD_TENANT_ID`: Your tenant ID (or use existing `AZURE_TENANT_ID`)
 
+Add this as a repository secret:
+- `AZURE_AD_CLIENT_SECRET`: Your client secret (for Easy Auth)
+
 ## How It Works
 
 ### User Flow
 
-1. User clicks "Sign in" button
-2. MSAL.js opens Microsoft login popup
+1. User visits the frontend URL
+2. Easy Auth intercepts the request and redirects to Microsoft login (if enabled)
 3. User authenticates with Microsoft
-4. Frontend receives ID token and access token
-5. Frontend includes access token in API requests
-6. Backend validates token and finds/creates user
+4. Easy Auth validates the token and allows access to the SPA
+5. MSAL.js acquires an access token for the backend API
+6. Frontend includes access token in API requests
+7. Backend validates token and finds/creates user
 
 ### User Matching
 
@@ -145,9 +195,13 @@ Verify the token issuer matches your tenant. The backend expects tokens from:
 - `https://login.microsoftonline.com/{tenant-id}/v2.0`
 - `https://sts.windows.net/{tenant-id}/`
 
+### Easy Auth returns 401 but MSAL works locally
+
+This is expected when Easy Auth is enabled — it gates access at the ingress before MSAL ever runs. Ensure the user is in the configured tenant.
+
 ## Demo Mode (No Authentication)
 
-If `VITE_AZURE_AD_CLIENT_ID` is not set, the app falls back to demo mode with a simple user picker dropdown. This is useful for local development without setting up Entra ID.
+If `VITE_AZURE_AD_CLIENT_ID` is not set, the app falls back to demo mode with a simple user picker dropdown. This is useful for local development without setting up Entra ID. Easy Auth is also disabled in this mode (see [Authentication Architecture](#authentication-architecture)).
 
 ## Database Migration
 
