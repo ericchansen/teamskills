@@ -172,7 +172,7 @@ function getMyLevel(skillName) {
   return mySkills.get(skillName) || 0;
 }
 
-let saveTimeout = null;
+const saveTimeouts = new Map();
 
 async function setLevel(skillName, level) {
   if (!canEdit.value || !user.value) return;
@@ -191,11 +191,14 @@ async function setLevel(skillName, level) {
     myPerson.value.skills[idx] = newLevel;
   }
 
-  // Debounced save to API
-  clearTimeout(saveTimeout);
+  // Per-skill debounced save to API
+  if (saveTimeouts.has(skillName)) {
+    clearTimeout(saveTimeouts.get(skillName));
+  }
   saveStatus.value = 'saving';
 
-  saveTimeout = setTimeout(async () => {
+  const timeout = setTimeout(async () => {
+    saveTimeouts.delete(skillName);
     try {
       // Look up the real backend skill ID from the name → ID map
       const skillId = skillNameToId.value[skillName];
@@ -205,18 +208,20 @@ async function setLevel(skillName, level) {
         return;
       }
 
-      // If toggled off (level 0), skip the save — no DELETE endpoint available
       if (newLevel === 0) {
-        saveStatus.value = '';
-        return;
+        // Delete the skill rating via backend DELETE endpoint
+        await api.del('/api/user-skills', {
+          user_id: user.value.id,
+          skill_id: skillId,
+        });
+      } else {
+        await api.put('/api/user-skills', {
+          user_id: user.value.id,
+          skill_id: skillId,
+          proficiency_level: `L${newLevel}`,
+          notes: '',
+        });
       }
-
-      await api.put('/api/user-skills', {
-        user_id: user.value.id,
-        skill_id: skillId,
-        proficiency_level: `L${newLevel}`,
-        notes: '',
-      });
       saveStatus.value = 'saved';
       setTimeout(() => {
         saveStatus.value = '';

@@ -17,9 +17,13 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   if (to.meta.requiresAuth) {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, isLoading, initialize } = useAuth();
+    // Ensure auth has finished initializing before checking
+    if (isLoading.value) {
+      await initialize();
+    }
     if (!isAuthenticated.value) {
       return { name: 'matrix' };
     }
