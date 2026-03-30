@@ -29,6 +29,10 @@ param azureAdClientSecret string = ''
 @description('Wake Function URL for database auto-start')
 param wakeFunctionUrl string = ''
 
+// Easy Auth requires all three params: clientId, tenantId, and clientSecret.
+// Gate on all of them to prevent partial/broken auth configurations.
+var easyAuthEnabled = !empty(azureAdClientId) && !empty(azureAdTenantId) && !empty(azureAdClientSecret)
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
   name: containerAppsEnvironmentName
 }
@@ -59,7 +63,7 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
           identity: 'system'
         }
       ]
-      secrets: !empty(azureAdClientSecret) ? [
+      secrets: easyAuthEnabled ? [
         {
           name: 'azure-ad-client-secret'
           value: azureAdClientSecret
@@ -144,16 +148,16 @@ resource frontendAuth 'Microsoft.App/containerApps/authConfigs@2023-05-01' = {
   name: 'current'
   properties: {
     platform: {
-      enabled: !empty(azureAdClientId)
+      enabled: easyAuthEnabled
     }
     globalValidation: {
-      unauthenticatedClientAction: !empty(azureAdClientId) ? 'RedirectToLoginPage' : 'AllowAnonymous'
-      redirectToProvider: !empty(azureAdClientId) ? 'azureactivedirectory' : null
-      excludedPaths: !empty(azureAdClientId) ? [
+      unauthenticatedClientAction: easyAuthEnabled ? 'RedirectToLoginPage' : 'AllowAnonymous'
+      redirectToProvider: easyAuthEnabled ? 'azureactivedirectory' : null
+      excludedPaths: easyAuthEnabled ? [
         '/config.js'
       ] : []
     }
-    identityProviders: !empty(azureAdClientId) ? {
+    identityProviders: easyAuthEnabled ? {
       azureActiveDirectory: {
         enabled: true
         registration: {
