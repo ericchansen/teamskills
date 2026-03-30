@@ -44,5 +44,12 @@ export function useApi() {
     });
   }
 
-  return { get, put, post, request };
+  function del(url, body) {
+    return request(url, {
+      method: 'DELETE',
+      body: JSON.stringify(body),
+    });
+  }
+
+  return { get, put, post, del, request };
 }

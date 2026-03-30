@@ -129,19 +129,28 @@ export function useSkillsData() {
       Object.assign(state, transformed);
       state.isLive = true;
     } catch (err) {
-      console.warn('API unavailable, using mock data:', err.message);
-      try {
-        const mock = await import('../data.js');
-        state.people = mock.people;
-        state.allSkills = mock.allSkills;
-        state.skillCategories = mock.skillCategories;
-        state.categoryNames = mock.categoryNames;
-        state.skillToCategory = mock.skillToCategory;
-        state.skillIndex = mock.skillIndex;
+      // Only fall back to mock data for network errors (offline/dev).
+      // Auth (401/403) and server (5xx) errors should surface to the user.
+      const isNetworkError = !err.message?.includes('(4') && !err.message?.includes('(5');
+      if (isNetworkError) {
+        console.warn('API unavailable (network), using mock data:', err.message);
+        try {
+          const mock = await import('../data.js');
+          state.people = mock.people;
+          state.allSkills = mock.allSkills;
+          state.skillCategories = mock.skillCategories;
+          state.categoryNames = mock.categoryNames;
+          state.skillToCategory = mock.skillToCategory;
+          state.skillIndex = mock.skillIndex;
+          state.isLive = false;
+        } catch (mockErr) {
+          state.error = 'Failed to load skills data';
+          console.error('Mock data also failed:', mockErr);
+        }
+      } else {
+        console.error('API error:', err.message);
+        state.error = err.message;
         state.isLive = false;
-      } catch (mockErr) {
-        state.error = 'Failed to load skills data';
-        console.error('Mock data also failed:', mockErr);
       }
     } finally {
       state.isLoading = false;
