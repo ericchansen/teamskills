@@ -129,6 +129,9 @@ jobs:
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
             --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
+          WAKE_FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
+          WAKE_URL="https://${WAKE_FUNC_NAME}.azurewebsites.net"
+
           az acr build \
             --registry ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }} \
             --image frontend:${{ github.sha }} \
@@ -138,7 +141,35 @@ jobs:
             --build-arg VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
             --build-arg VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
             --build-arg VITE_AGENT_URL=$AGENT_URL \
+            --build-arg VITE_WAKE_FUNCTION_URL=$WAKE_URL \
             .
+
+      - name: Provision wake function infrastructure
+        run: |
+          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
+          FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
+          if az functionapp show --name "$FUNC_NAME" --resource-group "$RG" &>/dev/null; then
+            echo "✅ Wake function app already exists, skipping provisioning"
+          else
+            PG_NAME="${{ vars.PG_SERVER_NAME || 'psql-gvojq4dgzbtk4' }}"
+            PG_ID=$(az postgres flexible-server show --name "$PG_NAME" --resource-group "$RG" --query id -o tsv)
+            az deployment group create \
+              --resource-group "$RG" \
+              --template-file infra/app/wake-function.bicep \
+              --parameters \
+                name="$FUNC_NAME" \
+                postgresServerResourceId="$PG_ID" \
+                postgresServerName="$PG_NAME" \
+                resourceToken="${{ vars.RESOURCE_TOKEN || 'gvojq4dgzbtk4' }}"
+          fi
+
+      - name: Deploy wake function code
+        run: |
+          cd wake-function && npm ci --production && zip -r ../wake-function.zip . && cd ..
+          az functionapp deployment source config-zip \
+            --name "${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}" \
+            --resource-group "${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}" \
+            --src wake-function.zip
 
       - name: Deploy backend
         run: |
@@ -173,12 +204,16 @@ jobs:
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
             --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
+          WAKE_FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
+          WAKE_URL="https://${WAKE_FUNC_NAME}.azurewebsites.net"
+
           az containerapp update \
             --name ${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }} \
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
             --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/frontend:${{ github.sha }} \
             --set-env-vars \
-              VITE_AGENT_URL=$AGENT_URL
+              VITE_AGENT_URL=$AGENT_URL \
+              VITE_WAKE_FUNCTION_URL=$WAKE_URL
 
       - name: Wait for new revisions to provision
         run: |
@@ -305,3 +340,6 @@ jobs:
           echo "| \`BACKEND_APP\` | \`ca-backend-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`FRONTEND_APP\` | \`ca-frontend-teamskills\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`AGENT_APP\` | \`ca-agent-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`WAKE_FUNCTION_APP\` | \`func-wake-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`PG_SERVER_NAME\` | \`psql-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`RESOURCE_TOKEN\` | \`gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
