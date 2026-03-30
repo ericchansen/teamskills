@@ -153,11 +153,15 @@ jobs:
         run: |
           RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
           FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
+
+          # Check if function app already exists
           if az functionapp show --name "$FUNC_NAME" --resource-group "$RG" &>/dev/null; then
             echo "✅ Wake function app already exists, skipping provisioning"
           else
+            echo "Provisioning wake function infrastructure..."
             PG_NAME="${{ vars.PG_SERVER_NAME || 'psql-gvojq4dgzbtk4' }}"
             PG_ID=$(az postgres flexible-server show --name "$PG_NAME" --resource-group "$RG" --query id -o tsv)
+
             az deployment group create \
               --resource-group "$RG" \
               --template-file infra/app/wake-function.bicep \
@@ -166,16 +170,18 @@ jobs:
                 postgresServerResourceId="$PG_ID" \
                 postgresServerName="$PG_NAME" \
                 resourceToken="${{ vars.RESOURCE_TOKEN || 'gvojq4dgzbtk4' }}"
+            echo "✅ Wake function infrastructure provisioned"
           fi
 
       - name: Deploy wake function code
         run: |
           cd wake-function && npm ci --production && rm -f local.settings.json && cd ..
           (cd wake-function && zip -r ../wake-function.zip .)
-          az functionapp deployment source config-zip \
+          az functionapp deploy \
             --name "${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}" \
             --resource-group "${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}" \
-            --src wake-function.zip
+            --src-path wake-function.zip \
+            --type zip
 
       - name: Deploy backend
         run: |
@@ -328,11 +334,15 @@ jobs:
 
       - name: Deployment summary
         run: |
+          WAKE_FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
+          WAKE_URL="https://${WAKE_FUNC_NAME}.azurewebsites.net"
+
           echo "## Deployment Complete! 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Frontend:** ${{ env.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "**Backend:** ${{ env.BACKEND_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "**Agent:** ${{ env.AGENT_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Wake Function:** ${WAKE_URL}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
