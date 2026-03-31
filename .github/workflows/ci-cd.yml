@@ -149,7 +149,12 @@ jobs:
         with:
           node-version: '22'
 
+      # Wake function steps are non-blocking: an Azure Policy enforces
+      # allowSharedKeyAccess=false on the storage account, which blocks
+      # SCM/Kudu zip deployment. We don't want this to prevent container
+      # app updates. Track fix in a separate issue.
       - name: Provision wake function infrastructure
+        continue-on-error: true
         run: |
           RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
           FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
@@ -168,6 +173,7 @@ jobs:
           echo "✅ Wake function infrastructure up to date"
 
       - name: Deploy wake function code
+        continue-on-error: true
         run: |
           cd wake-function && npm ci --production && rm -f local.settings.json && cd ..
           (cd wake-function && zip -r ../wake-function.zip .)
