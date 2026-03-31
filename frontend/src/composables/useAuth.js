@@ -140,9 +140,10 @@ export function useAuth() {
    */
   async function loadCurrentUser() {
     try {
+      const baseUrl = window.__CONFIG__?.VITE_API_URL || '';
       const token = await getToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch('/api/auth/me', { headers });
+      const res = await fetch(`${baseUrl}/api/auth/me`, { headers });
       if (res.ok) {
         user.value = await res.json();
       }
@@ -156,7 +157,8 @@ export function useAuth() {
    */
   async function loadDemoUser() {
     try {
-      const res = await fetch('/api/auth/me');
+      const baseUrl = window.__CONFIG__?.VITE_API_URL || '';
+      const res = await fetch(`${baseUrl}/api/auth/me`);
       if (res.ok) {
         user.value = await res.json();
       }
