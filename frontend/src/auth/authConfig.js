@@ -15,7 +15,7 @@ export async function fetchAuthConfig() {
   if (_cachedConfig) return _cachedConfig;
 
   try {
-    const baseUrl = window.__CONFIG__?.VITE_API_URL || '';
+    const baseUrl = (window.__CONFIG__?.VITE_API_URL || '').replace(/\/+$/, '');
     const res = await fetch(`${baseUrl}/api/auth/config`);
     if (!res.ok) throw new Error(`Auth config fetch failed: ${res.status}`);
     _cachedConfig = await res.json();

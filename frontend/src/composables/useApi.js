@@ -5,7 +5,7 @@
 import { useAuth } from './useAuth';
 
 function getBaseUrl() {
-  return window.__CONFIG__?.VITE_API_URL || '';
+  return (window.__CONFIG__?.VITE_API_URL || '').replace(/\/+$/, '');
 }
 
 export function useApi() {
