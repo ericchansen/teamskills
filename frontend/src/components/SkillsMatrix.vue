@@ -1,17 +1,31 @@
 <template>
   <div class="matrix-view">
     <div class="controls">
-      <span class="control-label">Categories:</span>
+      <span class="control-label">Roles:</span>
       <button
-        v-for="cat in categoryNames"
-        :key="cat"
-        :class="['cat-btn', { collapsed: collapsedCategories.has(cat) }]"
-        @click="toggleCategory(cat)"
+        v-for="role in topLevelCategories"
+        :key="role.id"
+        :class="['cat-btn', { collapsed: collapsedNodes.has(role.id) }]"
+        @click="toggleNode(role.id)"
       >
-        <span class="cat-arrow">{{ collapsedCategories.has(cat) ? '▸' : '▾' }}</span>
-        {{ cat }}
-        <span class="cat-count">({{ skillCategories[cat].length }})</span>
+        <span class="cat-arrow">{{ collapsedNodes.has(role.id) ? '▸' : '▾' }}</span>
+        {{ role.name }}
+        <span class="cat-count">({{ countSkills(role) }})</span>
       </button>
+
+      <template v-if="expandedDomains.length > 0">
+        <span class="control-label domain-label">Domains:</span>
+        <button
+          v-for="domain in expandedDomains"
+          :key="domain.id"
+          :class="['cat-btn', 'domain-btn', { collapsed: collapsedNodes.has(domain.id) }]"
+          @click="toggleNode(domain.id)"
+        >
+          <span class="cat-arrow">{{ collapsedNodes.has(domain.id) ? '▸' : '▾' }}</span>
+          {{ domain.name }}
+          <span class="cat-count">({{ countSkills(domain) }})</span>
+        </button>
+      </template>
     </div>
 
     <v-chart
@@ -27,31 +41,79 @@ import { ref, computed } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
 import { escapeHtml } from '../utils/escapeHtml';
 
-const { people, skillCategories, categoryNames, levels, getSkillLevel } = useSkillsData();
+const {
+  people,
+  allSkills,
+  skillCategories,
+  categoryNames,
+  categoryTree,
+  skillAncestorIds,
+  levels,
+  getSkillLevel,
+} = useSkillsData();
 
-const collapsedCategories = ref(new Set());
+const collapsedNodes = ref(new Set());
 
-function toggleCategory(cat) {
-  const next = new Set(collapsedCategories.value);
-  if (next.has(cat)) {
-    next.delete(cat);
+function toggleNode(nodeId) {
+  const next = new Set(collapsedNodes.value);
+  if (next.has(nodeId)) {
+    next.delete(nodeId);
   } else {
-    next.add(cat);
+    next.add(nodeId);
   }
-  collapsedCategories.value = next;
+  collapsedNodes.value = next;
 }
 
-const visibleSkills = computed(() => {
-  const result = [];
-  for (const cat of categoryNames.value) {
-    if (!collapsedCategories.value.has(cat)) {
-      result.push(...(skillCategories.value[cat] || []));
+const topLevelCategories = computed(() => categoryTree.value || []);
+
+// Domains whose parent role is expanded
+const expandedDomains = computed(() => {
+  const tree = categoryTree.value || [];
+  const domains = [];
+  for (const role of tree) {
+    if (!collapsedNodes.value.has(role.id) && role.children) {
+      domains.push(...role.children);
     }
   }
-  return result;
+  return domains;
 });
 
-const personNames = computed(() => people.value.map((p) => p.name));
+// Count skills under a category node (recursive)
+function countSkillsUnder(node) {
+  if (!node) return 0;
+  if (node.children && node.children.length > 0) {
+    let total = 0;
+    for (const child of node.children) total += countSkillsUnder(child);
+    return total;
+  }
+  // Leaf category — count skills whose ancestors include this node
+  const ancestors = skillAncestorIds.value || {};
+  let count = 0;
+  for (const name of (allSkills.value || [])) {
+    if ((ancestors[name] || []).includes(node.id)) count++;
+  }
+  return count;
+}
+
+function countSkills(node) {
+  return countSkillsUnder(node);
+}
+
+// Filter visible skills based on collapsed nodes
+const visibleSkills = computed(() => {
+  const skills = allSkills.value || [];
+  const collapsed = collapsedNodes.value;
+  if (collapsed.size === 0) return skills;
+
+  const ancestors = skillAncestorIds.value || {};
+  return skills.filter((name) => {
+    const chain = ancestors[name] || [];
+    // Hide skill if any of its ancestor categories is collapsed
+    return !chain.some((catId) => collapsed.has(catId));
+  });
+});
+
+const personNames = computed(() => (people.value || []).map((p) => p.name));
 
 const chartOption = computed(() => {
   const skills = visibleSkills.value;
@@ -167,6 +229,10 @@ const chartOption = computed(() => {
   margin-right: 4px;
 }
 
+.domain-label {
+  margin-left: 12px;
+}
+
 .cat-btn {
   display: inline-flex;
   align-items: center;
@@ -187,6 +253,12 @@ const chartOption = computed(() => {
 .cat-btn.collapsed {
   opacity: 0.5;
   background: transparent;
+}
+
+.domain-btn {
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border-style: dashed;
 }
 
 .cat-arrow {

@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const db = require('../db');
 const logger = require('../logger');
 const { requireAuth, requireAdmin } = require('../auth');
@@ -118,6 +120,7 @@ router.post('/init', checkInitSecret, async (req, res) => {
           entra_oid VARCHAR(36),
           role VARCHAR(100),
           team VARCHAR(100),
+          qualifier VARCHAR(100),
           is_admin BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -128,8 +131,12 @@ router.post('/init', checkInitSecret, async (req, res) => {
       CREATE TABLE IF NOT EXISTS skill_categories (
           id SERIAL PRIMARY KEY,
           name VARCHAR(255) NOT NULL,
+          parent_id INTEGER REFERENCES skill_categories(id) ON DELETE CASCADE,
+          level INTEGER NOT NULL DEFAULT 1,
+          sort_order INTEGER DEFAULT 0,
           description TEXT,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(parent_id, name)
       );
 
       CREATE TABLE IF NOT EXISTS skills (
@@ -139,6 +146,7 @@ router.post('/init', checkInitSecret, async (req, res) => {
           description TEXT,
           target_level VARCHAR(10) DEFAULT 'L200',
           is_core BOOLEAN DEFAULT false,
+          sort_order INTEGER DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -164,6 +172,7 @@ router.post('/init', checkInitSecret, async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_user_skills_user ON user_skills(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_skills_skill ON user_skills(skill_id);
       CREATE INDEX IF NOT EXISTS idx_skills_category ON skills(category_id);
+      CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
       CREATE INDEX IF NOT EXISTS idx_skill_relationships_parent ON skill_relationships(parent_skill_id);
       CREATE INDEX IF NOT EXISTS idx_skill_relationships_child ON skill_relationships(child_skill_id);
 
@@ -251,153 +260,15 @@ router.post('/init', checkInitSecret, async (req, res) => {
     await db.query(schemaSQL);
     logger.info('Schema created successfully');
 
-    // Seed data for skill categories
-    await db.query(`
-      INSERT INTO skill_categories (name, description) VALUES
-      ('Apps & AI', 'Application development, containers, serverless, AI/ML, and genertic AI'),
-      ('Data', 'Databases, analytics, data platforms, and business intelligence'),
-      ('Infrastructure', 'VMs, networking, hybrid cloud, security, and management'),
-      ('Soft Skills', 'Communication, presentation, and interpersonal skills')
-      ON CONFLICT DO NOTHING
-    `);
-
-    // Check if categories were inserted
-    const catResult = await db.query('SELECT COUNT(*) as count FROM skill_categories');
-    if (parseInt(catResult.rows[0].count) === 0) {
-      await db.query(`
-        INSERT INTO skill_categories (name, description) VALUES
-        ('Apps & AI', 'Application development, containers, serverless, AI/ML, and genertic AI'),
-        ('Data', 'Databases, analytics, data platforms, and business intelligence'),
-        ('Infrastructure', 'VMs, networking, hybrid cloud, security, and management'),
-        ('Soft Skills', 'Communication, presentation, and interpersonal skills')
-      `);
+    // Seed data from seed.sql (hierarchical categories + skills + demo users)
+    const seedPath = path.resolve(__dirname, '../../database/seed.sql');
+    if (fs.existsSync(seedPath)) {
+      const seedSQL = fs.readFileSync(seedPath, 'utf8');
+      await db.query(seedSQL);
+      logger.info('Seed data loaded from seed.sql');
+    } else {
+      logger.warn('seed.sql not found, skipping seed data');
     }
-
-    // Seed skills - Apps & AI (category_id = 1)
-    await db.query(`
-      INSERT INTO skills (name, category_id, description) VALUES
-      ('Azure App Service', 1, 'PaaS for web apps, APIs, and mobile backends'),
-      ('Azure Functions', 1, 'Serverless event-driven compute'),
-      ('Azure Container Apps', 1, 'Serverless containers with built-in scaling'),
-      ('Azure Kubernetes Service (AKS)', 1, 'Managed Kubernetes container orchestration'),
-      ('Azure Container Instances', 1, 'Fast, simple container deployment'),
-      ('Azure Service Fabric', 1, 'Distributed systems platform for microservices'),
-      ('Azure Red Hat OpenShift', 1, 'Managed OpenShift container platform'),
-      ('Azure API Management', 1, 'Full lifecycle API management'),
-      ('Azure Logic Apps', 1, 'Workflow automation and integration'),
-      ('Azure Service Bus', 1, 'Enterprise messaging and queuing'),
-      ('Azure Event Grid', 1, 'Event-driven architectures'),
-      ('Azure Event Hubs', 1, 'Big data streaming and event ingestion'),
-      ('Azure Functions Durable', 1, 'Stateful serverless workflows'),
-      ('Power Automate', 1, 'Low-code workflow automation'),
-      ('Azure OpenAI Service', 1, 'GPT models and generative AI'),
-      ('Azure AI Foundry', 1, 'Unified platform for building AI applications'),
-      ('Azure Machine Learning', 1, 'End-to-end ML platform'),
-      ('Azure AI Search', 1, 'AI-powered search with vector and semantic capabilities'),
-      ('Azure AI Document Intelligence', 1, 'Extract structured data from documents'),
-      ('Azure AI Language', 1, 'NLP for sentiment, key phrases, and entities'),
-      ('Azure AI Vision', 1, 'Image and video analysis'),
-      ('Azure AI Speech', 1, 'Speech-to-text and text-to-speech'),
-      ('Azure AI Translator', 1, 'Real-time translation'),
-      ('Azure AI Content Safety', 1, 'Content moderation and safety'),
-      ('Azure Bot Service', 1, 'Intelligent bot development'),
-      ('Copilot Studio', 1, 'Low-code AI assistant builder'),
-      ('Semantic Kernel', 1, 'AI orchestration SDK'),
-      ('RAG Patterns', 1, 'Retrieval-augmented generation architectures'),
-      ('Prompt Engineering', 1, 'Designing effective AI prompts'),
-      ('GitHub Actions', 1, 'CI/CD workflows'),
-      ('GitHub Copilot', 1, 'AI pair programming'),
-      ('Azure DevOps', 1, 'DevOps platform with repos, boards, pipelines'),
-      ('Azure Pipelines', 1, 'CI/CD pipelines'),
-      ('Bicep', 1, 'Azure-native infrastructure as code'),
-      ('Terraform', 1, 'Multi-cloud infrastructure as code'),
-      ('Azure Monitor', 1, 'Full-stack monitoring'),
-      ('Application Insights', 1, 'APM and diagnostics'),
-      ('C# / .NET', 1, 'Microsoft development stack'),
-      ('Python', 1, 'Data science and scripting'),
-      ('JavaScript / TypeScript', 1, 'Web and Node.js development'),
-      ('Java', 1, 'Enterprise development'),
-      ('Go', 1, 'Cloud-native development'),
-      ('React', 1, 'Frontend framework'),
-      ('Node.js', 1, 'Server-side JavaScript'),
-      ('PowerShell', 1, 'Scripting and automation'),
-      ('SQL', 1, 'Database query language')
-      ON CONFLICT DO NOTHING
-    `);
-
-    // Seed skills - Data (category_id = 2)
-    await db.query(`
-      INSERT INTO skills (name, category_id, description) VALUES
-      ('Azure SQL Database', 2, 'Managed relational database service'),
-      ('Azure Cosmos DB', 2, 'Globally distributed multi-model NoSQL database'),
-      ('Azure Database for PostgreSQL', 2, 'Managed PostgreSQL database'),
-      ('Azure Database for MySQL', 2, 'Managed MySQL database'),
-      ('Azure Cache for Redis', 2, 'In-memory data store for caching'),
-      ('Azure Synapse Analytics', 2, 'Unified analytics and data warehousing'),
-      ('Azure Data Factory', 2, 'Data integration and ETL/ELT pipelines'),
-      ('Azure Databricks', 2, 'Apache Spark-based analytics platform'),
-      ('Azure Data Lake Storage', 2, 'Scalable data lake for big data analytics'),
-      ('Azure Stream Analytics', 2, 'Real-time analytics on streaming data'),
-      ('Azure Data Explorer', 2, 'Fast, scalable data exploration service'),
-      ('Microsoft Fabric', 2, 'Unified analytics platform'),
-      ('Power BI', 2, 'Business intelligence and visualization')
-      ON CONFLICT DO NOTHING
-    `);
-
-    // Seed skills - Infrastructure (category_id = 3)
-    await db.query(`
-      INSERT INTO skills (name, category_id, description) VALUES
-      ('Azure Virtual Machines', 3, 'IaaS compute for Windows and Linux VMs'),
-      ('Azure Virtual Machine Scale Sets', 3, 'Auto-scaling VM deployments'),
-      ('Azure Batch', 3, 'Large-scale parallel and HPC batch jobs'),
-      ('Azure Virtual Network', 3, 'Private network in Azure'),
-      ('Azure Load Balancer', 3, 'Layer 4 load balancing'),
-      ('Azure Application Gateway', 3, 'Layer 7 load balancing and WAF'),
-      ('Azure Front Door', 3, 'Global load balancing and CDN'),
-      ('Azure CDN', 3, 'Content delivery network'),
-      ('Azure DNS', 3, 'DNS hosting and management'),
-      ('Azure Traffic Manager', 3, 'DNS-based traffic routing'),
-      ('Azure ExpressRoute', 3, 'Private connection to Azure'),
-      ('Azure VPN Gateway', 3, 'Site-to-site and point-to-site VPN'),
-      ('Azure Virtual WAN', 3, 'Network hub for hybrid connectivity'),
-      ('Azure Bastion', 3, 'Secure VM access without public IP'),
-      ('Azure Private Link', 3, 'Private access to Azure services'),
-      ('Azure Firewall', 3, 'Cloud-native network security'),
-      ('Azure DDoS Protection', 3, 'DDoS mitigation'),
-      ('Microsoft Entra ID', 3, 'Identity and access management'),
-      ('Microsoft Defender for Cloud', 3, 'Cloud security posture management'),
-      ('Microsoft Sentinel', 3, 'SIEM and SOAR'),
-      ('Azure Key Vault', 3, 'Secrets and key management'),
-      ('Azure Policy', 3, 'Governance and compliance'),
-      ('Microsoft Purview', 3, 'Data governance and compliance'),
-      ('Azure Resource Manager', 3, 'Resource deployment and management'),
-      ('ARM Templates', 3, 'Azure Resource Manager templates'),
-      ('Azure Arc', 3, 'Hybrid and multi-cloud management'),
-      ('Azure Migrate', 3, 'Migration assessment and execution'),
-      ('Azure Site Recovery', 3, 'Disaster recovery orchestration'),
-      ('Azure Backup', 3, 'Backup and recovery services'),
-      ('Azure Cost Management', 3, 'Cost monitoring and optimization'),
-      ('Azure Advisor', 3, 'Best practices recommendations'),
-      ('Azure Local', 3, 'Azure Stack HCI and edge'),
-      ('Azure Log Analytics', 3, 'Log collection and analysis')
-      ON CONFLICT DO NOTHING
-    `);
-
-    // Seed skills - Soft Skills (category_id = 4)
-    await db.query(`
-      INSERT INTO skills (name, category_id, description) VALUES
-      ('Technical Presentations', 4, 'Delivering technical content to audiences'),
-      ('Whiteboarding', 4, 'Visual communication and architecture design'),
-      ('Customer Discovery', 4, 'Understanding customer needs and pain points'),
-      ('Solution Architecture', 4, 'Designing end-to-end solutions'),
-      ('Proof of Concept Delivery', 4, 'Building and presenting POCs'),
-      ('Workshop Facilitation', 4, 'Running interactive technical workshops'),
-      ('Executive Briefings', 4, 'Presenting to senior leadership'),
-      ('Technical Writing', 4, 'Documentation and technical content')
-      ON CONFLICT DO NOTHING
-    `);
-
-    // -- Users are populated via /api/admin/sync-skills with real CSV data, not seeded here
 
     // Get counts
     const userCount = await db.query('SELECT COUNT(*) as count FROM users');
