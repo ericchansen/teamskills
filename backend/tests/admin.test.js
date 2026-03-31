@@ -54,6 +54,8 @@ describe('Admin API', () => {
       db.query.mockResolvedValueOnce({ rows: [] });
       // tables exist
       db.query.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+      // schema migrations (ALTER TABLE)
+      db.query.mockResolvedValueOnce({ rows: [] });
       // data exists
       db.query.mockResolvedValueOnce({ rows: [{ count: '10' }] });
 
@@ -374,6 +376,8 @@ describe('Admin API', () => {
       db.query.mockResolvedValueOnce({ rows: [] });
       // tables exist
       db.query.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+      // schema migrations (ALTER TABLE)
+      db.query.mockResolvedValueOnce({ rows: [] });
       // data exists
       db.query.mockResolvedValueOnce({ rows: [{ count: '5' }] });
 

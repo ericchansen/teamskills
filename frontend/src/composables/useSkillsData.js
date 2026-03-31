@@ -43,36 +43,6 @@ function parseLevel(val) {
 }
 
 /**
- * Build a hierarchical skillCategories object from category tree and skills.
- * Structure: { "Apps & AI": { "Agentic AI": { "Development Tools": ["skill1", ...] } } }
- */
-function buildHierarchicalCategories(categoryTree, skills) {
-  const catSkills = new Map();
-  for (const skill of skills) {
-    if (!skill.category_id) continue;
-    if (!catSkills.has(skill.category_id)) catSkills.set(skill.category_id, []);
-    catSkills.get(skill.category_id).push(skill.name);
-  }
-
-  function buildNode(node) {
-    if (node.children && node.children.length > 0) {
-      const result = {};
-      for (const child of node.children) {
-        result[child.name] = buildNode(child);
-      }
-      return result;
-    }
-    return catSkills.get(node.id) || [];
-  }
-
-  const root = {};
-  for (const role of categoryTree) {
-    root[role.name] = buildNode(role);
-  }
-  return root;
-}
-
-/**
  * Collect all skill names from the category tree in hierarchy order.
  */
 function collectSkillsFromTree(categoryTree, skills) {
@@ -85,11 +55,12 @@ function collectSkillsFromTree(categoryTree, skills) {
 
   const result = [];
   function walk(node) {
+    // Push any skills directly assigned to this node first
+    const names = catSkills.get(node.id) || [];
+    if (names.length > 0) result.push(...names);
+    // Then recurse into children
     if (node.children && node.children.length > 0) {
       for (const child of node.children) walk(child);
-    } else {
-      const names = catSkills.get(node.id) || [];
-      result.push(...names);
     }
   }
   for (const role of categoryTree) walk(role);
