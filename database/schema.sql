@@ -9,6 +9,7 @@ CREATE TABLE users (
     entra_oid VARCHAR(36),  -- Microsoft Entra ID object ID (GUID)
     role VARCHAR(100),
     team VARCHAR(100),
+    qualifier VARCHAR(100),
     is_admin BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -17,12 +18,16 @@ CREATE TABLE users (
 -- Index for fast Entra ID lookups
 CREATE INDEX idx_users_entra_oid ON users(entra_oid) WHERE entra_oid IS NOT NULL;
 
--- Skill categories table (e.g., "Azure Services", "Soft Skills", "Use Cases")
+-- Skill categories table (hierarchical: Role > Domain > Subdomain)
 CREATE TABLE skill_categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    parent_id INTEGER REFERENCES skill_categories(id) ON DELETE CASCADE,
+    level INTEGER NOT NULL DEFAULT 1,  -- 1=Role, 2=Domain, 3=Subdomain
+    sort_order INTEGER DEFAULT 0,
     description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(parent_id, name)
 );
 
 -- Skills table
@@ -33,6 +38,7 @@ CREATE TABLE skills (
     description TEXT,
     target_level VARCHAR(10) DEFAULT 'L200',
     is_core BOOLEAN DEFAULT false,
+    sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -61,6 +67,7 @@ CREATE TABLE skill_relationships (
 CREATE INDEX idx_user_skills_user ON user_skills(user_id);
 CREATE INDEX idx_user_skills_skill ON user_skills(skill_id);
 CREATE INDEX idx_skills_category ON skills(category_id);
+CREATE INDEX idx_skill_categories_parent ON skill_categories(parent_id);
 CREATE INDEX idx_skill_relationships_parent ON skill_relationships(parent_skill_id);
 CREATE INDEX idx_skill_relationships_child ON skill_relationships(child_skill_id);
 
