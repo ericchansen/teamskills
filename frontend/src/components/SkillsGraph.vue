@@ -50,8 +50,9 @@ const chartOption = computed(() => {
 
   // People nodes
   for (const person of people.value) {
+    const pid = person.id || person.name;
     nodes.push({
-      id: `p:${person.name}`,
+      id: `p:${pid}`,
       name: person.name,
       symbolSize: 40,
       category: 0,
@@ -63,12 +64,13 @@ const chartOption = computed(() => {
   // Collect which skills are actually connected
   const usedSkills = new Set();
   for (const person of people.value) {
+    const pid = person.id || person.name;
     for (const skill of allSkills.value) {
       const lvl = getSkillLevel(person, skill);
       if (lvl >= threshold.value) {
         usedSkills.add(skill);
         links.push({
-          source: `p:${person.name}`,
+          source: `p:${pid}`,
           target: `s:${skill}`,
           value: lvl,
           lineStyle: {

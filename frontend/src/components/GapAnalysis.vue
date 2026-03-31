@@ -50,6 +50,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
+import { escapeHtml } from '../utils/escapeHtml';
 
 const { people, skillCategories, categoryNames, getSkillLevel } = useSkillsData();
 
@@ -117,7 +118,7 @@ const chartOption = computed(() => {
       axisPointer: { type: 'shadow' },
       formatter(params) {
         const p = params[0];
-        return `<b>${p.name}</b><br/>${p.value}${suffix}`;
+        return `<b>${escapeHtml(p.name)}</b><br/>${p.value}${suffix}`;
       },
     },
     grid: {
