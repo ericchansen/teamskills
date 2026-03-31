@@ -99,11 +99,21 @@ router.post('/init', checkInitSecret, async (req, res) => {
     `);
     
     if (parseInt(tablesCheck.rows[0].count) > 0) {
-      // Tables exist - check if data exists
+      // Tables exist — run schema migrations for new columns
+      await db.query(`
+        ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES skill_categories(id) ON DELETE CASCADE;
+        ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+        ALTER TABLE skills ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+        CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
+      `);
+      logger.info('Schema migrations applied');
+
+      // Check if data exists
       const dataCheck = await db.query('SELECT COUNT(*) as count FROM users');
       if (parseInt(dataCheck.rows[0].count) > 0) {
         return res.json({ 
-          message: 'Database already initialized', 
+          message: 'Database already initialized (migrations applied)', 
           users: parseInt(dataCheck.rows[0].count),
           status: 'skipped'
         });
