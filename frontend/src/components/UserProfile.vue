@@ -28,7 +28,10 @@
     </div>
 
     <!-- Skills editor -->
-    <div class="skills-editor">
+    <div v-if="!myPerson && !isLive" class="no-profile-msg">
+      <p>Profile editing is not available in demo mode. Sign in to manage your skills.</p>
+    </div>
+    <div v-else class="skills-editor">
       <div class="editor-header">
         <h3>My Skills</h3>
         <div class="editor-actions">
@@ -96,9 +99,8 @@ const canEdit = computed(() => isAuthenticated.value && isLive.value);
 // ── Find this user in the people array ─────────
 const myPerson = computed(() => {
   if (!user.value) return null;
-  return people.value.find(
-    (p) => p.id === user.value.id || p.name === user.value.name || p.email === user.value.email,
-  );
+  // Strict ID match only — avoids binding to the wrong person in demo mode
+  return people.value.find((p) => p.id === user.value.id) || null;
 });
 
 // Local copy of my skill levels (for optimistic updates)
@@ -474,5 +476,12 @@ async function setLevel(skillName, level) {
   background: #581c87;
   border-color: #9333ea;
   color: #c084fc;
+}
+
+.no-profile-msg {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
 }
 </style>
