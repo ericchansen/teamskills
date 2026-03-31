@@ -1,16 +1,36 @@
 """Generate seed.sql from Inventory.csv with hierarchical categories and fake demo users."""
+import argparse
 import csv
-import re
+import os
 import random
+from pathlib import Path
 
-INV = r'C:\Users\erichansen\OneDrive - Microsoft\Internal\Skills Matrix\Inventory.csv'
-OUT = r'C:\Users\erichansen\repos\teamskills\database\seed.sql'
+script_dir = Path(__file__).resolve().parent
+default_inv = os.environ.get('INV_PATH') or str(script_dir.parent / 'Inventory.csv')
+default_out = os.environ.get('OUT_PATH') or str(script_dir.parent / 'database' / 'seed.sql')
+
+parser = argparse.ArgumentParser(
+    description='Generate seed.sql from Inventory.csv with hierarchical categories and fake demo users.'
+)
+parser.add_argument('-i', '--inventory', default=default_inv, help='Path to Inventory CSV (default: %(default)s)')
+parser.add_argument('-o', '--output', default=default_out, help='Output seed SQL path (default: %(default)s)')
+args = parser.parse_args()
+
+INV = args.inventory
+OUT = args.output
 
 # Duplicate placement overrides (skill -> preferred location)
 DUPE_PLACEMENT = {
     'Azure Container Apps': ('Apps & AI', 'Containers', 'Solution'),
     'Azure Functions': ('Apps & AI', 'Application Development', 'Solution'),
     'Azure Firewall': ('Infra', 'Networking', 'Network Security'),
+}
+
+# Typo corrections from source CSV
+TYPO_FIXES = {
+    'Postgre': 'PostgreSQL',
+    'Manged Redis': 'Managed Redis',
+    'Dedicatd Hosts': 'Dedicated Hosts',
 }
 
 # Parse inventory
@@ -29,6 +49,11 @@ for r in inv_rows:
     domain = (r.get('Domain ') or r.get('Domain') or '').strip()
     subdomain = (r.get('Subdomain') or '').strip()
     skill = (r.get('r') or '').strip()
+
+    # Apply typo corrections
+    subdomain = TYPO_FIXES.get(subdomain, subdomain)
+    skill = TYPO_FIXES.get(skill, skill)
+
     if not skill or not domain:
         continue
     if not role and 'Fabric' in subdomain:

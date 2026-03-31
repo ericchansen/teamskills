@@ -106,6 +106,8 @@ router.post('/init', checkInitSecret, async (req, res) => {
         ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
         ALTER TABLE skills ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
         CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_root_name
+            ON skill_categories(name) WHERE parent_id IS NULL;
       `);
       logger.info('Schema migrations applied');
 
@@ -183,6 +185,8 @@ router.post('/init', checkInitSecret, async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_user_skills_skill ON user_skills(skill_id);
       CREATE INDEX IF NOT EXISTS idx_skills_category ON skills(category_id);
       CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_root_name
+          ON skill_categories(name) WHERE parent_id IS NULL;
       CREATE INDEX IF NOT EXISTS idx_skill_relationships_parent ON skill_relationships(parent_skill_id);
       CREATE INDEX IF NOT EXISTS idx_skill_relationships_child ON skill_relationships(child_skill_id);
 

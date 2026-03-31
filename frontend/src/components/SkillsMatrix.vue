@@ -78,15 +78,9 @@ const expandedDomains = computed(() => {
   return domains;
 });
 
-// Count skills under a category node (recursive)
+// Count skills under a category node using ancestor mapping
 function countSkillsUnder(node) {
   if (!node) return 0;
-  if (node.children && node.children.length > 0) {
-    let total = 0;
-    for (const child of node.children) total += countSkillsUnder(child);
-    return total;
-  }
-  // Leaf category — count skills whose ancestors include this node
   const ancestors = skillAncestorIds.value || {};
   let count = 0;
   for (const name of (allSkills.value || [])) {
