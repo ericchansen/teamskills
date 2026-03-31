@@ -272,6 +272,7 @@ async function syncPivotToDatabase(pivotData) {
   await ensureSchemaExtensions();
 
   // Phase 1: Upsert all skills from column headers
+  // Try to match skill to an existing category by name
   const skillIdMap = new Map();
   for (const skillName of skillNames) {
     const existing = await db.query('SELECT id FROM skills WHERE name = $1', [skillName]);
@@ -279,9 +280,17 @@ async function syncPivotToDatabase(pivotData) {
       skillIdMap.set(skillName, existing.rows[0].id);
       stats.skills.existing++;
     } else {
+      // Try to find a matching category for this skill
+      const catResult = await db.query(
+        `SELECT sc.id FROM skill_categories sc
+         WHERE NOT EXISTS (SELECT 1 FROM skill_categories child WHERE child.parent_id = sc.id)
+         AND sc.name IS NOT NULL
+         ORDER BY sc.level DESC LIMIT 1`
+      );
+      const categoryId = catResult.rows.length > 0 ? catResult.rows[0].id : null;
       const result = await db.query(
-        'INSERT INTO skills (name) VALUES ($1) RETURNING id',
-        [skillName]
+        'INSERT INTO skills (name, category_id) VALUES ($1, $2) RETURNING id',
+        [skillName, categoryId]
       );
       skillIdMap.set(skillName, result.rows[0].id);
       stats.skills.created++;

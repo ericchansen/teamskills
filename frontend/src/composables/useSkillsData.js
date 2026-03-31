@@ -22,6 +22,8 @@ const state = reactive({
   skillToCategory: {},
   skillIndex: {},
   skillNameToId: {},
+  categoryTree: [],
+  skillAncestorIds: {},
   isLoading: true,
   error: null,
   isLive: false,
@@ -41,30 +43,107 @@ function parseLevel(val) {
 }
 
 /**
+ * Build a hierarchical skillCategories object from category tree and skills.
+ * Structure: { "Apps & AI": { "Agentic AI": { "Development Tools": ["skill1", ...] } } }
+ */
+function buildHierarchicalCategories(categoryTree, skills) {
+  const catSkills = new Map();
+  for (const skill of skills) {
+    if (!skill.category_id) continue;
+    if (!catSkills.has(skill.category_id)) catSkills.set(skill.category_id, []);
+    catSkills.get(skill.category_id).push(skill.name);
+  }
+
+  function buildNode(node) {
+    if (node.children && node.children.length > 0) {
+      const result = {};
+      for (const child of node.children) {
+        result[child.name] = buildNode(child);
+      }
+      return result;
+    }
+    return catSkills.get(node.id) || [];
+  }
+
+  const root = {};
+  for (const role of categoryTree) {
+    root[role.name] = buildNode(role);
+  }
+  return root;
+}
+
+/**
+ * Collect all skill names from the category tree in hierarchy order.
+ */
+function collectSkillsFromTree(categoryTree, skills) {
+  const catSkills = new Map();
+  for (const skill of skills) {
+    if (!skill.category_id) continue;
+    if (!catSkills.has(skill.category_id)) catSkills.set(skill.category_id, []);
+    catSkills.get(skill.category_id).push(skill.name);
+  }
+
+  const result = [];
+  function walk(node) {
+    if (node.children && node.children.length > 0) {
+      for (const child of node.children) walk(child);
+    } else {
+      const names = catSkills.get(node.id) || [];
+      result.push(...names);
+    }
+  }
+  for (const role of categoryTree) walk(role);
+
+  // Append any uncategorized skills
+  const inTree = new Set(result);
+  for (const skill of skills) {
+    if (!inTree.has(skill.name)) result.push(skill.name);
+  }
+  return result;
+}
+
+/**
+ * Build skill -> top-level role mapping for backward compat.
+ */
+function buildSkillToCategory(categoryTree, skills) {
+  const catToRoot = new Map();
+  function mapToRoot(node, rootName) {
+    catToRoot.set(node.id, rootName);
+    if (node.children) {
+      for (const child of node.children) mapToRoot(child, rootName);
+    }
+  }
+  for (const role of categoryTree) mapToRoot(role, role.name);
+
+  const result = {};
+  for (const skill of skills) {
+    result[skill.name] = catToRoot.get(skill.category_id) || 'Uncategorized';
+  }
+  return result;
+}
+
+/**
  * Transform API response → internal format matching data.js exports.
  */
 function transformApiData(apiData) {
-  const { users, skills, userSkills } = apiData;
+  const { users, skills, userSkills, categories: categoryTree = [] } = apiData;
 
-  // Group skills by category, preserve API ordering
-  const catMap = new Map();
+  // Backward-compat flat skillCategories: top-level role -> flat list of skills
+  const skillToCat = buildSkillToCategory(categoryTree, skills);
+  const flatCategories = new Map();
   for (const skill of skills) {
-    const cat = skill.category_name || 'Uncategorized';
-    if (!catMap.has(cat)) catMap.set(cat, []);
-    catMap.get(cat).push(skill.name);
+    const cat = skillToCat[skill.name] || 'Uncategorized';
+    if (!flatCategories.has(cat)) flatCategories.set(cat, []);
+    flatCategories.get(cat).push(skill.name);
   }
 
-  const skillCategories = Object.fromEntries(catMap);
-  const categoryNames = [...catMap.keys()];
-  const allSkills = categoryNames.flatMap((c) => catMap.get(c));
+  const skillCategories = Object.fromEntries(flatCategories);
+  const categoryNames = [...flatCategories.keys()];
 
-  // Build lookup maps
-  const skillToCategory = {};
-  for (const [cat, names] of Object.entries(skillCategories)) {
-    for (const name of names) {
-      skillToCategory[name] = cat;
-    }
-  }
+  // Use tree-ordered skill list for consistent column ordering
+  const allSkills = collectSkillsFromTree(categoryTree, skills);
+
+  const skillToCategory = skillToCat;
 
   const skillIndex = {};
   allSkills.forEach((name, i) => {
@@ -81,7 +160,6 @@ function transformApiData(apiData) {
   // Transform users
   const people = users.map((u) => {
     const skillsArr = new Array(allSkills.length).fill(0);
-    // Fill from userSkills map
     for (const skill of skills) {
       const key = `${u.id}-${skill.id}`;
       const entry = userSkills[key];
@@ -96,7 +174,7 @@ function transformApiData(apiData) {
       id: u.id,
       name: u.name,
       email: u.email,
-      qualifier: u.team || u.role || 'Unknown',
+      qualifier: u.qualifier || u.team || u.role || 'Unknown',
       skills: skillsArr,
     };
   });
@@ -107,7 +185,39 @@ function transformApiData(apiData) {
     skillNameToId[skill.name] = skill.id;
   }
 
-  return { people, allSkills, skillCategories, categoryNames, skillToCategory, skillIndex, skillNameToId };
+  // Build skillAncestorIds: skill name -> array of all ancestor category IDs
+  // (includes the skill's own category and all parents up to the root)
+  const flatCatMap = new Map();
+  function flattenCatTree(nodes) {
+    for (const n of nodes) {
+      flatCatMap.set(n.id, n);
+      if (n.children) flattenCatTree(n.children);
+    }
+  }
+  flattenCatTree(categoryTree);
+
+  const skillAncestorIds = {};
+  for (const skill of skills) {
+    const ancestors = [];
+    let cur = skill.category_id ? flatCatMap.get(skill.category_id) : null;
+    while (cur) {
+      ancestors.push(cur.id);
+      cur = cur.parent_id ? flatCatMap.get(cur.parent_id) : null;
+    }
+    skillAncestorIds[skill.name] = ancestors;
+  }
+
+  return {
+    people,
+    allSkills,
+    skillCategories,
+    categoryNames,
+    skillToCategory,
+    skillIndex,
+    skillNameToId,
+    categoryTree,
+    skillAncestorIds,
+  };
 }
 
 // ── Public composable ────────────────────────────────
