@@ -223,6 +223,26 @@ export function useSkillsData() {
           state.categoryNames = mock.categoryNames;
           state.skillToCategory = mock.skillToCategory;
           state.skillIndex = mock.skillIndex;
+          // Build minimal categoryTree from flat skillCategories for offline mode
+          state.categoryTree = (mock.categoryNames || []).map((name, i) => ({
+            id: -(i + 1),
+            name,
+            parent_id: null,
+            level: 1,
+            sort_order: i,
+            children: [],
+          }));
+          // Build skillAncestorIds from flat categories
+          const ancestorIds = {};
+          for (const [cat, skills] of Object.entries(mock.skillCategories || {})) {
+            const catNode = state.categoryTree.find(n => n.name === cat);
+            if (catNode) {
+              for (const skill of skills) {
+                ancestorIds[skill] = [catNode.id];
+              }
+            }
+          }
+          state.skillAncestorIds = ancestorIds;
           state.isLive = false;
         } catch (mockErr) {
           state.error = 'Failed to load skills data';

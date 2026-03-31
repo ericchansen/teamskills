@@ -44,8 +44,6 @@ import { escapeHtml } from '../utils/escapeHtml';
 const {
   people,
   allSkills,
-  skillCategories,
-  categoryNames,
   categoryTree,
   skillAncestorIds,
   levels,

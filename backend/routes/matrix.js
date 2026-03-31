@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
              sc.level as category_level
       FROM skills s
       LEFT JOIN skill_categories sc ON s.category_id = sc.id
-      ORDER BY sc.sort_order, s.sort_order, s.name
+      ORDER BY sc.sort_order NULLS LAST, s.sort_order, s.name
     `);
 
     // Build category lookup for path resolution

@@ -105,9 +105,12 @@ router.post('/init', checkInitSecret, async (req, res) => {
         ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;
         ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
         ALTER TABLE skills ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS qualifier VARCHAR(100);
         CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_root_name
             ON skill_categories(name) WHERE parent_id IS NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_parent_name
+            ON skill_categories(parent_id, name);
       `);
       logger.info('Schema migrations applied');
 

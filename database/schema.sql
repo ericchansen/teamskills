@@ -68,6 +68,7 @@ CREATE INDEX idx_user_skills_user ON user_skills(user_id);
 CREATE INDEX idx_user_skills_skill ON user_skills(skill_id);
 CREATE INDEX idx_skills_category ON skills(category_id);
 CREATE INDEX idx_skill_categories_parent ON skill_categories(parent_id);
+CREATE UNIQUE INDEX idx_skill_categories_root_name ON skill_categories(name) WHERE parent_id IS NULL;
 CREATE INDEX idx_skill_relationships_parent ON skill_relationships(parent_skill_id);
 CREATE INDEX idx_skill_relationships_child ON skill_relationships(child_skill_id);
 
