@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, watch } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import { useAuth } from './composables/useAuth';
 import { useSkillsData } from './composables/useSkillsData';
@@ -53,9 +53,16 @@ const { isLoading, error, refresh, load: loadData } = useSkillsData();
 
 onMounted(async () => {
   await initAuth();
-  // Only load data once we know auth is either not required or user is signed in
+  // Load data immediately if auth is not required or user has an existing session
   if (!authEnabled.value || isAuthenticated.value) {
     await loadData();
+  }
+});
+
+// After interactive login completes, load data (uses refresh() to bypass idempotency guard)
+watch(isAuthenticated, (signedIn) => {
+  if (signedIn) {
+    refresh();
   }
 });
 </script>
