@@ -90,7 +90,6 @@ const api = useApi();
 // ── Local state ────────────────────────────────
 const collapsedCats = reactive(new Set());
 const saveStatus = ref('');
-const pendingChanges = reactive(new Map());
 
 const canEdit = computed(() => isAuthenticated.value && isLive.value);
 
@@ -197,7 +196,7 @@ async function setLevel(skillName, level) {
   }
   saveStatus.value = 'saving';
 
-  const timeout = setTimeout(async () => {
+  saveTimeouts.set(skillName, setTimeout(async () => {
     saveTimeouts.delete(skillName);
     try {
       // Look up the real backend skill ID from the name → ID map
@@ -238,7 +237,7 @@ async function setLevel(skillName, level) {
         saveStatus.value = '';
       }, 3000);
     }
-  }, 500);
+  }, 500));
 }
 </script>
 

@@ -27,7 +27,7 @@ import { ref, computed } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
 import { escapeHtml } from '../utils/escapeHtml';
 
-const { people, skillCategories, categoryNames, allSkills, levels, getSkillLevel } = useSkillsData();
+const { people, skillCategories, categoryNames, levels, getSkillLevel } = useSkillsData();
 
 const collapsedCategories = ref(new Set());
 

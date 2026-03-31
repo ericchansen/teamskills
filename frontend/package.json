@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "echo \"No frontend linter configured\" && exit 0",
-    "test": "echo \"No frontend tests defined\" && exit 0"
+    "test": "npm run build"
   },
   "dependencies": {
     "@azure/msal-browser": "^3.30.0",
