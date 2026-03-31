@@ -1,7 +1,12 @@
 /**
  * API fetch wrapper with automatic Bearer token injection.
+ * Resolves the backend base URL from runtime config (window.__CONFIG__).
  */
 import { useAuth } from './useAuth';
+
+function getBaseUrl() {
+  return window.__CONFIG__?.VITE_API_URL || '';
+}
 
 export function useApi() {
   const { getToken } = useAuth();
@@ -16,7 +21,8 @@ export function useApi() {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const res = await fetch(url, { ...options, headers });
+    const fullUrl = `${getBaseUrl()}${url}`;
+    const res = await fetch(fullUrl, { ...options, headers });
 
     if (!res.ok) {
       const body = await res.text();
