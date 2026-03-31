@@ -41,7 +41,9 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
-    allowSharedKeyAccess: false
+    // Shared key access is required for Function App SCM/Kudu zip deployment.
+    // The runtime still uses identity-based storage (AzureWebJobsStorage__accountName).
+    allowSharedKeyAccess: true
   }
 }
 
