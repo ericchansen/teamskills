@@ -211,19 +211,29 @@ jobs:
 
       - name: Deploy frontend
         run: |
+          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
+
+          BACKEND_FQDN="$(az containerapp show \
+            --name ${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }} \
+            --resource-group "$RG" \
+            --query 'properties.configuration.ingress.fqdn' -o tsv)"
+          API_URL="https://${BACKEND_FQDN}"
+
           AGENT_URL="https://$(az containerapp show \
             --name ${{ vars.AGENT_APP || 'ca-agent-gvojq4dgzbtk4' }} \
-            --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
+            --resource-group "$RG" \
             --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
           WAKE_FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
           WAKE_URL="https://${WAKE_FUNC_NAME}.azurewebsites.net"
 
+          # --set-env-vars REPLACES all env vars — must include every var the container needs
           az containerapp update \
             --name ${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }} \
-            --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
+            --resource-group "$RG" \
             --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/frontend:${{ github.sha }} \
             --set-env-vars \
+              VITE_API_URL=$API_URL \
               VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
               VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
               VITE_AGENT_URL=$AGENT_URL \
