@@ -224,6 +224,8 @@ jobs:
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
             --image ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}.azurecr.io/frontend:${{ github.sha }} \
             --set-env-vars \
+              VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
+              VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
               VITE_AGENT_URL=$AGENT_URL \
               VITE_WAKE_FUNCTION_URL=$WAKE_URL
 
@@ -266,6 +268,35 @@ jobs:
           if [ "$AGENT_READY" != "true" ]; then
             echo "⚠️ Agent failed to become ready (non-blocking)"
           fi
+
+      - name: Initialize database (seed schema + skills)
+        run: |
+          if [ -z "$INIT_SECRET" ]; then
+            echo "⚠️ INIT_SECRET not configured — skipping database init"
+            exit 0
+          fi
+
+          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
+          BACKEND_APP="${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }}"
+          BACKEND_URL="https://$(az containerapp show -n "$BACKEND_APP" -g "$RG" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+
+          echo "Calling ${BACKEND_URL}/api/admin/init ..."
+          INIT_RESPONSE=$(curl -sf -X POST "${BACKEND_URL}/api/admin/init" \
+            -H 'Content-Type: application/json' \
+            -d "{\"secret\":\"${INIT_SECRET}\"}" \
+            || echo '{"error":"curl failed"}')
+          echo "Init response: ${INIT_RESPONSE}"
+
+          if echo "$INIT_RESPONSE" | grep -q '"status":"skipped"'; then
+            echo "✅ Database already seeded — nothing to do"
+          elif echo "$INIT_RESPONSE" | grep -q '"status":"success"'; then
+            echo "✅ Database initialized and seeded"
+          else
+            echo "❌ Database init failed!"
+            exit 1
+          fi
+        env:
+          INIT_SECRET: ${{ secrets.INIT_SECRET }}
 
       - name: Smoke test - Validate auth configuration
         run: |
