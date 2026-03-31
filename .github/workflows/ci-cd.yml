@@ -153,25 +153,19 @@ jobs:
         run: |
           RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
           FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
+          PG_NAME="${{ vars.PG_SERVER_NAME || 'psql-gvojq4dgzbtk4' }}"
+          PG_ID=$(az postgres flexible-server show --name "$PG_NAME" --resource-group "$RG" --query id -o tsv)
 
-          # Check if function app already exists
-          if az functionapp show --name "$FUNC_NAME" --resource-group "$RG" &>/dev/null; then
-            echo "✅ Wake function app already exists, skipping provisioning"
-          else
-            echo "Provisioning wake function infrastructure..."
-            PG_NAME="${{ vars.PG_SERVER_NAME || 'psql-gvojq4dgzbtk4' }}"
-            PG_ID=$(az postgres flexible-server show --name "$PG_NAME" --resource-group "$RG" --query id -o tsv)
-
-            az deployment group create \
-              --resource-group "$RG" \
-              --template-file infra/app/wake-function.bicep \
-              --parameters \
-                name="$FUNC_NAME" \
-                postgresServerResourceId="$PG_ID" \
-                postgresServerName="$PG_NAME" \
-                resourceToken="${{ vars.RESOURCE_TOKEN || 'gvojq4dgzbtk4' }}"
-            echo "✅ Wake function infrastructure provisioned"
-          fi
+          echo "Deploying wake function infrastructure (idempotent)..."
+          az deployment group create \
+            --resource-group "$RG" \
+            --template-file infra/app/wake-function.bicep \
+            --parameters \
+              name="$FUNC_NAME" \
+              postgresServerResourceId="$PG_ID" \
+              postgresServerName="$PG_NAME" \
+              resourceToken="${{ vars.RESOURCE_TOKEN || 'gvojq4dgzbtk4' }}"
+          echo "✅ Wake function infrastructure up to date"
 
       - name: Deploy wake function code
         run: |
