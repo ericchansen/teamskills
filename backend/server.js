@@ -101,12 +101,13 @@ app.get('/health/live', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Readiness probe — checks DB connectivity. Only ready when DB is reachable.
+// Readiness probe — checks DB connectivity and schema compatibility.
 app.get('/health/ready', async (req, res) => {
   const start = Date.now();
   try {
     const db = require('./db');
-    await db.query('SELECT 1');
+    // Verify schema has required columns (catches missed migrations)
+    await db.query('SELECT id, parent_id FROM skill_categories LIMIT 1');
     const latencyMs = Date.now() - start;
     res.json({
       status: 'ok',
@@ -116,12 +117,13 @@ app.get('/health/ready', async (req, res) => {
     });
   } catch (error) {
     const latencyMs = Date.now() - start;
+    const isSchemaError = error.code === '42703'; // undefined_column
     logger.error({ err: error, requestId: req.correlationId }, 'Readiness check failed');
     res.status(503).json({
       status: 'unavailable',
-      database: 'disconnected',
+      database: isSchemaError ? 'schema_outdated' : 'disconnected',
       database_latency_ms: latencyMs,
-      error: 'Database connection failed',
+      error: isSchemaError ? 'Schema migration required' : 'Database connection failed',
       timestamp: new Date().toISOString(),
     });
   }
@@ -163,8 +165,11 @@ app.use((err, req, res, _next) => {
 // Only start server if not in test mode
 let server;
 if (process.env.NODE_ENV !== 'test') {
-  server = app.listen(PORT, () => {
-    logger.info({ port: PORT }, 'Server running');
+  const { runMigrations } = require('./migrate');
+  runMigrations().then(() => {
+    server = app.listen(PORT, () => {
+      logger.info({ port: PORT }, 'Server running');
+    });
   });
 }
 
