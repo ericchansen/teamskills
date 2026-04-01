@@ -34,8 +34,8 @@ The Team Skills Tracker uses a three-tier deployment architecture:
 │                      GitHub Actions                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
 │  │ Bicep deploy │  │  Lint + Test │  │  HTTP ping   │          │
-│  │ Docker build │  │  ACR build   │  │  (DB wakeup) │          │
-│  │ Smoke test   │  │  az update   │  └──────────────┘          │
+│  │ Docker build │  │  ACR build   │                            │
+│  │ Smoke test   │  │  az update   │                            │
 │  └──────┬───────┘  └──────┬───────┘                             │
 └─────────┼──────────────────┼──────────────────────────────────────┘
           │                  │
@@ -119,9 +119,9 @@ PR opened/synchronized/reopened against `master`
    - Push to production ACR (reuses existing registry to save cost)
    - Tag: `<git-sha>`
 
-4. **Wake PostgreSQL** (if stopped)
-   - Azure Flex Servers auto-pause after inactivity
+4. **Wake PostgreSQL** (if stopped — staging PG servers may be paused by MCAPS)
    - `az postgres flexible-server start`
+   - Production PG is exempt via `CostControl=Ignore` tag
 
 5. **Deploy with Bicep** (`infra/staging/main.bicep`)
    - Creates per-PR resources with `pr${PR_NUMBER}` naming
@@ -515,8 +515,7 @@ window.__CONFIG__ = {
   VITE_API_URL: "${VITE_API_URL:-}",
   VITE_AZURE_AD_CLIENT_ID: "${VITE_AZURE_AD_CLIENT_ID:-}",
   VITE_AZURE_AD_TENANT_ID: "${VITE_AZURE_AD_TENANT_ID:-}",
-  VITE_AGENT_URL: "${VITE_AGENT_URL:-}",
-  VITE_WAKE_FUNCTION_URL: "${VITE_WAKE_FUNCTION_URL:-}"
+  VITE_AGENT_URL: "${VITE_AGENT_URL:-}"
 };
 EOF
 ```
@@ -601,7 +600,7 @@ Pings backend health endpoint:
 curl -sf https://ca-backend-gvojq4dgzbtk4.greenwater-c5983efd.centralus.azurecontainerapps.io/health
 ```
 
-Health endpoint queries the database (`SELECT 1`), keeping PostgreSQL awake.
+Health endpoint queries the database (`SELECT 1`), verifying PostgreSQL connectivity. Production PostgreSQL is tagged with `CostControl=Ignore` to prevent MCAPS nightly shutdown.
 
 ### Cost
 
@@ -626,7 +625,7 @@ Two issues combined to cause the failure:
 
 1. **Node version mismatch** — `@azure/msal-node@5.0.6` requires `node >= 20`, but `Dockerfile.backend` used `node:18-alpine`. CI tests passed because GitHub Actions used Node 22 (`actions/setup-node`), masking the Docker image incompatibility. **Fix:** PR #44 upgraded to `node:22-alpine`.
 
-2. **PostgreSQL server stopped** — The Azure Flexible Server was in "Stopped" state, causing every health check to return "Connection terminated due to connection timeout." The Node.js server started fine but the `/health` endpoint queries the database and returned 503. **Fix:** `az postgres flexible-server start --name psql-gvojq4dgzbtk4 --resource-group rg-teamskills-prod`.
+2. **PostgreSQL server stopped** — The Azure Flexible Server was in "Stopped" state, caused by MCAPS Cost Control #26 (nightly automation that pauses PostgreSQL). The Node.js server started fine but the `/health` endpoint queries the database and returned 503. **Fix:** Tag PostgreSQL with `CostControl=Ignore` to exempt from nightly shutdown. Manual recovery: `az postgres flexible-server start --name psql-gvojq4dgzbtk4 --resource-group rg-teamskills-prod`.
 
 **Investigation Steps (in order of likelihood):**
 
@@ -791,8 +790,7 @@ window.__CONFIG__ = {
   VITE_API_URL: "https://ca-backend-gvojq4dgzbtk4.greenwater-c5983efd.centralus.azurecontainerapps.io",
   VITE_AZURE_AD_CLIENT_ID: "69c41897-2a3c-4956-b78d-56670cdb5750",
   VITE_AZURE_AD_TENANT_ID: "72f988bf-4a3c-4ad2-97fc-2d7430d1fbb5",
-  VITE_AGENT_URL: "https://ca-agent-gvojq4dgzbtk4.greenwater-c5983efd.centralus.azurecontainerapps.io",
-  VITE_WAKE_FUNCTION_URL: ""
+  VITE_AGENT_URL: "https://ca-agent-gvojq4dgzbtk4.greenwater-c5983efd.centralus.azurecontainerapps.io"
 };
 ```
 
