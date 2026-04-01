@@ -129,9 +129,6 @@ jobs:
             --resource-group ${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }} \
             --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
-          WAKE_FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
-          WAKE_URL="https://${WAKE_FUNC_NAME}.azurewebsites.net"
-
           az acr build \
             --registry ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }} \
             --image frontend:${{ github.sha }} \
@@ -141,47 +138,7 @@ jobs:
             --build-arg VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
             --build-arg VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
             --build-arg VITE_AGENT_URL=$AGENT_URL \
-            --build-arg VITE_WAKE_FUNCTION_URL=$WAKE_URL \
             .
-
-      - name: Setup Node.js for wake function
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      # Wake function steps are non-blocking: an Azure Policy enforces
-      # allowSharedKeyAccess=false on the storage account, which blocks
-      # SCM/Kudu zip deployment. We don't want this to prevent container
-      # app updates. Track fix in a separate issue.
-      - name: Provision wake function infrastructure
-        continue-on-error: true
-        run: |
-          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
-          FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
-          PG_NAME="${{ vars.PG_SERVER_NAME || 'psql-gvojq4dgzbtk4' }}"
-          PG_ID=$(az postgres flexible-server show --name "$PG_NAME" --resource-group "$RG" --query id -o tsv)
-
-          echo "Deploying wake function infrastructure (idempotent)..."
-          az deployment group create \
-            --resource-group "$RG" \
-            --template-file infra/app/wake-function.bicep \
-            --parameters \
-              name="$FUNC_NAME" \
-              postgresServerResourceId="$PG_ID" \
-              postgresServerName="$PG_NAME" \
-              resourceToken="${{ vars.RESOURCE_TOKEN || 'gvojq4dgzbtk4' }}"
-          echo "✅ Wake function infrastructure up to date"
-
-      - name: Deploy wake function code
-        continue-on-error: true
-        run: |
-          cd wake-function && npm ci --production && rm -f local.settings.json && cd ..
-          (cd wake-function && zip -r ../wake-function.zip .)
-          az functionapp deploy \
-            --name "${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}" \
-            --resource-group "${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}" \
-            --src-path wake-function.zip \
-            --type zip
 
       - name: Deploy backend
         run: |
@@ -224,9 +181,6 @@ jobs:
             --resource-group "$RG" \
             --query 'properties.configuration.ingress.fqdn' -o tsv)"
 
-          WAKE_FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
-          WAKE_URL="https://${WAKE_FUNC_NAME}.azurewebsites.net"
-
           # --set-env-vars REPLACES all env vars — must include every var the container needs
           az containerapp update \
             --name ${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }} \
@@ -236,8 +190,7 @@ jobs:
               VITE_API_URL=$API_URL \
               VITE_AZURE_AD_CLIENT_ID=${{ vars.AZURE_AD_CLIENT_ID }} \
               VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
-              VITE_AGENT_URL=$AGENT_URL \
-              VITE_WAKE_FUNCTION_URL=$WAKE_URL
+              VITE_AGENT_URL=$AGENT_URL
 
       - name: Wait for new revisions to provision
         run: |
@@ -375,15 +328,11 @@ jobs:
 
       - name: Deployment summary
         run: |
-          WAKE_FUNC_NAME="${{ vars.WAKE_FUNCTION_APP || 'func-wake-gvojq4dgzbtk4' }}"
-          WAKE_URL="https://${WAKE_FUNC_NAME}.azurewebsites.net"
-
           echo "## Deployment Complete! 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Frontend:** ${{ env.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "**Backend:** ${{ env.BACKEND_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "**Agent:** ${{ env.AGENT_URL }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Wake Function:** ${WAKE_URL}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -397,6 +346,5 @@ jobs:
           echo "| \`BACKEND_APP\` | \`ca-backend-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`FRONTEND_APP\` | \`ca-frontend-teamskills\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`AGENT_APP\` | \`ca-agent-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`WAKE_FUNCTION_APP\` | \`func-wake-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`PG_SERVER_NAME\` | \`psql-gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`RESOURCE_TOKEN\` | \`gvojq4dgzbtk4\` |" >> $GITHUB_STEP_SUMMARY

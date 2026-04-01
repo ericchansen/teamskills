@@ -26,9 +26,6 @@ param azureAdTenantId string = ''
 @secure()
 param azureAdClientSecret string = ''
 
-@description('Wake Function URL for database auto-start')
-param wakeFunctionUrl string = ''
-
 // Easy Auth requires all three params: clientId, tenantId, and clientSecret.
 // Gate on all of them to prevent partial/broken auth configurations.
 var easyAuthEnabled = !empty(azureAdClientId) && !empty(azureAdTenantId) && !empty(azureAdClientSecret)
@@ -87,10 +84,6 @@ resource frontend 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'VITE_AZURE_AD_TENANT_ID'
               value: azureAdTenantId
-            }
-            {
-              name: 'VITE_WAKE_FUNCTION_URL'
-              value: wakeFunctionUrl
             }
           ]
           resources: {

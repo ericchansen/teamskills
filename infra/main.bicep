@@ -149,7 +149,6 @@ module frontend './app/frontend.bicep' = {
     azureAdClientId: azureAdClientId
     azureAdTenantId: azureAdTenantId
     azureAdClientSecret: azureAdClientSecret
-    wakeFunctionUrl: wakeFunction.outputs.uri
   }
 }
 
@@ -170,20 +169,6 @@ module agent './app/agent.bicep' = {
     azureOpenAiResourceId: openai.outputs.id
     frontendUrl: frontend.outputs.uri
     appInsightsConnectionString: appInsights.outputs.connectionString
-  }
-}
-
-// Wake Function App (auto-starts PostgreSQL on demand)
-module wakeFunction './app/wake-function.bicep' = {
-  name: 'wake-function'
-  scope: rg
-  params: {
-    name: '${abbrs.webSitesFunctions}wake-${resourceToken}'
-    location: location
-    tags: union(tags, { 'azd-service-name': 'wake-function' })
-    postgresServerResourceId: postgres.outputs.id
-    postgresServerName: postgres.outputs.name
-    resourceToken: resourceToken
   }
 }
 
@@ -211,7 +196,6 @@ output AGENT_URI string = agent.outputs.uri
 output POSTGRES_HOST string = postgres.outputs.fqdn
 output AZURE_OPENAI_ENDPOINT string = openai.outputs.endpoint
 output AZURE_OPENAI_DEPLOYMENT_NAME string = openAiModelDeploymentName
-output WAKE_FUNCTION_URI string = wakeFunction.outputs.uri
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = appInsights.outputs.connectionString
 
 // AcrPull role assignments for Container Apps managed identity
