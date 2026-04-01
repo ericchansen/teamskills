@@ -99,20 +99,9 @@ router.post('/init', checkInitSecret, async (req, res) => {
     `);
     
     if (parseInt(tablesCheck.rows[0].count) > 0) {
-      // Tables exist — run schema migrations for new columns
-      await db.query(`
-        ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES skill_categories(id) ON DELETE CASCADE;
-        ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;
-        ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
-        ALTER TABLE skills ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS qualifier VARCHAR(100);
-        CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_root_name
-            ON skill_categories(name) WHERE parent_id IS NULL;
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_parent_name
-            ON skill_categories(parent_id, name);
-      `);
-      logger.info('Schema migrations applied');
+      // Tables exist — run schema migrations (reuses startup migration logic)
+      const { runMigrations } = require('../migrate');
+      await runMigrations();
 
       // Check if data exists
       const dataCheck = await db.query('SELECT COUNT(*) as count FROM users');

@@ -283,6 +283,18 @@ jobs:
             exit 1
           fi
 
+          echo "=== Smoke Test: Schema Readiness ==="
+          READY=$(curl -sf "${BACKEND_URL}/health/ready" || echo '{"status":"unreachable"}')
+          echo "Ready: ${READY}"
+          if echo "$READY" | grep -q '"schema_outdated"'; then
+            echo "❌ Database schema is outdated — migrations did not run!"
+            exit 1
+          fi
+          if ! echo "$READY" | grep -q '"ok"'; then
+            echo "❌ Readiness check failed!"
+            exit 1
+          fi
+
           echo "=== Smoke Test: Auth Config ==="
           AUTH_CONFIG=$(curl -sf "${BACKEND_URL}/api/auth/config" || echo "{}")
           echo "Auth config: ${AUTH_CONFIG}"
