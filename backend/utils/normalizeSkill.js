@@ -11,8 +11,9 @@ const nameMap = require('../data/skill-name-map.json');
 const aliases = nameMap.aliases || {};
 
 /**
- * Normalize a skill name: apply aliases, URL-decode, strip Fabric prefix,
- * and strip trailing dedup digits.
+ * Normalize a skill name: apply explicit alias map (includes Fabric-prefixed
+ * names, URL-encoded variants, and known dedup suffixes), URL-decode, and
+ * strip trailing dedup digits.
  * "Azure Container Apps2" → "Azure Container Apps"
  * "C%23 / .NET" → "C# / .NET"
  * "Fabric OneLake" → "OneLake"

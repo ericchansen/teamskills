@@ -295,9 +295,14 @@ async function syncPivotToDatabase(pivotData) {
       stats.skills.existing++;
     } else {
       // For truly new skills, find a category from the hierarchy by partial name match
+      // Only match uniquely-named categories to avoid ambiguous assignment
       const catResult = await db.query(`
         SELECT sc.id as category_id FROM skill_categories sc
         WHERE $1 ILIKE '%' || sc.name || '%' AND sc.level >= 2
+          AND NOT EXISTS (
+            SELECT 1 FROM skill_categories sc2
+            WHERE sc2.name = sc.name AND sc2.id <> sc.id
+          )
         ORDER BY sc.level DESC, length(sc.name) DESC
         LIMIT 1
       `, [skillName]);
