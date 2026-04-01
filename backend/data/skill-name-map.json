@@ -2,7 +2,13 @@
   "aliases": {
     "Azure Container Apps2": "Azure Container Apps",
     "Azure Functions3": "Azure Functions",
-    "Azure Firewall4": "Azure Firewall"
+    "Azure Firewall4": "Azure Firewall",
+    "C%23 / .NET": "C# / .NET",
+    "Fabric OneLake": "OneLake",
+    "Fabric Data Engineering and Data Science": "Data Engineering and Data Science",
+    "Fabric Data Factory": "Data Factory",
+    "Fabric Data Warehouse": "Data Warehouse",
+    "Fabric Real Time Intelligence": "Real Time Intelligence"
   },
   "softSkills": [
     "Technical Presentations",
