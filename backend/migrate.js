@@ -85,6 +85,9 @@ async function cleanupSkillCategories() {
   // Step 2: Merge duplicate skills created by Excel pivot dedup suffixes
   await mergeDuplicateSkills();
 
+  // Step 2b: Merge exact-name duplicates (same literal name, different IDs)
+  await mergeExactNameDuplicates();
+
   // Step 3: Assign categories to uncategorized skills by name-matching
   await assignUncategorizedSkills();
 
@@ -249,6 +252,65 @@ async function mergeDuplicateSkills() {
     await db.query('DELETE FROM skills WHERE id = $1', [skill.id]);
 
     logger.info(`Merged duplicate skill "${skill.name}" (id=${skill.id}) → "${normalized}" (id=${canonicalId})`);
+  }
+}
+
+/**
+ * Merge skills with the exact same name but different IDs.
+ * Keeps the lowest ID (oldest), merges user_skills with MAX proficiency, deletes others.
+ */
+async function mergeExactNameDuplicates() {
+  const dupes = await db.query(`
+    SELECT name, array_agg(id ORDER BY id) as ids
+    FROM skills GROUP BY name HAVING COUNT(*) > 1
+  `);
+
+  for (const row of dupes.rows) {
+    const [keepId, ...removeIds] = row.ids;
+
+    for (const removeId of removeIds) {
+      const removeSkills = await db.query(
+        'SELECT user_id, proficiency_level FROM user_skills WHERE skill_id = $1',
+        [removeId]
+      );
+
+      for (const us of removeSkills.rows) {
+        const existing = await db.query(
+          'SELECT proficiency_level FROM user_skills WHERE user_id = $1 AND skill_id = $2',
+          [us.user_id, keepId]
+        );
+
+        const removeNum = parseInt(us.proficiency_level.replace('L', ''), 10);
+        if (existing.rows.length > 0) {
+          const keepNum = parseInt(existing.rows[0].proficiency_level.replace('L', ''), 10);
+          if (removeNum > keepNum) {
+            await db.query(
+              'UPDATE user_skills SET proficiency_level = $1 WHERE user_id = $2 AND skill_id = $3',
+              [us.proficiency_level, us.user_id, keepId]
+            );
+          }
+        } else {
+          await db.query(
+            'INSERT INTO user_skills (user_id, skill_id, proficiency_level) VALUES ($1, $2, $3)',
+            [us.user_id, keepId, us.proficiency_level]
+          );
+        }
+      }
+
+      // If the kept skill is uncategorized but the duplicate has a category, take it
+      const keepSkill = await db.query('SELECT category_id FROM skills WHERE id = $1', [keepId]);
+      const removeSkill = await db.query('SELECT category_id FROM skills WHERE id = $1', [removeId]);
+      if (!keepSkill.rows[0].category_id && removeSkill.rows[0]?.category_id) {
+        await db.query('UPDATE skills SET category_id = $1 WHERE id = $2', [removeSkill.rows[0].category_id, keepId]);
+      }
+
+      await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [keepId, removeId]);
+      await db.query('DELETE FROM user_skills WHERE skill_id = $1', [removeId]);
+      await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [removeId]);
+      await db.query('DELETE FROM skills WHERE id = $1', [removeId]);
+
+      logger.info(`Merged exact-name duplicate "${row.name}" (id=${removeId}) → (id=${keepId})`);
+    }
   }
 }
 
