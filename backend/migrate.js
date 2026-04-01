@@ -94,6 +94,73 @@ async function tableExists(tableName) {
 }
 
 /**
+ * Set-based merge of user_skills from one skill ID to another.
+ * Uses INSERT...ON CONFLICT with GREATEST to keep the higher proficiency level.
+ * Also migrates user_skills_history if the table exists.
+ */
+async function mergeUserSkills(keepId, removeId, hasHistory) {
+  await db.query(`
+    INSERT INTO user_skills (user_id, skill_id, proficiency_level)
+    SELECT user_id, $1 AS skill_id, proficiency_level
+    FROM user_skills
+    WHERE skill_id = $2
+    ON CONFLICT (user_id, skill_id)
+    DO UPDATE SET proficiency_level = CASE
+      WHEN regexp_replace(EXCLUDED.proficiency_level, '^L', '')::int >
+           regexp_replace(user_skills.proficiency_level, '^L', '')::int
+      THEN EXCLUDED.proficiency_level
+      ELSE user_skills.proficiency_level
+    END
+  `, [keepId, removeId]);
+
+  await db.query('DELETE FROM user_skills WHERE skill_id = $1', [removeId]);
+
+  if (hasHistory) {
+    await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [keepId, removeId]);
+  }
+}
+
+/**
+ * Re-point skill_relationships from one skill ID to another, then clean up leftovers.
+ * Avoids creating duplicate or self-referential relationship rows.
+ */
+async function repointRelationships(keepId, removeId) {
+  // Remove any direct relationship between the two skills (would become self-referential)
+  await db.query(
+    'DELETE FROM skill_relationships WHERE (parent_skill_id = $1 AND child_skill_id = $2) OR (parent_skill_id = $2 AND child_skill_id = $1)',
+    [keepId, removeId]
+  );
+
+  // Re-point parent_skill_id, skipping rows that would create duplicates
+  await db.query(`
+    UPDATE skill_relationships sr
+    SET parent_skill_id = $1
+    WHERE sr.parent_skill_id = $2
+      AND NOT EXISTS (
+        SELECT 1 FROM skill_relationships s2
+        WHERE s2.parent_skill_id = $1 AND s2.child_skill_id = sr.child_skill_id
+      )
+  `, [keepId, removeId]);
+
+  // Re-point child_skill_id, skipping rows that would create duplicates
+  await db.query(`
+    UPDATE skill_relationships sr
+    SET child_skill_id = $1
+    WHERE sr.child_skill_id = $2
+      AND NOT EXISTS (
+        SELECT 1 FROM skill_relationships s2
+        WHERE s2.parent_skill_id = sr.parent_skill_id AND s2.child_skill_id = $1
+      )
+  `, [keepId, removeId]);
+
+  // Delete any remaining references (now-redundant duplicates)
+  await db.query(
+    'DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1',
+    [removeId]
+  );
+}
+
+/**
  * Idempotent skill cleanup migration:
  * 1. Ensure "Soft Skills" top-level category exists with its 8 skills
  * 2. Merge duplicate skills (dedup suffix variants → canonical name)
@@ -187,45 +254,12 @@ async function mergeDuplicateSkills(hasHistory, hasRelationships) {
     const canonicalId = canonicalResult.rows[0].id;
     if (aliasId === canonicalId) continue;
 
-    // Move user_skills: for each user_skill pointing to the alias,
-    // keep the MAX proficiency between alias and canonical
-    const aliasUserSkills = await db.query(
-      'SELECT user_id, proficiency_level FROM user_skills WHERE skill_id = $1',
-      [aliasId]
-    );
+    // Set-based merge of user_skills (MAX proficiency wins)
+    await mergeUserSkills(canonicalId, aliasId, hasHistory);
 
-    for (const row of aliasUserSkills.rows) {
-      const existing = await db.query(
-        'SELECT proficiency_level FROM user_skills WHERE user_id = $1 AND skill_id = $2',
-        [row.user_id, canonicalId]
-      );
-
-      const aliasNum = parseInt(row.proficiency_level.replace('L', ''), 10);
-
-      if (existing.rows.length > 0) {
-        const canonicalNum = parseInt(existing.rows[0].proficiency_level.replace('L', ''), 10);
-        if (aliasNum > canonicalNum) {
-          await db.query(
-            'UPDATE user_skills SET proficiency_level = $1 WHERE user_id = $2 AND skill_id = $3',
-            [row.proficiency_level, row.user_id, canonicalId]
-          );
-        }
-      } else {
-        await db.query(
-          'INSERT INTO user_skills (user_id, skill_id, proficiency_level) VALUES ($1, $2, $3)',
-          [row.user_id, canonicalId, row.proficiency_level]
-        );
-      }
-    }
-
-    if (hasHistory) {
-      await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [canonicalId, aliasId]);
-    }
-
-    // Delete the alias user_skills and the alias skill
-    await db.query('DELETE FROM user_skills WHERE skill_id = $1', [aliasId]);
+    // Re-point relationships to canonical skill before deleting
     if (hasRelationships) {
-      await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [aliasId]);
+      await repointRelationships(canonicalId, aliasId);
     }
     await db.query('DELETE FROM skills WHERE id = $1', [aliasId]);
 
@@ -243,41 +277,12 @@ async function mergeDuplicateSkills(hasHistory, hasRelationships) {
 
     const canonicalId = canonical.rows[0].id;
 
-    // Same merge logic as above
-    const dupeSkills = await db.query(
-      'SELECT user_id, proficiency_level FROM user_skills WHERE skill_id = $1',
-      [skill.id]
-    );
+    // Set-based merge of user_skills (MAX proficiency wins)
+    await mergeUserSkills(canonicalId, skill.id, hasHistory);
 
-    for (const row of dupeSkills.rows) {
-      const existing = await db.query(
-        'SELECT proficiency_level FROM user_skills WHERE user_id = $1 AND skill_id = $2',
-        [row.user_id, canonicalId]
-      );
-
-      const dupeNum = parseInt(row.proficiency_level.replace('L', ''), 10);
-      if (existing.rows.length > 0) {
-        const canonicalNum = parseInt(existing.rows[0].proficiency_level.replace('L', ''), 10);
-        if (dupeNum > canonicalNum) {
-          await db.query(
-            'UPDATE user_skills SET proficiency_level = $1 WHERE user_id = $2 AND skill_id = $3',
-            [row.proficiency_level, row.user_id, canonicalId]
-          );
-        }
-      } else {
-        await db.query(
-          'INSERT INTO user_skills (user_id, skill_id, proficiency_level) VALUES ($1, $2, $3)',
-          [row.user_id, canonicalId, row.proficiency_level]
-        );
-      }
-    }
-
-    if (hasHistory) {
-      await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [canonicalId, skill.id]);
-    }
-    await db.query('DELETE FROM user_skills WHERE skill_id = $1', [skill.id]);
+    // Re-point relationships to canonical skill before deleting
     if (hasRelationships) {
-      await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [skill.id]);
+      await repointRelationships(canonicalId, skill.id);
     }
     await db.query('DELETE FROM skills WHERE id = $1', [skill.id]);
 
@@ -299,34 +304,6 @@ async function mergeExactNameDuplicates(hasHistory, hasRelationships) {
     const [keepId, ...removeIds] = row.ids;
 
     for (const removeId of removeIds) {
-      const removeSkills = await db.query(
-        'SELECT user_id, proficiency_level FROM user_skills WHERE skill_id = $1',
-        [removeId]
-      );
-
-      for (const us of removeSkills.rows) {
-        const existing = await db.query(
-          'SELECT proficiency_level FROM user_skills WHERE user_id = $1 AND skill_id = $2',
-          [us.user_id, keepId]
-        );
-
-        const removeNum = parseInt(us.proficiency_level.replace('L', ''), 10);
-        if (existing.rows.length > 0) {
-          const keepNum = parseInt(existing.rows[0].proficiency_level.replace('L', ''), 10);
-          if (removeNum > keepNum) {
-            await db.query(
-              'UPDATE user_skills SET proficiency_level = $1 WHERE user_id = $2 AND skill_id = $3',
-              [us.proficiency_level, us.user_id, keepId]
-            );
-          }
-        } else {
-          await db.query(
-            'INSERT INTO user_skills (user_id, skill_id, proficiency_level) VALUES ($1, $2, $3)',
-            [us.user_id, keepId, us.proficiency_level]
-          );
-        }
-      }
-
       // If the kept skill is uncategorized but the duplicate has a category, take it
       const keepSkill = await db.query('SELECT category_id FROM skills WHERE id = $1', [keepId]);
       const removeSkill = await db.query('SELECT category_id FROM skills WHERE id = $1', [removeId]);
@@ -334,12 +311,12 @@ async function mergeExactNameDuplicates(hasHistory, hasRelationships) {
         await db.query('UPDATE skills SET category_id = $1 WHERE id = $2', [removeSkill.rows[0].category_id, keepId]);
       }
 
-      if (hasHistory) {
-        await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [keepId, removeId]);
-      }
-      await db.query('DELETE FROM user_skills WHERE skill_id = $1', [removeId]);
+      // Set-based merge of user_skills (MAX proficiency wins)
+      await mergeUserSkills(keepId, removeId, hasHistory);
+
+      // Re-point relationships to kept skill before deleting
       if (hasRelationships) {
-        await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [removeId]);
+        await repointRelationships(keepId, removeId);
       }
       await db.query('DELETE FROM skills WHERE id = $1', [removeId]);
 
