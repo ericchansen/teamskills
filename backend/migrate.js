@@ -21,16 +21,31 @@ async function runMigrations() {
 
     await db.query(`
       -- PR #79: Hierarchical skill categories
-      ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES skill_categories(id) ON DELETE CASCADE;
-      ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;
-      ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
-      ALTER TABLE skills ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS qualifier VARCHAR(100);
-      CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_root_name
-          ON skill_categories(name) WHERE parent_id IS NULL;
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_parent_name
-          ON skill_categories(parent_id, name);
+      -- Guard each table group in case of partially-initialized schemas
+      DO $$ BEGIN
+        IF to_regclass('public.skill_categories') IS NOT NULL THEN
+          ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES skill_categories(id) ON DELETE CASCADE;
+          ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;
+          ALTER TABLE skill_categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+          CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_root_name
+              ON skill_categories(name) WHERE parent_id IS NULL;
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_parent_name
+              ON skill_categories(parent_id, name);
+        END IF;
+      END $$;
+
+      DO $$ BEGIN
+        IF to_regclass('public.skills') IS NOT NULL THEN
+          ALTER TABLE skills ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+        END IF;
+      END $$;
+
+      DO $$ BEGIN
+        IF to_regclass('public.users') IS NOT NULL THEN
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS qualifier VARCHAR(100);
+        END IF;
+      END $$;
 
       -- Admin audit log (used by /api/admin endpoints)
       CREATE TABLE IF NOT EXISTS admin_audit_log (
