@@ -274,23 +274,33 @@ async function syncPivotToDatabase(pivotData) {
   await ensureSchemaExtensions();
 
   // Phase 1: Upsert all skills from column headers (with name normalization)
+  // canonicalIdMap prevents redundant DB queries when multiple raw names
+  // normalize to the same canonical skill (e.g., "Azure Functions" + "Azure Functions3")
   const skillIdMap = new Map();
+  const canonicalIdMap = new Map();
   for (const rawName of skillNames) {
     const skillName = normalizeSkillName(rawName);
 
     // If we already resolved this canonical name, reuse the same ID
-    if (skillIdMap.has(rawName)) continue;
+    if (canonicalIdMap.has(skillName)) {
+      skillIdMap.set(rawName, canonicalIdMap.get(skillName));
+      stats.skills.existing++;
+      continue;
+    }
 
     const existing = await db.query('SELECT id FROM skills WHERE name = $1', [skillName]);
     if (existing.rows.length > 0) {
       skillIdMap.set(rawName, existing.rows[0].id);
+      canonicalIdMap.set(skillName, existing.rows[0].id);
       stats.skills.existing++;
     } else {
-      // Try to find a category by matching an existing categorized skill with a similar name
-      const catResult = await db.query(
-        'SELECT category_id FROM skills WHERE name = $1 AND category_id IS NOT NULL LIMIT 1',
-        [skillName]
-      );
+      // For truly new skills, find a category from the hierarchy by partial name match
+      const catResult = await db.query(`
+        SELECT sc.id as category_id FROM skill_categories sc
+        WHERE $1 ILIKE '%' || sc.name || '%' AND sc.level >= 2
+        ORDER BY sc.level DESC, length(sc.name) DESC
+        LIMIT 1
+      `, [skillName]);
       const categoryId = catResult.rows.length > 0 ? catResult.rows[0].category_id : null;
 
       const result = await db.query(
@@ -298,6 +308,7 @@ async function syncPivotToDatabase(pivotData) {
         [skillName, categoryId]
       );
       skillIdMap.set(rawName, result.rows[0].id);
+      canonicalIdMap.set(skillName, result.rows[0].id);
       stats.skills.created++;
     }
   }

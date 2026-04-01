@@ -61,7 +61,19 @@ async function runMigrations() {
     `);
 
     // PR #82: Skill categorization cleanup — dedup + assign categories
-    await cleanupSkillCategories();
+    // Guard: only run if all skill-related tables exist (partial schemas skip)
+    const skillTablesCheck = await db.query(`
+      SELECT
+        to_regclass('public.skills') AS skills,
+        to_regclass('public.user_skills') AS user_skills,
+        to_regclass('public.skill_categories') AS skill_categories
+    `);
+    const st = skillTablesCheck.rows[0] || {};
+    if (!st.skills || !st.user_skills || !st.skill_categories) {
+      logger.info('One or more skill-related tables are missing — skipping skill categorization cleanup');
+    } else {
+      await cleanupSkillCategories();
+    }
 
     logger.info('Startup migrations applied successfully');
   } catch (err) {
@@ -72,6 +84,16 @@ async function runMigrations() {
 }
 
 /**
+ * Check if a table exists in the public schema.
+ */
+async function tableExists(tableName) {
+  const result = await db.query(
+    `SELECT to_regclass('public.' || $1) AS t`, [tableName]
+  );
+  return !!result.rows[0]?.t;
+}
+
+/**
  * Idempotent skill cleanup migration:
  * 1. Ensure "Soft Skills" top-level category exists with its 8 skills
  * 2. Merge duplicate skills (dedup suffix variants → canonical name)
@@ -79,14 +101,18 @@ async function runMigrations() {
  * 4. Add unique index on skills.name to prevent future duplicates
  */
 async function cleanupSkillCategories() {
+  // Cache table existence for optional tables (may not exist on older schemas)
+  const hasHistory = await tableExists('user_skills_history');
+  const hasRelationships = await tableExists('skill_relationships');
+
   // Step 1: Ensure "Soft Skills" category and skills exist
   await ensureSoftSkills();
 
   // Step 2: Merge duplicate skills created by Excel pivot dedup suffixes
-  await mergeDuplicateSkills();
+  await mergeDuplicateSkills(hasHistory, hasRelationships);
 
   // Step 2b: Merge exact-name duplicates (same literal name, different IDs)
-  await mergeExactNameDuplicates();
+  await mergeExactNameDuplicates(hasHistory, hasRelationships);
 
   // Step 3: Assign categories to uncategorized skills by name-matching
   await assignUncategorizedSkills();
@@ -125,7 +151,7 @@ async function ensureSoftSkills() {
     logger.info('Created "Soft Skills" top-level category');
   }
 
-  // Upsert each soft skill
+  // Upsert each soft skill — force category to Soft Skills regardless of current assignment
   for (let i = 0; i < softSkills.length; i++) {
     const name = softSkills[i];
     const existing = await db.query('SELECT id, category_id FROM skills WHERE name = $1', [name]);
@@ -134,7 +160,7 @@ async function ensureSoftSkills() {
         'INSERT INTO skills (name, category_id, sort_order) VALUES ($1, $2, $3)',
         [name, catId, i + 1]
       );
-    } else if (existing.rows[0].category_id === null) {
+    } else if (existing.rows[0].category_id !== catId) {
       await db.query(
         'UPDATE skills SET category_id = $1, sort_order = $2 WHERE id = $3',
         [catId, i + 1, existing.rows[0].id]
@@ -147,7 +173,7 @@ async function ensureSoftSkills() {
  * Merge duplicate skills created by Excel pivot dedup suffixes.
  * For each known alias, move user_skills to the canonical skill and delete the duplicate.
  */
-async function mergeDuplicateSkills() {
+async function mergeDuplicateSkills(hasHistory, hasRelationships) {
   const aliases = nameMap.aliases || {};
 
   for (const [aliasName, canonicalName] of Object.entries(aliases)) {
@@ -192,15 +218,15 @@ async function mergeDuplicateSkills() {
       }
     }
 
-    // Also move history records
-    await db.query(
-      'UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2',
-      [canonicalId, aliasId]
-    );
+    if (hasHistory) {
+      await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [canonicalId, aliasId]);
+    }
 
     // Delete the alias user_skills and the alias skill
     await db.query('DELETE FROM user_skills WHERE skill_id = $1', [aliasId]);
-    await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [aliasId]);
+    if (hasRelationships) {
+      await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [aliasId]);
+    }
     await db.query('DELETE FROM skills WHERE id = $1', [aliasId]);
 
     logger.info(`Merged duplicate skill "${aliasName}" → "${canonicalName}"`);
@@ -246,9 +272,13 @@ async function mergeDuplicateSkills() {
       }
     }
 
-    await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [canonicalId, skill.id]);
+    if (hasHistory) {
+      await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [canonicalId, skill.id]);
+    }
     await db.query('DELETE FROM user_skills WHERE skill_id = $1', [skill.id]);
-    await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [skill.id]);
+    if (hasRelationships) {
+      await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [skill.id]);
+    }
     await db.query('DELETE FROM skills WHERE id = $1', [skill.id]);
 
     logger.info(`Merged duplicate skill "${skill.name}" (id=${skill.id}) → "${normalized}" (id=${canonicalId})`);
@@ -259,7 +289,7 @@ async function mergeDuplicateSkills() {
  * Merge skills with the exact same name but different IDs.
  * Keeps the lowest ID (oldest), merges user_skills with MAX proficiency, deletes others.
  */
-async function mergeExactNameDuplicates() {
+async function mergeExactNameDuplicates(hasHistory, hasRelationships) {
   const dupes = await db.query(`
     SELECT name, array_agg(id ORDER BY id) as ids
     FROM skills GROUP BY name HAVING COUNT(*) > 1
@@ -304,9 +334,13 @@ async function mergeExactNameDuplicates() {
         await db.query('UPDATE skills SET category_id = $1 WHERE id = $2', [removeSkill.rows[0].category_id, keepId]);
       }
 
-      await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [keepId, removeId]);
+      if (hasHistory) {
+        await db.query('UPDATE user_skills_history SET skill_id = $1 WHERE skill_id = $2', [keepId, removeId]);
+      }
       await db.query('DELETE FROM user_skills WHERE skill_id = $1', [removeId]);
-      await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [removeId]);
+      if (hasRelationships) {
+        await db.query('DELETE FROM skill_relationships WHERE parent_skill_id = $1 OR child_skill_id = $1', [removeId]);
+      }
       await db.query('DELETE FROM skills WHERE id = $1', [removeId]);
 
       logger.info(`Merged exact-name duplicate "${row.name}" (id=${removeId}) → (id=${keepId})`);
@@ -341,11 +375,16 @@ async function assignUncategorizedSkills() {
       continue;
     }
 
-    // Try partial match: look for a category whose name appears in the skill name
+    // Try partial match: look for a uniquely-named category whose name appears in the skill name
+    // Exclude ambiguous names (e.g., "Solution" exists under multiple parents)
     const partialMatch = await db.query(`
       SELECT sc.id as category_id, sc.name, sc.level
       FROM skill_categories sc
       WHERE $1 ILIKE '%' || sc.name || '%' AND sc.level >= 2
+        AND NOT EXISTS (
+          SELECT 1 FROM skill_categories sc2
+          WHERE sc2.name = sc.name AND sc2.id <> sc.id
+        )
       ORDER BY sc.level DESC, length(sc.name) DESC
       LIMIT 1
     `, [skill.name]);
