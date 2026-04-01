@@ -19,6 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../db');
+const { normalizeSkillName } = require('../utils/normalizeSkill');
 
 // SharePoint site and list identifiers
 const SHAREPOINT_SITE = 'microsoft.sharepoint.com:/teams/SDPAccountsShared';
@@ -272,20 +273,31 @@ async function syncPivotToDatabase(pivotData) {
 
   await ensureSchemaExtensions();
 
-  // Phase 1: Upsert all skills from column headers
+  // Phase 1: Upsert all skills from column headers (with name normalization)
   const skillIdMap = new Map();
-  for (const skillName of skillNames) {
+  for (const rawName of skillNames) {
+    const skillName = normalizeSkillName(rawName);
+
+    // If we already resolved this canonical name, reuse the same ID
+    if (skillIdMap.has(rawName)) continue;
+
     const existing = await db.query('SELECT id FROM skills WHERE name = $1', [skillName]);
     if (existing.rows.length > 0) {
-      skillIdMap.set(skillName, existing.rows[0].id);
+      skillIdMap.set(rawName, existing.rows[0].id);
       stats.skills.existing++;
     } else {
-      // New skill from pivot — no category mapping available, leave null
-      const result = await db.query(
-        'INSERT INTO skills (name) VALUES ($1) RETURNING id',
+      // Try to find a category by matching an existing categorized skill with a similar name
+      const catResult = await db.query(
+        'SELECT category_id FROM skills WHERE name = $1 AND category_id IS NOT NULL LIMIT 1',
         [skillName]
       );
-      skillIdMap.set(skillName, result.rows[0].id);
+      const categoryId = catResult.rows.length > 0 ? catResult.rows[0].category_id : null;
+
+      const result = await db.query(
+        'INSERT INTO skills (name, category_id) VALUES ($1, $2) RETURNING id',
+        [skillName, categoryId]
+      );
+      skillIdMap.set(rawName, result.rows[0].id);
       stats.skills.created++;
     }
   }
@@ -313,7 +325,7 @@ async function syncPivotToDatabase(pivotData) {
     }
     const userId = userResult.rows[0].id;
 
-    // Phase 3: Upsert user_skills
+    // Phase 3: Upsert user_skills (take MAX when dedup columns map to the same skill)
     for (const [skillName, level] of Object.entries(row.skills)) {
       const skillId = skillIdMap.get(skillName);
       if (!skillId) { stats.userSkills.skipped++; continue; }
@@ -324,7 +336,10 @@ async function syncPivotToDatabase(pivotData) {
       );
 
       if (existing.rows.length > 0) {
-        if (existing.rows[0].proficiency_level !== level) {
+        const existingNum = parseInt(existing.rows[0].proficiency_level.replace('L', ''), 10);
+        const newNum = parseInt(level.replace('L', ''), 10);
+        // Only update if the new level is higher (MAX wins for dedup columns)
+        if (newNum > existingNum) {
           await db.query(
             'UPDATE user_skills SET proficiency_level = $1 WHERE user_id = $2 AND skill_id = $3',
             [level, userId, skillId]

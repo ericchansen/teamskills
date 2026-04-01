@@ -133,6 +133,27 @@ for (role, domain, subdomain), skills in cat_skills.items():
     for s in skills:
         skill_role_map[s] = role
 
+# Add "Soft Skills" as a 4th top-level category with its skills
+SOFT_SKILLS = [
+    'Technical Presentations',
+    'Whiteboarding',
+    'Customer Discovery',
+    'Solution Architecture',
+    'Proof of Concept Delivery',
+    'Workshop Facilitation',
+    'Executive Briefings',
+    'Technical Writing',
+]
+
+cat_id += 1
+soft_cid = cat_id
+cat_entries.append((soft_cid, 'Soft Skills', None, 1, len(role_order) + 1))
+
+for si, skill in enumerate(SOFT_SKILLS):
+    skill_id += 1
+    skill_entries.append((skill_id, skill, soft_cid, si + 1))
+    skill_role_map[skill] = 'Soft Skills'
+
 def esc(s):
     return s.replace("'", "''")
 
@@ -149,7 +170,8 @@ cat_values = []
 for cid, name, parent_id, level, sort_order in cat_entries:
     pid = str(parent_id) if parent_id else 'NULL'
     cat_values.append(f"  ({cid}, '{esc(name)}', {pid}, {level}, {sort_order})")
-lines.append(",\n".join(cat_values) + "\nON CONFLICT DO NOTHING;")
+lines.append(",\n".join(cat_values))
+lines.append("ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, parent_id = EXCLUDED.parent_id, level = EXCLUDED.level, sort_order = EXCLUDED.sort_order;")
 lines.append("")
 
 lines.append("-- Skills (linked to most specific category)")
@@ -157,7 +179,8 @@ lines.append("INSERT INTO skills (id, name, category_id, sort_order) VALUES")
 skill_values = []
 for sid, name, cid, sort_order in skill_entries:
     skill_values.append(f"  ({sid}, '{esc(name)}', {cid}, {sort_order})")
-lines.append(",\n".join(skill_values) + "\nON CONFLICT DO NOTHING;")
+lines.append(",\n".join(skill_values))
+lines.append("ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category_id = EXCLUDED.category_id, sort_order = EXCLUDED.sort_order;")
 lines.append("")
 
 lines.append(f"SELECT setval('skill_categories_id_seq', {cat_id}, true);")
