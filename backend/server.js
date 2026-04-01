@@ -117,7 +117,8 @@ app.get('/health/ready', async (req, res) => {
     });
   } catch (error) {
     const latencyMs = Date.now() - start;
-    const isSchemaError = error.code === '42703'; // undefined_column
+    const schemaErrorCodes = ['42703', '42P01']; // undefined_column, undefined_table
+    const isSchemaError = schemaErrorCodes.includes(error.code);
     logger.error({ err: error, requestId: req.correlationId }, 'Readiness check failed');
     res.status(503).json({
       status: 'unavailable',

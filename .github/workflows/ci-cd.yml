@@ -284,14 +284,15 @@ jobs:
           fi
 
           echo "=== Smoke Test: Schema Readiness ==="
-          READY=$(curl -sf "${BACKEND_URL}/health/ready" || echo '{"status":"unreachable"}')
-          echo "Ready: ${READY}"
+          READY_HTTP=$(curl -s -o /tmp/ready.json -w '%{http_code}' "${BACKEND_URL}/health/ready")
+          READY=$(cat /tmp/ready.json 2>/dev/null || echo '{"status":"unreachable"}')
+          echo "Ready (HTTP ${READY_HTTP}): ${READY}"
           if echo "$READY" | grep -q '"schema_outdated"'; then
             echo "❌ Database schema is outdated — migrations did not run!"
             exit 1
           fi
-          if ! echo "$READY" | grep -q '"ok"'; then
-            echo "❌ Readiness check failed!"
+          if [ "$READY_HTTP" != "200" ]; then
+            echo "❌ Readiness check failed (HTTP ${READY_HTTP})!"
             exit 1
           fi
 
