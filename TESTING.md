@@ -120,6 +120,11 @@ test('renders L300 badge with correct color', () => {
 # Run E2E tests (requires app to be running)
 npm run test:e2e
 
+# Run E2E locally without Docker using an already-running app
+# PowerShell:
+$env:BASE_URL="http://127.0.0.1:3000"
+npx playwright test --project="msedge"
+
 # Run with UI mode (interactive)
 npm run test:e2e:ui
 
@@ -132,6 +137,24 @@ npx playwright test --headed
 # Debug mode
 npx playwright test --debug
 ```
+
+### Local validation without Docker
+
+If Docker Desktop is unavailable, you can still validate the UI in mock/demo mode:
+
+```bash
+# Terminal 1: start the frontend
+cd frontend
+npm run dev -- --host 127.0.0.1
+
+# Terminal 2: run Playwright against the live Vite server
+cd ..
+$env:BASE_URL="http://127.0.0.1:3000"
+npx playwright test --project="msedge"
+```
+
+If you also have PostgreSQL running locally, start the backend separately with `node backend/server.js`
+to exercise the live API paths as well.
 
 ### Example Test
 

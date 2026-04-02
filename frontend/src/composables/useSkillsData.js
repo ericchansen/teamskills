@@ -42,6 +42,10 @@ function parseLevel(val) {
   return parseInt(val, 10) || 0;
 }
 
+function getSkillDisplayName(skill) {
+  return skill?.preferred_label || skill?.name;
+}
+
 /**
  * Collect all skill names from the category tree in hierarchy order.
  */
@@ -50,7 +54,7 @@ function collectSkillsFromTree(categoryTree, skills) {
   for (const skill of skills) {
     if (!skill.category_id) continue;
     if (!catSkills.has(skill.category_id)) catSkills.set(skill.category_id, []);
-    catSkills.get(skill.category_id).push(skill.name);
+    catSkills.get(skill.category_id).push(getSkillDisplayName(skill));
   }
 
   const result = [];
@@ -68,7 +72,8 @@ function collectSkillsFromTree(categoryTree, skills) {
   // Append any uncategorized skills
   const inTree = new Set(result);
   for (const skill of skills) {
-    if (!inTree.has(skill.name)) result.push(skill.name);
+    const displayName = getSkillDisplayName(skill);
+    if (!inTree.has(displayName)) result.push(displayName);
   }
   return result;
 }
@@ -88,7 +93,8 @@ function buildSkillToCategory(categoryTree, skills) {
 
   const result = {};
   for (const skill of skills) {
-    result[skill.name] = catToRoot.get(skill.category_id) || 'Uncategorized';
+    const displayName = getSkillDisplayName(skill);
+    result[displayName] = catToRoot.get(skill.category_id) || 'Uncategorized';
   }
   return result;
 }
@@ -103,9 +109,10 @@ function transformApiData(apiData) {
   const skillToCat = buildSkillToCategory(categoryTree, skills);
   const flatCategories = new Map();
   for (const skill of skills) {
-    const cat = skillToCat[skill.name] || 'Uncategorized';
+    const displayName = getSkillDisplayName(skill);
+    const cat = skillToCat[displayName] || 'Uncategorized';
     if (!flatCategories.has(cat)) flatCategories.set(cat, []);
-    flatCategories.get(cat).push(skill.name);
+    flatCategories.get(cat).push(displayName);
   }
 
   const skillCategories = Object.fromEntries(flatCategories);
@@ -124,7 +131,7 @@ function transformApiData(apiData) {
   // Build skill ID → index map for user skills lookup
   const skillIdToIndex = {};
   for (const skill of skills) {
-    const idx = skillIndex[skill.name];
+    const idx = skillIndex[getSkillDisplayName(skill)];
     if (idx !== undefined) skillIdToIndex[skill.id] = idx;
   }
 
@@ -153,6 +160,8 @@ function transformApiData(apiData) {
   // Build skill name → backend ID map for save operations
   const skillNameToId = {};
   for (const skill of skills) {
+    const displayName = getSkillDisplayName(skill);
+    skillNameToId[displayName] = skill.id;
     skillNameToId[skill.name] = skill.id;
   }
 
@@ -175,6 +184,8 @@ function transformApiData(apiData) {
       ancestors.push(cur.id);
       cur = cur.parent_id ? flatCatMap.get(cur.parent_id) : null;
     }
+    const displayName = getSkillDisplayName(skill);
+    skillAncestorIds[displayName] = ancestors;
     skillAncestorIds[skill.name] = ancestors;
   }
 
@@ -210,11 +221,16 @@ export function useSkillsData() {
       Object.assign(state, transformed);
       state.isLive = true;
     } catch (err) {
-      // Only fall back to mock data for network errors (offline/dev).
-      // Auth (401/403) and server (5xx) errors should surface to the user.
-      const isNetworkError = !err.message?.includes('(4') && !err.message?.includes('(5');
-      if (isNetworkError) {
-        console.warn('API unavailable (network), using mock data:', err.message);
+      // Fall back to mock data when the API is unreachable, and also during
+      // local development when the backend proxy returns a 5xx because the API
+      // or database is not running. Auth/permission errors should still surface.
+      const message = err.message || '';
+      const statusMatch = message.match(/\((\d{3})\)/);
+      const statusCode = statusMatch ? Number(statusMatch[1]) : null;
+      const shouldUseMockData = statusCode === null || (import.meta.env.DEV && statusCode >= 500);
+
+      if (shouldUseMockData) {
+        console.warn('API unavailable, using mock data:', err.message);
         try {
           const mock = await import('../data.js');
           state.people = mock.people;

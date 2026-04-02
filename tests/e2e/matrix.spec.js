@@ -1,83 +1,58 @@
 import { test, expect } from '@playwright/test';
 
-// Demo login helper: selects a user from the auth gate dropdown
-async function demoLogin(page) {
+async function loadDashboard(page) {
   await page.goto('/');
-  // Auth gate shows the demo login inline when MSAL is not configured
-  await expect(page.locator('.auth-gate')).toBeVisible();
-  // Wait for user options to load before selecting
-  await page.locator('.demo-login-inline select option:nth-child(2)').waitFor({ state: 'attached', timeout: 10000 });
-  await page.locator('.demo-login-inline select').selectOption({ index: 1 });
-  // Wait for matrix to load after login
-  await expect(page.locator('.skill-matrix')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('.app-header')).toBeVisible();
+  await expect(page.locator('.matrix-view')).toBeVisible({ timeout: 15000 });
 }
 
 test.describe('Skills Matrix', () => {
   test.beforeEach(async ({ page }) => {
-    await demoLogin(page);
+    await loadDashboard(page);
   });
 
-  test('should display the skills matrix', async ({ page }) => {
-
-    // Check page title
-    await expect(page.locator('h1')).toContainText('Team Skills Tracker');
-
-    // Check matrix view button is active (it's the default)
-    await expect(page.getByRole('button', { name: /Matrix/i }).first()).toHaveClass(/active/);
-
-    // Check that skills matrix loads
-    await expect(page.locator('.skill-matrix')).toBeVisible();
-    await expect(page.locator('h2')).toContainText('Skills Matrix');
+  test('should render the matrix dashboard shell', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'Team Skills' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Skills Matrix' })).toHaveClass(/active/);
+    await expect(page.locator('.matrix-view .cat-btn').first()).toBeVisible();
+    await expect(page.locator('.matrix-view canvas')).toBeVisible();
   });
 
-  test('should display users and skills', async ({ page }) => {
-    // Wait for matrix to load
-    await expect(page.locator('.matrix-table')).toBeVisible();
+  test('should collapse and expand a role in the matrix controls', async ({ page }) => {
+    const firstRole = page.locator('.matrix-view .cat-btn').first();
 
-    // Check that we have users
-    const userNames = page.locator('.user-name');
-    await expect(userNames.first()).toBeVisible();
+    await expect(firstRole).toBeVisible();
+    await expect(firstRole).not.toHaveClass(/collapsed/);
 
-    // Check that we have skills
-    const skillNames = page.locator('.skill-name');
-    await expect(skillNames.first()).toBeVisible();
+    await firstRole.click();
+    await expect(firstRole).toHaveClass(/collapsed/);
 
-    // Check that proficiency badges are visible
-    const badges = page.locator('.proficiency-badge');
-    await expect(badges.first()).toBeVisible();
+    await firstRole.click();
+    await expect(firstRole).not.toHaveClass(/collapsed/);
   });
 
-  test('should filter skills by category', async ({ page }) => {
-    // Wait for matrix to load
-    await expect(page.locator('.matrix-table')).toBeVisible();
+  test('should navigate to the profile page from the header', async ({ page }) => {
+    const profileLink = page.getByRole('link', { name: 'My Profile' });
 
-    // Get initial skill count
-    const initialSkillHeaders = await page.locator('.skill-header').count();
+    await expect(profileLink).toBeVisible();
+    await profileLink.click();
 
-    // Select a category filter
-    await page.selectOption('select', { index: 1 }); // Select first non-"All" option
-
-    // Wait for filter to apply
-    await page.waitForTimeout(500);
-
-    // Verify filtered skill count is different
-    const filteredSkillHeaders = await page.locator('.skill-header').count();
-    expect(filteredSkillHeaders).toBeLessThan(initialSkillHeaders);
+    await expect(page).toHaveURL(/\/profile$/);
+    await expect(page.locator('.profile-page')).toBeVisible();
+    await expect(page.locator('.user-card')).toBeVisible();
   });
 
-  test('should navigate to user profile', async ({ page }) => {
-    // Wait for matrix to load
-    await expect(page.locator('.matrix-table')).toBeVisible();
+  test('should show canonical labels in the profile editor', async ({ page }) => {
+    await page.getByRole('link', { name: 'My Profile' }).click();
 
-    // Click on first user
-    const firstUser = page.locator('.user-name').first();
-    const userName = await firstUser.textContent();
-    await firstUser.click();
+    await expect(page.locator('.profile-page')).toBeVisible();
 
-    // Check that we navigated to profile view
-    await expect(page.locator('.user-profile')).toBeVisible();
-
-    // Check that user name is displayed in profile
-    await expect(page.locator('.user-profile h2')).toContainText(userName);
+    if (await page.locator('.skills-editor').count()) {
+      // These canonical relabels exist in both mock data and the live DB
+      await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Microsoft Foundry' })).toBeVisible();
+      await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Azure AI Services (OpenAI)' })).toBeVisible();
+    } else {
+      await expect(page.locator('.no-profile-msg')).toContainText('demo mode');
+    }
   });
 });

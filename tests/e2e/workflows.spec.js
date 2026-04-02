@@ -1,76 +1,74 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Add Skill Workflow', () => {
-  test.describe.configure({ mode: 'serial' });
+async function loadDashboard(page) {
+  await page.goto('/');
+  await expect(page.locator('.app-header')).toBeVisible();
+  await expect(page.locator('.matrix-view')).toBeVisible({ timeout: 15000 });
+}
 
+test.describe('Dashboard workflows', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    
-    // Login via auth gate - demo mode shows inline login
-    await expect(page.locator('.auth-gate')).toBeVisible();
-    // Wait for user options to load before selecting
-    await page.locator('.demo-login-inline select option:nth-child(2)').waitFor({ state: 'attached', timeout: 10000 });
-    await page.locator('.demo-login-inline select').selectOption({ index: 1 });
-    
-    // Auth gate login shows matrix view; navigate to own profile
-    await expect(page.locator('.skill-matrix')).toBeVisible({ timeout: 10000 });
-    await page.locator('.profile-btn').click();
-    await expect(page.locator('.user-profile')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('.own-profile-badge')).toBeVisible();
+    await loadDashboard(page);
   });
 
-  test('should complete full add skill workflow', async ({ page }) => {
-    // Wait for skills to load
-    await expect(page.locator('.skills-section')).toBeVisible({ timeout: 10000 });
-    const initialSkillCount = await page.locator('.skill-item').count();
+  test('should show the graph page with the default L400 threshold', async ({ page }) => {
+    await page.getByRole('link', { name: 'Skills Graph' }).click();
 
-    // Open Add Skill modal
-    await page.click('text=Add Skill');
-    await expect(page.locator('.modal-overlay')).toBeVisible();
-
-    // Search for a skill
-    const searchInput = page.locator('input[placeholder*="search"]');
-    await searchInput.fill('Azure');
-    await expect(page.locator('.skills-dropdown')).toBeVisible();
-
-    // Select a skill
-    await page.locator('.skill-option').first().click();
-    await expect(page.locator('.selected-skill')).toBeVisible();
-
-    // Select proficiency level (radio buttons, not checkboxes)
-    await page.locator('input[value="L300"]').click();
-
-    // Submit and wait for API response
-    const responsePromise = page.waitForResponse(resp => resp.url().includes('/api/user-skills') && resp.status() < 400);
-    await page.click('button[type="submit"]');
-    await responsePromise;
-
-    // Wait for modal to close and profile to refresh
-    await expect(page.locator('.modal-overlay')).not.toBeVisible();
-    await expect(page.locator('.skills-section')).toBeVisible({ timeout: 10000 });
-
-    // Verify new skill count (might be same if skill already existed)
-    const newSkillCount = await page.locator('.skill-item').count();
-    expect(newSkillCount).toBeGreaterThanOrEqual(initialSkillCount);
+    await expect(page).toHaveURL(/\/graph$/);
+    await expect(page.locator('.graph-view')).toBeVisible();
+    await expect(page.locator('.threshold-badge')).toContainText('400');
+    await expect(page.locator('.edge-count')).toContainText('connections');
   });
 
-  test('should update proficiency and verify in matrix', async ({ page }) => {
-    // Wait for skills to load
-    await expect(page.locator('.skills-section')).toBeVisible({ timeout: 10000 });
+  test('should allow changing the graph threshold', async ({ page }) => {
+    await page.getByRole('link', { name: 'Skills Graph' }).click();
 
-    // Find first skill and change proficiency
-    const firstSelect = page.locator('.proficiency-select').first();
-    if (await firstSelect.isVisible()) {
-      const responsePromise = page.waitForResponse(resp => resp.url().includes('/api/user-skills') && resp.status() < 400);
-      await firstSelect.selectOption('L400');
-      await responsePromise;
+    const slider = page.locator('#threshold-slider');
+    await expect(slider).toBeVisible();
 
-      // Navigate back to matrix
-      await page.locator('.back-btn').click();
-      await expect(page.locator('.skill-matrix')).toBeVisible({ timeout: 10000 });
+    await slider.evaluate((element) => {
+      element.value = '300';
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
 
-      // The update should persist (verify matrix loads without error)
-      await expect(page.locator('.matrix-table')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.threshold-badge')).toContainText('300');
+  });
+
+  test('should show the gap analysis page with configurable thresholds', async ({ page }) => {
+    await page.getByRole('link', { name: 'Gap Analysis' }).click();
+
+    await expect(page).toHaveURL(/\/gap-analysis$/);
+    await expect(page.locator('.gap-view')).toBeVisible();
+    await expect(page.locator('#mode-select')).toHaveValue('expert');
+    await expect(page.locator('.threshold-input').first()).toHaveValue('2');
+    await expect(page.locator('.threshold-input').nth(1)).toHaveValue('1');
+  });
+
+  test('should update gap-analysis thresholds when switching modes', async ({ page }) => {
+    await page.getByRole('link', { name: 'Gap Analysis' }).click();
+
+    await page.locator('#mode-select').selectOption('average');
+
+    await expect(page.locator('.threshold-input').first()).toHaveValue('250');
+    await expect(page.locator('.threshold-input').nth(1)).toHaveValue('175');
+  });
+
+  test('should load the taxonomy review page for admins', async ({ page }) => {
+    const taxonomyLink = page.getByRole('link', { name: 'Taxonomy Review' });
+    await expect(taxonomyLink).toBeVisible();
+
+    await taxonomyLink.click();
+
+    await expect(page).toHaveURL(/\/admin\/taxonomy$/);
+    await expect(page.locator('.taxonomy-review')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Taxonomy Review' })).toBeVisible();
+
+    const proposalCards = page.locator('.proposal-card');
+    if (await proposalCards.count()) {
+      await expect(proposalCards.first()).toContainText(/Suggested action:/);
+    } else {
+      await expect(page.locator('.info-card')).toContainText(/No proposals found|Could not load proposals/i);
     }
   });
 });

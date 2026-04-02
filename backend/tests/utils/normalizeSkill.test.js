@@ -1,4 +1,4 @@
-const { normalizeSkillName } = require('../../utils/normalizeSkill');
+const { normalizeSkillName, getCanonicalSkillInfo, suggestSkillProposal } = require('../../utils/normalizeSkill');
 
 describe('normalizeSkillName', () => {
   describe('explicit aliases', () => {
@@ -14,10 +14,13 @@ describe('normalizeSkillName', () => {
 
     it('maps Fabric-prefixed aliases', () => {
       expect(normalizeSkillName('Fabric OneLake')).toBe('OneLake');
-      expect(normalizeSkillName('Fabric Data Engineering and Data Science')).toBe('Data Engineering and Data Science');
       expect(normalizeSkillName('Fabric Data Factory')).toBe('Data Factory');
       expect(normalizeSkillName('Fabric Data Warehouse')).toBe('Data Warehouse');
       expect(normalizeSkillName('Fabric Real Time Intelligence')).toBe('Real Time Intelligence');
+    });
+
+    it('does not auto-merge ambiguous combined Fabric labels', () => {
+      expect(normalizeSkillName('Fabric Data Engineering and Data Science')).toBe('Fabric Data Engineering and Data Science');
     });
   });
 
@@ -64,6 +67,23 @@ describe('normalizeSkillName', () => {
 
     it('returns empty string as-is', () => {
       expect(normalizeSkillName('')).toBe('');
+    });
+  });
+
+  describe('canonical metadata', () => {
+    it('returns preferred display labels for Microsoft product names', () => {
+      expect(getCanonicalSkillInfo('Data Factory')).toMatchObject({
+        canonicalName: 'Data Factory',
+        preferredLabel: 'Fabric Data Factory',
+        vendorNamespace: 'Microsoft Fabric',
+      });
+    });
+
+    it('flags review-required Fabric combined labels for approval', () => {
+      expect(suggestSkillProposal('Fabric Data Engineering and Data Science')).toMatchObject({
+        suggestedAction: 'split',
+        needsReview: true,
+      });
     });
   });
 });

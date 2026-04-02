@@ -34,6 +34,10 @@ CREATE TABLE skill_categories (
 CREATE TABLE skills (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    preferred_label VARCHAR(255),
+    concept_type VARCHAR(50),
+    lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'active',
+    vendor_namespace VARCHAR(100),
     category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
     description TEXT,
     target_level VARCHAR(10) DEFAULT 'L200',
@@ -72,6 +76,19 @@ CREATE UNIQUE INDEX idx_skill_categories_root_name ON skill_categories(name) WHE
 CREATE INDEX idx_skill_relationships_parent ON skill_relationships(parent_skill_id);
 CREATE INDEX idx_skill_relationships_child ON skill_relationships(child_skill_id);
 
+-- Canonical alias registry for approved alternate skill labels
+CREATE TABLE skill_aliases (
+    id SERIAL PRIMARY KEY,
+    skill_id INTEGER REFERENCES skills(id) ON DELETE CASCADE NOT NULL,
+    alias VARCHAR(255) NOT NULL,
+    source VARCHAR(50) DEFAULT 'manual',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(skill_id, alias)
+);
+
+CREATE INDEX idx_skill_aliases_skill ON skill_aliases(skill_id);
+CREATE UNIQUE INDEX idx_skill_aliases_alias_lower ON skill_aliases(LOWER(alias));
+
 -- Skill proposals table (user-suggested skills with admin approval)
 CREATE TABLE skill_proposals (
     id SERIAL PRIMARY KEY,
@@ -79,6 +96,10 @@ CREATE TABLE skill_proposals (
     name VARCHAR(255) NOT NULL,
     category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
     description TEXT,
+    canonical_skill_id INTEGER REFERENCES skills(id) ON DELETE SET NULL,
+    suggested_action VARCHAR(20),
+    confidence NUMERIC(4,3),
+    review_notes TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
     reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     reviewed_at TIMESTAMP,
@@ -86,6 +107,7 @@ CREATE TABLE skill_proposals (
 );
 
 CREATE INDEX idx_skill_proposals_status ON skill_proposals(status);
+CREATE INDEX idx_skill_proposals_canonical_skill ON skill_proposals(canonical_skill_id);
 
 -- Update trigger for user_skills
 CREATE OR REPLACE FUNCTION update_user_skills_timestamp()

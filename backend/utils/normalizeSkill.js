@@ -6,9 +6,15 @@
  * known aliases from the canonical Inventory.csv.
  */
 
-const nameMap = require('../data/skill-name-map.json');
+const taxonomy = require('../data/skill-taxonomy');
 
-const aliases = nameMap.aliases || {};
+const aliases = taxonomy.aliases || {};
+const skillMetadata = taxonomy.skillMetadata || {};
+const reviewRequired = taxonomy.reviewRequired || {};
+const knownSkills = new Set([
+  ...Object.keys(taxonomy.skillCategoryMap || {}),
+  ...Object.keys(skillMetadata),
+]);
 
 /**
  * Normalize a skill name: apply explicit alias map (includes Fabric-prefixed
@@ -21,6 +27,7 @@ const aliases = nameMap.aliases || {};
 function normalizeSkillName(name) {
   if (!name) return name;
   const trimmed = name.trim();
+  if (!trimmed) return trimmed;
 
   // Check explicit alias map first (catches all known variants)
   if (aliases[trimmed]) return aliases[trimmed];
@@ -40,11 +47,77 @@ function normalizeSkillName(name) {
     const base = match[1];
     // Only strip if the base ends with a letter or closing paren (not a digit)
     if (base && /[a-zA-Z)\]]$/.test(base)) {
-      return base;
+      return aliases[base] || base;
     }
   }
 
-  return result;
+  return aliases[result] || result;
 }
 
-module.exports = { normalizeSkillName, aliases };
+function getCanonicalSkillInfo(name) {
+  const canonicalName = normalizeSkillName(name);
+  const metadata = skillMetadata[canonicalName] || {};
+
+  return {
+    canonicalName,
+    preferredLabel: metadata.preferredLabel || canonicalName,
+    conceptType: metadata.conceptType || null,
+    lifecycleStatus: metadata.lifecycleStatus || 'active',
+    vendorNamespace: metadata.vendorNamespace || null,
+  };
+}
+
+function suggestSkillProposal(name) {
+  if (!name) {
+    return {
+      canonicalName: null,
+      preferredLabel: null,
+      suggestedAction: 'new_skill',
+      needsReview: false,
+      confidence: null,
+      reviewNotes: null,
+    };
+  }
+
+  const trimmed = name.trim();
+  const canonicalInfo = getCanonicalSkillInfo(trimmed);
+  const reviewHint = reviewRequired[trimmed] || reviewRequired[canonicalInfo.canonicalName];
+  if (reviewHint) {
+    return {
+      canonicalName: canonicalInfo.canonicalName,
+      preferredLabel: canonicalInfo.preferredLabel,
+      suggestedAction: reviewHint.suggestedAction || 'review',
+      needsReview: true,
+      confidence: reviewHint.confidence ?? null,
+      reviewNotes: reviewHint.reviewNotes || null,
+    };
+  }
+
+  if (canonicalInfo.canonicalName !== trimmed) {
+    return {
+      canonicalName: canonicalInfo.canonicalName,
+      preferredLabel: canonicalInfo.preferredLabel,
+      suggestedAction: 'alias',
+      needsReview: false,
+      confidence: 1,
+      reviewNotes: `Normalize "${trimmed}" to "${canonicalInfo.preferredLabel}".`,
+    };
+  }
+
+  const needsReview = !knownSkills.has(canonicalInfo.canonicalName);
+  return {
+    canonicalName: canonicalInfo.canonicalName,
+    preferredLabel: canonicalInfo.preferredLabel,
+    suggestedAction: 'new_skill',
+    needsReview,
+    confidence: null,
+    reviewNotes: needsReview ? 'New label is not yet part of the approved skill taxonomy.' : null,
+  };
+}
+
+module.exports = {
+  normalizeSkillName,
+  aliases,
+  getCanonicalSkillInfo,
+  suggestSkillProposal,
+};
