@@ -20,6 +20,8 @@ const logger = require('../logger');
 const { requireAuth } = require('../auth');
 const { isOboConfigured, getGraphClientOnBehalfOf, extractBearerToken } = require('../services/oboClient');
 const sharepoint = require('../services/sharepoint');
+const { fetchPivotFromSharePoint } = require('../services/sharepointGraph');
+const { syncPivotToDatabase } = require('../services/pivotSync');
 
 /**
  * GET /api/sharepoint/status
@@ -53,8 +55,8 @@ router.post('/pull', requireAuth, async (req, res) => {
 
   try {
     const graphClient = await getGraphClientOnBehalfOf(bearerToken);
-    const pivotData = await sharepoint.fetchPivotFromSharePoint(graphClient);
-    const stats = await sharepoint.syncPivotToDatabase(pivotData);
+    const pivotData = await fetchPivotFromSharePoint(graphClient);
+    const stats = await syncPivotToDatabase(pivotData);
 
     res.json({
       message: 'SharePoint pull completed',

@@ -40,7 +40,7 @@
     </div>
 
     <v-chart
-      class="bar-chart"
+      :style="{ ...chartContainerStyle, minHeight: '600px' }"
       :option="chartOption"
       autoresize
     />
@@ -50,7 +50,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
-import { escapeHtml } from '../utils/escapeHtml';
+import { escapeHtml, baseChartOption, chartContainerStyle } from '../composables/useChartDefaults';
 
 const { people, skillCategories, categoryNames, getSkillLevel } = useSkillsData();
 
@@ -112,7 +112,7 @@ const chartOption = computed(() => {
         : '%';
 
   return {
-    backgroundColor: 'transparent',
+    ...baseChartOption(),
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -227,9 +227,5 @@ const chartOption = computed(() => {
   padding: 4px 6px;
 }
 
-.bar-chart {
-  width: 100%;
-  height: calc(100vh - 200px);
-  min-height: 600px;
-}
+
 </style>
