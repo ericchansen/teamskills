@@ -1,6 +1,8 @@
 # Agent Service Dependencies
-# Microsoft Agent Framework (preview - requires --pre flag)
-agent-framework-azure-ai
+# Microsoft Agent Framework (preview packages can break between builds; pin a known-good set)
+agent-framework-core==1.0.0rc6
+agent-framework-openai==1.0.0rc6
+agent-framework-azure-ai==1.0.0rc6
 
 # Web framework
 fastapi>=0.115.0

@@ -4,7 +4,12 @@ from typing import Optional, AsyncIterator, Any
 
 from azure.identity import DefaultAzureCredential
 from agent_framework import RawAgent
-from agent_framework.azure import AzureOpenAIChatClient
+try:
+    from agent_framework.azure import AzureOpenAIChatClient
+except ImportError:
+    # Some preview releases stopped re-exporting this symbol from
+    # agent_framework.azure even though the client still exists in core.
+    from agent_framework.azure._chat_client import AzureOpenAIChatClient
 
 from config import config
 from tools import (
