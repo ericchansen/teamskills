@@ -18,7 +18,7 @@
     </div>
 
     <v-chart
-      class="graph-chart"
+      :style="chartContainerStyle"
       :option="chartOption"
       autoresize
     />
@@ -28,7 +28,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
-import { escapeHtml } from '../utils/escapeHtml';
+import { escapeHtml, baseChartOption, chartContainerStyle } from '../composables/useChartDefaults';
 
 const { people, allSkills, levels, getSkillLevel, skillToCategory } = useSkillsData();
 
@@ -96,7 +96,7 @@ const chartOption = computed(() => {
   }
 
   return {
-    backgroundColor: 'transparent',
+    ...baseChartOption(),
     tooltip: {
       formatter(params) {
         if (params.dataType === 'node') {
@@ -190,9 +190,5 @@ const chartOption = computed(() => {
   margin-left: auto;
 }
 
-.graph-chart {
-  width: 100%;
-  height: calc(100vh - 200px);
-  min-height: 500px;
-}
+
 </style>

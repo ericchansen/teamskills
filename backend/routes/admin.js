@@ -5,7 +5,7 @@ const path = require('path');
 const db = require('../db');
 const logger = require('../logger');
 const { requireAuth, requireAdmin } = require('../auth');
-const sharepointSync = require('../services/sharepoint');
+const { sync: sharepointSync } = require('../services/pivotSync');
 const { validateProficiencyLevel } = require('../utils/validations');
 
 // --- In-memory rate limiter for admin endpoints ---
@@ -429,7 +429,7 @@ router.post('/sync-skills', requireAuth, checkAdminAllowlist, checkInitSecret, a
     });
   }
 
-  const stats = await sharepointSync.sync(source, options);
+  const stats = await sharepointSync(source, options);
   res.json({ 
     message: 'Skill sync completed',
     ...stats

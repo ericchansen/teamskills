@@ -29,7 +29,7 @@
     </div>
 
     <v-chart
-      class="heatmap-chart"
+      :style="chartContainerStyle"
       :option="chartOption"
       autoresize
     />
@@ -39,7 +39,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
-import { escapeHtml } from '../utils/escapeHtml';
+import { escapeHtml, baseChartOption, chartContainerStyle } from '../composables/useChartDefaults';
 
 const {
   people,
@@ -120,7 +120,7 @@ const chartOption = computed(() => {
   }
 
   return {
-    backgroundColor: 'transparent',
+    ...baseChartOption(),
     tooltip: {
       formatter(params) {
         const [xi, yi, val] = params.data;
@@ -263,9 +263,5 @@ const chartOption = computed(() => {
   font-size: 0.7rem;
 }
 
-.heatmap-chart {
-  width: 100%;
-  height: calc(100vh - 200px);
-  min-height: 500px;
-}
+
 </style>
