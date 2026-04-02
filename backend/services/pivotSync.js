@@ -12,6 +12,7 @@ const db = require('../db');
 const { normalizeSkillName } = require('../utils/normalizeSkill');
 const { parsePivotCSV, parseCSVContent, parseCSV } = require('./csvParser');
 const { ensureSchemaExtensions, fetchFromSharePoint, syncToDatabase } = require('./sharepoint');
+const taxonomy = require('../data/skill-taxonomy');
 
 /**
  * Sync pivot-table CSV into PostgreSQL (users, skills, user_skills).
@@ -50,19 +51,56 @@ async function syncPivotToDatabase(pivotData) {
       canonicalIdMap.set(skillName, existing.rows[0].id);
       stats.skills.existing++;
     } else {
-      // For truly new skills, find a category from the hierarchy by partial name match
-      // Only match uniquely-named categories to avoid ambiguous assignment
-      const catResult = await db.query(`
-        SELECT sc.id as category_id FROM skill_categories sc
-        WHERE $1 ILIKE '%' || sc.name || '%' AND sc.level >= 2
-          AND NOT EXISTS (
-            SELECT 1 FROM skill_categories sc2
-            WHERE sc2.name = sc.name AND sc2.id <> sc.id
-          )
-        ORDER BY sc.level DESC, length(sc.name) DESC
-        LIMIT 1
-      `, [skillName]);
-      const categoryId = catResult.rows.length > 0 ? catResult.rows[0].category_id : null;
+      // For truly new skills, use taxonomy map first, then fall back to partial name match
+      let categoryId = null;
+
+      // Strategy 1: Taxonomy path-based lookup
+      const catPath = taxonomy.skillCategoryMap[skillName];
+      if (catPath) {
+        // Resolve path by walking the category tree in the DB
+        const parts = catPath.split('/');
+        // Also try top-level aliases (e.g., "Infra" might be "Infrastructure" in DB)
+        const l1Alias = taxonomy.topLevelAliases[parts[0]];
+        const l1Variants = l1Alias ? [parts[0], l1Alias] : [parts[0]];
+        // Reverse aliases: if canonical is parts[0], find alternatives
+        for (const [alt, canonical] of Object.entries(taxonomy.topLevelAliases)) {
+          if (canonical === parts[0] && !l1Variants.includes(alt)) l1Variants.push(alt);
+        }
+
+        let parentId = null;
+        let resolved = true;
+        for (let i = 0; i < parts.length; i++) {
+          const variants = i === 0 ? l1Variants : [parts[i]];
+          const placeholders = variants.map((_, j) => `$${j + 2}`).join(', ');
+          const q = parentId === null
+            ? `SELECT id FROM skill_categories WHERE parent_id IS NULL AND name IN (${placeholders})`
+            : `SELECT id FROM skill_categories WHERE parent_id = $1 AND name IN (${placeholders})`;
+          const params = parentId === null ? variants : [parentId, ...variants];
+          const r = await db.query(q, params);
+          if (r.rows.length > 0) {
+            parentId = r.rows[0].id;
+          } else {
+            resolved = false;
+            break;
+          }
+        }
+        if (resolved && parentId) categoryId = parentId;
+      }
+
+      // Strategy 2: SQL partial match against category names (fallback)
+      if (!categoryId) {
+        const catResult = await db.query(`
+          SELECT sc.id as category_id FROM skill_categories sc
+          WHERE $1 ILIKE '%' || sc.name || '%' AND sc.level >= 2
+            AND NOT EXISTS (
+              SELECT 1 FROM skill_categories sc2
+              WHERE sc2.name = sc.name AND sc2.id <> sc.id
+            )
+          ORDER BY sc.level DESC, length(sc.name) DESC
+          LIMIT 1
+        `, [skillName]);
+        if (catResult.rows.length > 0) categoryId = catResult.rows[0].category_id;
+      }
 
       const result = await db.query(
         'INSERT INTO skills (name, category_id) VALUES ($1, $2) RETURNING id',
