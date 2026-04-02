@@ -68,6 +68,7 @@ app.use(cors({
 app.use(express.json({ limit: '100kb' }));
 
 // Routes
+const healthRouter = require('./routes/health');
 const usersRouter = require('./routes/users');
 const skillsRouter = require('./routes/skills');
 const categoriesRouter = require('./routes/categories');
@@ -79,6 +80,10 @@ const proposalsRouter = require('./routes/proposals');
 const trendsRouter = require('./routes/trends');
 const sharepointRouter = require('./routes/sharepoint');
 const { requireAuth } = require('./auth');
+const errorHandler = require('./middleware/errorHandler');
+
+// Health endpoints (no auth required)
+app.use('/health', healthRouter);
 
 // Pre-auth routes (have their own per-route authentication)
 app.use('/api/auth', authRouter);
@@ -96,72 +101,7 @@ app.use('/api/proposals', proposalsRouter);
 app.use('/api/trends', trendsRouter);
 app.use('/api/sharepoint', sharepointRouter);
 
-// Liveness probe — cheap, no dependencies. Proves the process is alive.
-app.get('/health/live', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Readiness probe — checks DB connectivity and schema compatibility.
-app.get('/health/ready', async (req, res) => {
-  const start = Date.now();
-  try {
-    const db = require('./db');
-    // Verify schema has required columns (catches missed migrations)
-    await db.query('SELECT id, parent_id FROM skill_categories LIMIT 1');
-    const latencyMs = Date.now() - start;
-    res.json({
-      status: 'ok',
-      database: 'connected',
-      database_latency_ms: latencyMs,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    const latencyMs = Date.now() - start;
-    const schemaErrorCodes = ['42703', '42P01']; // undefined_column, undefined_table
-    const isSchemaError = schemaErrorCodes.includes(error.code);
-    logger.error({ err: error, requestId: req.correlationId }, 'Readiness check failed');
-    res.status(503).json({
-      status: 'unavailable',
-      database: isSchemaError ? 'schema_outdated' : 'disconnected',
-      database_latency_ms: latencyMs,
-      error: isSchemaError ? 'Schema migration required' : 'Database connection failed',
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
-
-// Legacy health endpoint — kept for backward compatibility (e.g. external monitors)
-app.get('/health', async (req, res) => {
-  const start = Date.now();
-  try {
-    const db = require('./db');
-    await db.query('SELECT 1');
-    const latencyMs = Date.now() - start;
-    res.json({
-      status: 'ok',
-      database: 'connected',
-      database_latency_ms: latencyMs,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    const latencyMs = Date.now() - start;
-    logger.error({ err: error, requestId: req.correlationId }, 'Health check failed');
-    res.status(503).json({
-      status: 'unavailable',
-      database: 'disconnected',
-      database_latency_ms: latencyMs,
-      error: 'Database connection failed',
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
-
-// Error handling middleware
-app.use((err, req, res, _next) => {
-  logger.error({ err, requestId: req.correlationId }, 'Unhandled server error');
-  // Return generic message to client
-  res.status(500).json({ error: 'Something went wrong!' });
-});
+app.use(errorHandler);
 
 // Only start server if not in test mode
 let server;

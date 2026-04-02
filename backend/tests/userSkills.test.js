@@ -42,7 +42,7 @@ describe('User Skills API', () => {
       const response = await request(app).get('/api/user-skills/1');
 
       expect(response.status).toBe(500);
-      expect(response.body.error).toMatch(/failed to fetch/i);
+      expect(response.body.error).toMatch(/internal server error/i);
     });
   });
 
@@ -79,7 +79,7 @@ describe('User Skills API', () => {
         .send({ user_id: 1, skill_id: 5, proficiency_level: 'L200' });
 
       expect(response.status).toBe(500);
-      expect(response.body.error).toMatch(/failed to update/i);
+      expect(response.body.error).toMatch(/internal server error/i);
     });
   });
 
@@ -116,7 +116,7 @@ describe('User Skills API', () => {
         .send({ user_id: 1, skill_id: 5 });
 
       expect(response.status).toBe(500);
-      expect(response.body.error).toMatch(/failed to delete/i);
+      expect(response.body.error).toMatch(/internal server error/i);
     });
   });
 });

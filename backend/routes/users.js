@@ -1,82 +1,56 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const logger = require('../logger');
 const { requireAuth, requireAdmin } = require('../auth');
 
 // GET all users
 router.get('/', async (req, res) => {
-  try {
-    const result = await db.query('SELECT id, name, email, role, team, is_admin, created_at, updated_at FROM users ORDER BY name');
-    res.json(result.rows);
-  } catch (err) {
-    logger.error({ err }, 'Request failed');
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
+  const result = await db.query('SELECT id, name, email, role, team, is_admin, created_at, updated_at FROM users ORDER BY name');
+  res.json(result.rows);
 });
 
 // GET single user
 router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await db.query('SELECT id, name, email, role, team, is_admin, created_at, updated_at FROM users WHERE id = $1', [id]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json(result.rows[0]);
-  } catch (err) {
-    logger.error({ err }, 'Request failed');
-    res.status(500).json({ error: 'Failed to fetch user' });
+  const { id } = req.params;
+  const result = await db.query('SELECT id, name, email, role, team, is_admin, created_at, updated_at FROM users WHERE id = $1', [id]);
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'User not found' });
   }
+  res.json(result.rows[0]);
 });
 
 // POST create user (admin only)
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { name, email, role, team } = req.body;
-    const result = await db.query(
-      'INSERT INTO users (name, email, role, team) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, email, role, team]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    logger.error({ err }, 'Request failed');
-    res.status(500).json({ error: 'Failed to create user' });
-  }
+  const { name, email, role, team } = req.body;
+  const result = await db.query(
+    'INSERT INTO users (name, email, role, team) VALUES ($1, $2, $3, $4) RETURNING *',
+    [name, email, role, team]
+  );
+  res.status(201).json(result.rows[0]);
 });
 
 // PUT update user (admin only)
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email, role, team } = req.body;
-    const result = await db.query(
-      'UPDATE users SET name = $1, email = $2, role = $3, team = $4 WHERE id = $5 RETURNING *',
-      [name, email, role, team, id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json(result.rows[0]);
-  } catch (err) {
-    logger.error({ err }, 'Request failed');
-    res.status(500).json({ error: 'Failed to update user' });
+  const { id } = req.params;
+  const { name, email, role, team } = req.body;
+  const result = await db.query(
+    'UPDATE users SET name = $1, email = $2, role = $3, team = $4 WHERE id = $5 RETURNING *',
+    [name, email, role, team, id]
+  );
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'User not found' });
   }
+  res.json(result.rows[0]);
 });
 
 // DELETE user (admin only)
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({ message: 'User deleted successfully' });
-  } catch (err) {
-    logger.error({ err }, 'Request failed');
-    res.status(500).json({ error: 'Failed to delete user' });
+  const { id } = req.params;
+  const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'User not found' });
   }
+  res.json({ message: 'User deleted successfully' });
 });
 
 module.exports = router;
