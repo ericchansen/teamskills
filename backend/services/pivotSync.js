@@ -71,7 +71,8 @@ async function syncPivotToDatabase(pivotData) {
         let resolved = true;
         for (let i = 0; i < parts.length; i++) {
           const variants = i === 0 ? l1Variants : [parts[i]];
-          const placeholders = variants.map((_, j) => `$${j + 2}`).join(', ');
+          const offset = parentId === null ? 1 : 2;
+          const placeholders = variants.map((_, j) => `$${j + offset}`).join(', ');
           const q = parentId === null
             ? `SELECT id FROM skill_categories WHERE parent_id IS NULL AND name IN (${placeholders})`
             : `SELECT id FROM skill_categories WHERE parent_id = $1 AND name IN (${placeholders})`;

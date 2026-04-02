@@ -121,7 +121,8 @@ async function ensureCategoryHierarchy() {
       const allNames = [name, ...(alias ? [alias] : []), ...reverseAliases];
       const placeholders = allNames.map((_, i) => `$${i + 1}`).join(', ');
       existing = await db.query(
-        `SELECT id, name FROM skill_categories WHERE parent_id IS NULL AND name IN (${placeholders})`,
+        `SELECT id, name FROM skill_categories WHERE parent_id IS NULL AND name IN (${placeholders})
+         ORDER BY CASE WHEN name = $1 THEN 0 ELSE 1 END`,
         allNames
       );
     } else {
@@ -133,9 +134,9 @@ async function ensureCategoryHierarchy() {
 
     if (existing.rows.length > 0) {
       const row = existing.rows[0];
-      // Update level and sort_order if needed (but don't rename existing categories)
+      // Update level and sort_order only when they differ (avoid unnecessary writes on every startup)
       await db.query(
-        'UPDATE skill_categories SET level = $1, sort_order = $2 WHERE id = $3',
+        'UPDATE skill_categories SET level = $1, sort_order = $2 WHERE id = $3 AND (level IS DISTINCT FROM $1 OR sort_order IS DISTINCT FROM $2)',
         [level, sortOrder, row.id]
       );
       return row.id;
@@ -532,10 +533,12 @@ async function assignUncategorizedSkills(pathToId) {
     logger.info(`Categorized skills: ${mapFixed} by taxonomy map, ${heuristicFixed} by heuristic`);
   }
 
-  // Log remaining uncategorized
+  // Log remaining uncategorized (cap sample to avoid oversized log lines)
   const remaining = await db.query('SELECT name FROM skills WHERE category_id IS NULL');
   if (remaining.rows.length > 0) {
-    logger.warn(`${remaining.rows.length} skills still uncategorized: ${remaining.rows.map(r => r.name).join(', ')}`);
+    const sampleLimit = 20;
+    const sample = remaining.rows.slice(0, sampleLimit).map(r => r.name);
+    logger.warn(`${remaining.rows.length} skills still uncategorized (showing up to ${sampleLimit}): ${sample.join(', ')}`);
   }
 }
 
