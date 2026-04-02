@@ -16,7 +16,6 @@
 
 const express = require('express');
 const router = express.Router();
-const logger = require('../logger');
 const { requireAuth } = require('../auth');
 const { isOboConfigured, getGraphClientOnBehalfOf, extractBearerToken } = require('../services/oboClient');
 const sharepoint = require('../services/sharepoint');
@@ -46,43 +45,21 @@ router.post('/pull', requireAuth, async (req, res) => {
     return res.status(501).json({ error: 'SharePoint sync not configured' });
   }
 
-  try {
-    const bearerToken = extractBearerToken(req);
-    if (!bearerToken) {
-      return res.status(401).json({ error: 'Bearer token required for OBO SharePoint sync' });
-    }
-
-    const graphClient = await getGraphClientOnBehalfOf(bearerToken);
-    const pivotData = await sharepoint.fetchPivotFromSharePoint(graphClient);
-    const stats = await sharepoint.syncPivotToDatabase(pivotData);
-
-    res.json({
-      message: 'SharePoint pull completed',
-      method: 'obo',
-      source: 'sharepoint',
-      ...stats
-    });
-  } catch (err) {
-    logger.error({ err }, 'SharePoint Pull error');
-
-    if (err.message?.includes('AADSTS65001') || err.message?.includes('has not consented')) {
-      return res.status(403).json({
-        error: 'Admin consent required',
-        detail: 'A tenant admin must grant this app permission to access SharePoint. ' +
-          'Ask your admin to visit the admin consent URL for this application.',
-        consentRequired: true
-      });
-    }
-
-    if (err.statusCode === 403 || err.message?.includes('Access denied')) {
-      return res.status(403).json({
-        error: 'You do not have access to this SharePoint site',
-        detail: err.message
-      });
-    }
-
-    res.status(500).json({ error: 'SharePoint pull failed', detail: err.message });
+  const bearerToken = extractBearerToken(req);
+  if (!bearerToken) {
+    return res.status(401).json({ error: 'Bearer token required for OBO SharePoint sync' });
   }
+
+  const graphClient = await getGraphClientOnBehalfOf(bearerToken);
+  const pivotData = await sharepoint.fetchPivotFromSharePoint(graphClient);
+  const stats = await sharepoint.syncPivotToDatabase(pivotData);
+
+  res.json({
+    message: 'SharePoint pull completed',
+    method: 'obo',
+    source: 'sharepoint',
+    ...stats
+  });
 });
 
 /**
@@ -98,41 +75,19 @@ router.post('/push', requireAuth, async (req, res) => {
     return res.status(401).json({ error: 'User must be authenticated' });
   }
 
-  try {
-    const bearerToken = extractBearerToken(req);
-    if (!bearerToken) {
-      return res.status(401).json({ error: 'Bearer token required for OBO SharePoint sync' });
-    }
-
-    const graphClient = await getGraphClientOnBehalfOf(bearerToken);
-    const result = await sharepoint.pushUserSkillsToSharePoint(graphClient, req.user);
-
-    res.json({
-      message: 'SharePoint push completed',
-      method: 'obo',
-      ...result
-    });
-  } catch (err) {
-    logger.error({ err }, 'SharePoint Push error');
-
-    if (err.message?.includes('AADSTS65001') || err.message?.includes('has not consented')) {
-      return res.status(403).json({
-        error: 'Admin consent required',
-        detail: 'A tenant admin must grant this app permission to access SharePoint. ' +
-          'Ask your admin to visit the admin consent URL for this application.',
-        consentRequired: true
-      });
-    }
-
-    if (err.statusCode === 403 || err.message?.includes('Access denied')) {
-      return res.status(403).json({
-        error: 'You do not have permission to update this SharePoint list',
-        detail: err.message
-      });
-    }
-
-    res.status(500).json({ error: 'SharePoint push failed', detail: err.message });
+  const bearerToken = extractBearerToken(req);
+  if (!bearerToken) {
+    return res.status(401).json({ error: 'Bearer token required for OBO SharePoint sync' });
   }
+
+  const graphClient = await getGraphClientOnBehalfOf(bearerToken);
+  const result = await sharepoint.pushUserSkillsToSharePoint(graphClient, req.user);
+
+  res.json({
+    message: 'SharePoint push completed',
+    method: 'obo',
+    ...result
+  });
 });
 
 module.exports = router;

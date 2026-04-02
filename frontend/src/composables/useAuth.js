@@ -5,6 +5,7 @@
 import { ref, computed, readonly } from 'vue';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
 import { fetchAuthConfig, buildMsalConfig, buildLoginRequest } from '../auth/authConfig';
+import { getBaseUrl } from '../utils/config';
 
 // ── Singleton state ──────────────────────────────────
 const user = ref(null);
@@ -140,10 +141,9 @@ export function useAuth() {
    */
   async function loadCurrentUser() {
     try {
-      const baseUrl = (window.__CONFIG__?.VITE_API_URL || '').replace(/\/+$/, '');
       const token = await getToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${baseUrl}/api/auth/me`, { headers });
+      const res = await fetch(`${getBaseUrl()}/api/auth/me`, { headers });
       if (res.ok) {
         user.value = await res.json();
       }
@@ -157,8 +157,7 @@ export function useAuth() {
    */
   async function loadDemoUser() {
     try {
-      const baseUrl = (window.__CONFIG__?.VITE_API_URL || '').replace(/\/+$/, '');
-      const res = await fetch(`${baseUrl}/api/auth/me`);
+      const res = await fetch(`${getBaseUrl()}/api/auth/me`);
       if (res.ok) {
         user.value = await res.json();
       }

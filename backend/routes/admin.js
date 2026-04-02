@@ -6,6 +6,7 @@ const db = require('../db');
 const logger = require('../logger');
 const { requireAuth, requireAdmin } = require('../auth');
 const sharepointSync = require('../services/sharepoint');
+const { validateProficiencyLevel } = require('../utils/validations');
 
 // --- In-memory rate limiter for admin endpoints ---
 const adminRateLimit = new Map();
@@ -318,87 +319,70 @@ router.get('/status', requireAuth, requireAdmin, async (req, res) => {
 
 // List all users with admin status (admin only)
 router.get('/users', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const result = await db.query(
-      'SELECT id, name, email, role, team, is_admin FROM users ORDER BY name'
-    );
-    res.json(result.rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  const result = await db.query(
+    'SELECT id, name, email, role, team, is_admin FROM users ORDER BY name'
+  );
+  res.json(result.rows);
 });
 
 // Grant or revoke admin access (admin only)
 router.put('/users/:id/admin', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { is_admin } = req.body;
+  const { id } = req.params;
+  const { is_admin } = req.body;
 
-    if (typeof is_admin !== 'boolean') {
-      return res.status(400).json({ error: 'is_admin must be a boolean' });
-    }
-
-    const result = await db.query(
-      'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING id, name, email, is_admin',
-      [is_admin, id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json(result.rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  if (typeof is_admin !== 'boolean') {
+    return res.status(400).json({ error: 'is_admin must be a boolean' });
   }
+
+  const result = await db.query(
+    'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING id, name, email, is_admin',
+    [is_admin, id]
+  );
+
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  res.json(result.rows[0]);
 });
 
 // Admin: update any user's skill (bypasses ownership)
 router.put('/user-skills', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { user_id, skill_id, proficiency_level } = req.body;
+  const { user_id, skill_id, proficiency_level } = req.body;
 
-    if (!user_id || !skill_id || !proficiency_level) {
-      return res.status(400).json({ error: 'user_id, skill_id, and proficiency_level required' });
-    }
-
-    const validLevels = ['L100', 'L200', 'L300', 'L400'];
-    if (!validLevels.includes(proficiency_level)) {
-      return res.status(400).json({ error: 'Invalid proficiency level' });
-    }
-
-    const result = await db.query(`
-      INSERT INTO user_skills (user_id, skill_id, proficiency_level)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id, skill_id) 
-      DO UPDATE SET proficiency_level = $3
-      RETURNING *
-    `, [user_id, skill_id, proficiency_level]);
-
-    res.json(result.rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  if (!user_id || !skill_id || !proficiency_level) {
+    return res.status(400).json({ error: 'user_id, skill_id, and proficiency_level required' });
   }
+
+  if (!validateProficiencyLevel(proficiency_level)) {
+    return res.status(400).json({ error: 'Invalid proficiency level' });
+  }
+
+  const result = await db.query(`
+    INSERT INTO user_skills (user_id, skill_id, proficiency_level)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (user_id, skill_id) 
+    DO UPDATE SET proficiency_level = $3
+    RETURNING *
+  `, [user_id, skill_id, proficiency_level]);
+
+  res.json(result.rows[0]);
 });
 
 // Admin: delete any user's skill (bypasses ownership)
 router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { user_id, skill_id } = req.body;
+  const { user_id, skill_id } = req.body;
 
-    if (!user_id || !skill_id) {
-      return res.status(400).json({ error: 'user_id and skill_id required' });
-    }
-
-    await db.query(
-      'DELETE FROM user_skills WHERE user_id = $1 AND skill_id = $2',
-      [user_id, skill_id]
-    );
-
-    res.json({ message: 'Skill removed' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  if (!user_id || !skill_id) {
+    return res.status(400).json({ error: 'user_id and skill_id required' });
   }
+
+  await db.query(
+    'DELETE FROM user_skills WHERE user_id = $1 AND skill_id = $2',
+    [user_id, skill_id]
+  );
+
+  res.json({ message: 'Skill removed' });
 });
 
 // Admin: reset all users (wipe duplicates, start fresh)
@@ -408,20 +392,15 @@ router.post('/reset-users', requireAuth, checkAdminAllowlist, checkInitSecret, a
   const performedBy = req.user?.email || 'unknown';
   await logAdminAction('reset-users', performedBy, { endpoint: '/reset-users' }, ip);
 
-  try {
-    // Delete in dependency order: history → skills → users
-    await db.query('DELETE FROM user_skills_history');
-    await db.query('DELETE FROM user_skills');
-    await db.query('DELETE FROM users');
+  // Delete in dependency order: history → skills → users
+  await db.query('DELETE FROM user_skills_history');
+  await db.query('DELETE FROM user_skills');
+  await db.query('DELETE FROM users');
 
-    res.json({
-      message: 'All users, user_skills, and user_skills_history deleted. Re-initialize with /api/admin/init or sync.',
-      status: 'success'
-    });
-  } catch (error) {
-    logger.error({ err: error }, 'Reset users error');
-    res.status(500).json({ error: 'Failed to reset users' });
-  }
+  res.json({
+    message: 'All users, user_skills, and user_skills_history deleted. Re-initialize with /api/admin/init or sync.',
+    status: 'success'
+  });
 });
 
 // Admin: sync skills from CSV or SharePoint
@@ -434,32 +413,27 @@ router.post('/sync-skills', requireAuth, checkAdminAllowlist, checkInitSecret, a
   const performedBy = req.user?.email || 'unknown';
   await logAdminAction('sync-skills', performedBy, { endpoint: '/sync-skills', source }, ip);
 
-  try {
-    const options = {};
-    if (csvContent) {
-      options.csvContent = csvContent;
-    }
-    if (filePath) {
-      options.filePath = filePath;
-    }
-
-    if (source === 'sharepoint') {
-      // SharePoint requires Graph API client — future enhancement
-      return res.status(501).json({ 
-        error: 'SharePoint sync not yet configured. Use source: "csv" or configure SHAREPOINT_CLIENT_ID.',
-        hint: 'Set SHAREPOINT_CLIENT_ID, SHAREPOINT_CLIENT_SECRET, and SHAREPOINT_TENANT_ID env vars.'
-      });
-    }
-
-    const stats = await sharepointSync.sync(source, options);
-    res.json({ 
-      message: 'Skill sync completed',
-      ...stats
-    });
-  } catch (error) {
-    logger.error({ err: error }, 'Sync error');
-    res.status(500).json({ error: error.message });
+  const options = {};
+  if (csvContent) {
+    options.csvContent = csvContent;
   }
+  if (filePath) {
+    options.filePath = filePath;
+  }
+
+  if (source === 'sharepoint') {
+    // SharePoint requires Graph API client — future enhancement
+    return res.status(501).json({ 
+      error: 'SharePoint sync not yet configured. Use source: "csv" or configure SHAREPOINT_CLIENT_ID.',
+      hint: 'Set SHAREPOINT_CLIENT_ID, SHAREPOINT_CLIENT_SECRET, and SHAREPOINT_TENANT_ID env vars.'
+    });
+  }
+
+  const stats = await sharepointSync.sync(source, options);
+  res.json({ 
+    message: 'Skill sync completed',
+    ...stats
+  });
 });
 
 module.exports = router;

@@ -3,10 +3,7 @@
  * Resolves the backend base URL from runtime config (window.__CONFIG__).
  */
 import { useAuth } from './useAuth';
-
-function getBaseUrl() {
-  return (window.__CONFIG__?.VITE_API_URL || '').replace(/\/+$/, '');
-}
+import { getBaseUrl } from '../utils/config';
 
 export function useApi() {
   const { getToken } = useAuth();
