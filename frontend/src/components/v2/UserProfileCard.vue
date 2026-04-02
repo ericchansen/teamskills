@@ -28,7 +28,7 @@
 
 <script setup>
 defineProps({
-  user: { type: Object, required: true },
+  user: { type: Object, default: null },
   initials: { type: String, required: true },
   totalSkills: { type: Number, required: true },
   avgLevel: { type: Number, required: true },
