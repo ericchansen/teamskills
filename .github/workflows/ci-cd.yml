@@ -218,35 +218,6 @@ jobs:
               VITE_AZURE_AD_TENANT_ID=${{ vars.AZURE_AD_TENANT_ID }} \
               VITE_AGENT_URL=$AGENT_URL
 
-      - name: Verify deployed image SHAs
-        run: |
-          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
-          EXPECTED_SHA="${{ github.sha }}"
-          ALL_OK=true
-
-          for APP_PAIR in \
-            "backend:${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }}" \
-            "agent:${{ vars.AGENT_APP || 'ca-agent-gvojq4dgzbtk4' }}" \
-            "frontend:${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }}"; do
-            LABEL="${APP_PAIR%%:*}"
-            APP="${APP_PAIR#*:}"
-            DEPLOYED_IMAGE="$(az containerapp show -n "$APP" -g "$RG" \
-              --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || echo 'unknown')"
-            echo "$LABEL: $DEPLOYED_IMAGE"
-            if echo "$DEPLOYED_IMAGE" | grep -q ":${EXPECTED_SHA}$"; then
-              echo "  ✅ matches expected SHA"
-            else
-              echo "  ⚠️ expected SHA $EXPECTED_SHA but got: $DEPLOYED_IMAGE"
-              ALL_OK=false
-            fi
-          done
-
-          if [ "$ALL_OK" != "true" ]; then
-            echo "❌ One or more containers did not deploy the expected image!"
-            exit 1
-          fi
-          echo "✅ All containers running expected image SHA"
-
       - name: Wait for new revisions to provision
         run: |
           RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
@@ -286,6 +257,36 @@ jobs:
           if [ "$AGENT_READY" != "true" ]; then
             echo "⚠️ Agent failed to become ready (non-blocking)"
           fi
+
+      - name: Verify deployed image SHAs
+        run: |
+          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
+          EXPECTED_SHA="${{ github.sha }}"
+          ALL_OK=true
+
+          for APP_PAIR in \
+            "backend:${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }}" \
+            "agent:${{ vars.AGENT_APP || 'ca-agent-gvojq4dgzbtk4' }}" \
+            "frontend:${{ vars.FRONTEND_APP || 'ca-frontend-teamskills' }}"; do
+            LABEL="${APP_PAIR%%:*}"
+            APP="${APP_PAIR#*:}"
+            ACTIVE_IMAGE="$(az containerapp revision list -n "$APP" -g "$RG" \
+              --query "[?properties.active].properties.template.containers[0].image | [0]" \
+              -o tsv 2>/dev/null || echo 'unknown')"
+            echo "$LABEL active revision: $ACTIVE_IMAGE"
+            if echo "$ACTIVE_IMAGE" | grep -q ":${EXPECTED_SHA}$"; then
+              echo "  ✅ matches expected SHA"
+            else
+              echo "  ⚠️ expected SHA $EXPECTED_SHA but got: $ACTIVE_IMAGE"
+              ALL_OK=false
+            fi
+          done
+
+          if [ "$ALL_OK" != "true" ]; then
+            echo "❌ One or more active revisions do not match expected image!"
+            exit 1
+          fi
+          echo "✅ All active revisions running expected image SHA"
 
       - name: Initialize database (seed schema + skills)
         run: |
