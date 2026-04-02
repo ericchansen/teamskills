@@ -2,6 +2,7 @@ const db = require('./db');
 const logger = require('./logger');
 const { normalizeSkillName } = require('./utils/normalizeSkill');
 const nameMap = require('./data/skill-name-map.json');
+const taxonomy = require('./data/skill-taxonomy');
 
 /**
  * Idempotent schema migrations — safe to run on every startup.
@@ -75,7 +76,8 @@ async function runMigrations() {
     if (!st.skills || !st.user_skills || !st.skill_categories) {
       logger.info('One or more skill-related tables are missing — skipping skill categorization cleanup');
     } else {
-      await cleanupSkillCategories();
+      const pathToId = await ensureCategoryHierarchy();
+      await cleanupSkillCategories(pathToId);
     }
 
     logger.info('Startup migrations applied successfully');
@@ -94,6 +96,88 @@ async function tableExists(tableName) {
     `SELECT to_regclass('public.' || $1) AS t`, [tableName]
   );
   return !!result.rows[0]?.t;
+}
+
+/**
+ * Ensure the full hierarchical category tree exists.
+ * Uses the tree structure from skill-taxonomy.js.
+ * Resolves categories by (name, parent_id) — never by fixed IDs.
+ * Returns a pathToId map for use by assignUncategorizedSkills.
+ */
+async function ensureCategoryHierarchy() {
+  const { categoryTree, topLevelAliases } = taxonomy;
+  const pathToId = new Map();
+  let created = 0;
+
+  // Helper: find-or-create a category by name + parent_id
+  async function findOrCreate(name, parentId, level, sortOrder) {
+    // For top-level, also check aliases (e.g., "Infra" matches "Infrastructure")
+    let existing;
+    if (level === 1) {
+      const alias = topLevelAliases[name];
+      const reverseAliases = Object.entries(topLevelAliases)
+        .filter(([, canonical]) => canonical === name)
+        .map(([alt]) => alt);
+      const allNames = [name, ...(alias ? [alias] : []), ...reverseAliases];
+      const placeholders = allNames.map((_, i) => `$${i + 1}`).join(', ');
+      existing = await db.query(
+        `SELECT id, name FROM skill_categories WHERE parent_id IS NULL AND name IN (${placeholders})`,
+        allNames
+      );
+    } else {
+      existing = await db.query(
+        'SELECT id, name FROM skill_categories WHERE parent_id = $1 AND name = $2',
+        [parentId, name]
+      );
+    }
+
+    if (existing.rows.length > 0) {
+      const row = existing.rows[0];
+      // Update level and sort_order if needed (but don't rename existing categories)
+      await db.query(
+        'UPDATE skill_categories SET level = $1, sort_order = $2 WHERE id = $3',
+        [level, sortOrder, row.id]
+      );
+      return row.id;
+    }
+
+    // Insert new category — let PG assign the ID
+    const result = await db.query(
+      'INSERT INTO skill_categories (name, parent_id, level, sort_order) VALUES ($1, $2, $3, $4) RETURNING id',
+      [name, parentId, level, sortOrder]
+    );
+    created++;
+    return result.rows[0].id;
+  }
+
+  // Walk the tree: L1 → L2 → L3
+  let l1Sort = 0;
+  for (const [l1Name, l2Map] of Object.entries(categoryTree)) {
+    l1Sort++;
+    const l1Id = await findOrCreate(l1Name, null, 1, l1Sort);
+    pathToId.set(l1Name, l1Id);
+
+    let l2Sort = 0;
+    for (const [l2Name, l3List] of Object.entries(l2Map)) {
+      l2Sort++;
+      const l2Id = await findOrCreate(l2Name, l1Id, 2, l2Sort);
+      pathToId.set(`${l1Name}/${l2Name}`, l2Id);
+
+      const l3Names = Array.isArray(l3List) ? l3List : [];
+      let l3Sort = 0;
+      for (const l3Name of l3Names) {
+        l3Sort++;
+        const l3Id = await findOrCreate(l3Name, l2Id, 3, l3Sort);
+        pathToId.set(`${l1Name}/${l2Name}/${l3Name}`, l3Id);
+      }
+    }
+  }
+
+  if (created > 0) {
+    logger.info(`Category hierarchy: created ${created} new categories (${pathToId.size} total)`);
+  }
+
+  return pathToId;
 }
 
 /**
@@ -170,7 +254,7 @@ async function repointRelationships(keepId, removeId) {
  * 3. Assign categories to any remaining uncategorized skills
  * 4. Add unique index on skills.name to prevent future duplicates
  */
-async function cleanupSkillCategories() {
+async function cleanupSkillCategories(pathToId) {
   // Cache table existence for optional tables (may not exist on older schemas)
   const hasHistory = await tableExists('user_skills_history');
   const hasRelationships = await tableExists('skill_relationships');
@@ -185,7 +269,7 @@ async function cleanupSkillCategories() {
   await mergeExactNameDuplicates(hasHistory, hasRelationships);
 
   // Step 3: Assign categories to uncategorized skills by name-matching
-  await assignUncategorizedSkills();
+  await assignUncategorizedSkills(pathToId);
 
   // Step 4: Add unique index (only works after duplicates are resolved)
   await addSkillNameUniqueIndex();
@@ -195,7 +279,7 @@ async function cleanupSkillCategories() {
  * Ensure the "Soft Skills" top-level category and its 8 skills exist.
  */
 async function ensureSoftSkills() {
-  const softSkills = nameMap.softSkills || [];
+  const softSkills = taxonomy.softSkills.length > 0 ? taxonomy.softSkills : (nameMap.softSkills || []);
   if (softSkills.length === 0) return;
 
   // Upsert the top-level category
@@ -244,9 +328,10 @@ async function ensureSoftSkills() {
  * For each known alias, move user_skills to the canonical skill and delete the duplicate.
  */
 async function mergeDuplicateSkills(hasHistory, hasRelationships) {
-  const aliases = nameMap.aliases || {};
+  // Combine aliases from both sources (taxonomy takes precedence)
+  const combinedAliases = { ...(nameMap.aliases || {}), ...taxonomy.aliases };
 
-  for (const [aliasName, canonicalName] of Object.entries(aliases)) {
+  for (const [aliasName, canonicalName] of Object.entries(combinedAliases)) {
     const aliasResult = await db.query('SELECT id FROM skills WHERE name = $1', [aliasName]);
     if (aliasResult.rows.length === 0) continue;
 
@@ -329,10 +414,13 @@ async function mergeExactNameDuplicates(hasHistory, hasRelationships) {
 }
 
 /**
- * Assign categories to uncategorized skills by matching against existing categorized skills.
- * Falls back to name-based heuristics for common patterns.
+ * Assign categories to uncategorized skills using:
+ *  1. Taxonomy path lookup (primary — skill name → category path → DB id)
+ *  2. Alias resolution (SharePoint ↔ seed name variants)
+ *  3. Copy from same-name skill that already has a category
+ *  4. Partial match heuristic (fallback — SQL ILIKE against category names)
  */
-async function assignUncategorizedSkills() {
+async function assignUncategorizedSkills(pathToId) {
   const uncategorized = await db.query(
     'SELECT id, name FROM skills WHERE category_id IS NULL'
   );
@@ -341,22 +429,87 @@ async function assignUncategorizedSkills() {
 
   logger.info(`Found ${uncategorized.rows.length} uncategorized skills to fix`);
 
+  const { skillCategoryMap, aliases, topLevelAliases } = taxonomy;
+
+  // Build a combined skill name (lowercase) → category path lookup
+  const mapLookup = new Map();
+  for (const [skillName, catPath] of Object.entries(skillCategoryMap)) {
+    mapLookup.set(skillName.toLowerCase(), catPath);
+  }
+  // Add aliases so both directions work
+  for (const [alt, canonical] of Object.entries(aliases)) {
+    const catPath = skillCategoryMap[canonical] || skillCategoryMap[alt];
+    if (catPath) {
+      mapLookup.set(alt.toLowerCase(), catPath);
+      mapLookup.set(canonical.toLowerCase(), catPath);
+    }
+  }
+
+  // Resolve a category path to a DB id, handling top-level aliases
+  function resolvePathToId(catPath) {
+    // Direct lookup
+    let id = pathToId.get(catPath);
+    if (id) return id;
+
+    // Try with top-level alias (e.g., "Infra/..." when prod has "Infrastructure/...")
+    const parts = catPath.split('/');
+    const l1 = parts[0];
+    for (const [prodName, canonical] of Object.entries(topLevelAliases)) {
+      if (canonical === l1) {
+        const altPath = [prodName, ...parts.slice(1)].join('/');
+        id = pathToId.get(altPath);
+        if (id) return id;
+      }
+    }
+    if (topLevelAliases[l1]) {
+      const altPath = [topLevelAliases[l1], ...parts.slice(1)].join('/');
+      id = pathToId.get(altPath);
+      if (id) return id;
+    }
+    return null;
+  }
+
+  let mapFixed = 0;
+  let heuristicFixed = 0;
+
   for (const skill of uncategorized.rows) {
-    // Try to find the category of a skill with the same normalized name
+    // Strategy 1: Taxonomy path lookup
+    const catPath = mapLookup.get(skill.name.toLowerCase());
+    if (catPath) {
+      const catId = resolvePathToId(catPath);
+      if (catId) {
+        await db.query('UPDATE skills SET category_id = $1 WHERE id = $2', [catId, skill.id]);
+        mapFixed++;
+        continue;
+      }
+    }
+
+    // Strategy 2: Alias resolution — normalize name and try again
     const normalized = normalizeSkillName(skill.name);
-    const match = await db.query(
+    if (normalized !== skill.name) {
+      const aliasedPath = mapLookup.get(normalized.toLowerCase());
+      if (aliasedPath) {
+        const catId = resolvePathToId(aliasedPath);
+        if (catId) {
+          await db.query('UPDATE skills SET category_id = $1 WHERE id = $2', [catId, skill.id]);
+          mapFixed++;
+          continue;
+        }
+      }
+    }
+
+    // Strategy 3: Copy category from another skill with the same normalized name
+    const nameMatch = await db.query(
       'SELECT category_id FROM skills WHERE name = $1 AND category_id IS NOT NULL AND id != $2 LIMIT 1',
       [normalized, skill.id]
     );
-
-    if (match.rows.length > 0) {
-      await db.query('UPDATE skills SET category_id = $1 WHERE id = $2', [match.rows[0].category_id, skill.id]);
-      logger.info(`Categorized "${skill.name}" by name match`);
+    if (nameMatch.rows.length > 0) {
+      await db.query('UPDATE skills SET category_id = $1 WHERE id = $2', [nameMatch.rows[0].category_id, skill.id]);
+      heuristicFixed++;
       continue;
     }
 
-    // Try partial match: look for a uniquely-named category whose name appears in the skill name
-    // Exclude ambiguous names (e.g., "Solution" exists under multiple parents)
+    // Strategy 4: Partial match against category names
     const partialMatch = await db.query(`
       SELECT sc.id as category_id, sc.name, sc.level
       FROM skill_categories sc
@@ -371,15 +524,18 @@ async function assignUncategorizedSkills() {
 
     if (partialMatch.rows.length > 0) {
       await db.query('UPDATE skills SET category_id = $1 WHERE id = $2', [partialMatch.rows[0].category_id, skill.id]);
-      logger.info(`Categorized "${skill.name}" by partial match → "${partialMatch.rows[0].name}"`);
+      heuristicFixed++;
     }
   }
 
+  if (mapFixed > 0 || heuristicFixed > 0) {
+    logger.info(`Categorized skills: ${mapFixed} by taxonomy map, ${heuristicFixed} by heuristic`);
+  }
+
   // Log remaining uncategorized
-  const remaining = await db.query('SELECT COUNT(*) as count FROM skills WHERE category_id IS NULL');
-  const count = parseInt(remaining.rows[0].count);
-  if (count > 0) {
-    logger.warn(`${count} skills still uncategorized after migration`);
+  const remaining = await db.query('SELECT name FROM skills WHERE category_id IS NULL');
+  if (remaining.rows.length > 0) {
+    logger.warn(`${remaining.rows.length} skills still uncategorized: ${remaining.rows.map(r => r.name).join(', ')}`);
   }
 }
 
