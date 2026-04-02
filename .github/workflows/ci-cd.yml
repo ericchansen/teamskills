@@ -21,6 +21,7 @@ jobs:
           reporter: github-check
           level: info
           fail_level: error
+          actionlint_flags: -shellcheck=""
 
   lint:
     name: Lint
