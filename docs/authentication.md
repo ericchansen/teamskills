@@ -205,11 +205,4 @@ If `VITE_AZURE_AD_CLIENT_ID` is not set, the app falls back to demo mode with a 
 
 ## Database Migration
 
-For existing deployments, run the migration to add the `entra_oid` column:
-
-```sql
--- Run this migration script
-psql -d teamskills -f database/migrations/001_add_entra_oid.sql
-```
-
-Or the column will be added automatically on next `/api/admin/init` call.
+For existing deployments, the `entra_oid` column is added automatically by `backend/migrate.js` on startup. No manual migration needed.

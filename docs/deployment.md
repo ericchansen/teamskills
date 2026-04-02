@@ -131,8 +131,8 @@ PR opened/synchronized/reopened against `master`
    - Configures ingress, secrets, environment variables
 
 6. **Initialize Database**
-   - Connects to PostgreSQL
-   - Runs `database/schema.sql`, `database/seed-categories.sql`, `database/seed-users.sql`, `database/seed-demo-skills.sql`
+   - Backend runs idempotent migrations on startup via `backend/migrate.js`
+   - Calls `POST /api/admin/init` with `INIT_SECRET` to seed schema and skills from `database/seed.sql`
 
 7. **Smoke Tests**
    - Backend health check: `GET /health` → `{"status":"ok"}`

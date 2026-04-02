@@ -8,7 +8,6 @@ import {
   GridComponent,
   VisualMapComponent,
   LegendComponent,
-  DataZoomComponent,
 } from 'echarts/components';
 import App from './App.vue';
 import router from './router';
@@ -23,7 +22,6 @@ use([
   GridComponent,
   VisualMapComponent,
   LegendComponent,
-  DataZoomComponent,
 ]);
 
 const app = createApp(App);
