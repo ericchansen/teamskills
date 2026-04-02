@@ -19,7 +19,8 @@ jobs:
         uses: reviewdog/action-actionlint@v1
         with:
           reporter: github-check
-          fail_on_error: true
+          level: info
+          fail_level: error
 
   lint:
     name: Lint
@@ -173,6 +174,7 @@ jobs:
             ENV_VARS="$ENV_VARS INIT_SECRET=secretref:init-secret"
           fi
 
+          # shellcheck disable=SC2086 — ENV_VARS needs word splitting for multiple env var args
           az containerapp update \
             --name "$APP" \
             --resource-group "$RG" \
