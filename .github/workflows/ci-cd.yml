@@ -10,12 +10,15 @@ jobs:
   actionlint:
     name: Lint workflows
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - name: actionlint
         uses: reviewdog/action-actionlint@v1
         with:
-          reporter: github-pr-review
+          reporter: github-check
           fail_on_error: true
 
   lint:
@@ -226,7 +229,7 @@ jobs:
             DEPLOYED_IMAGE="$(az containerapp show -n "$APP" -g "$RG" \
               --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || echo 'unknown')"
             echo "$LABEL: $DEPLOYED_IMAGE"
-            if echo "$DEPLOYED_IMAGE" | grep -q "$EXPECTED_SHA"; then
+            if echo "$DEPLOYED_IMAGE" | grep -q ":${EXPECTED_SHA}$"; then
               echo "  ✅ matches expected SHA"
             else
               echo "  ⚠️ expected SHA $EXPECTED_SHA but got: $DEPLOYED_IMAGE"
