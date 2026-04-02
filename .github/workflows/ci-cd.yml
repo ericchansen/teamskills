@@ -174,7 +174,8 @@ jobs:
             ENV_VARS="$ENV_VARS INIT_SECRET=secretref:init-secret"
           fi
 
-          # shellcheck disable=SC2086 — ENV_VARS needs word splitting for multiple env var args
+          # ENV_VARS needs word splitting for multiple env var args
+          # shellcheck disable=SC2086
           az containerapp update \
             --name "$APP" \
             --resource-group "$RG" \
