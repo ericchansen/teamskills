@@ -49,6 +49,7 @@ const { isLive } = useSkillsData();
 const navRoutes = computed(() =>
   router.getRoutes().filter((r) => {
     if (r.meta.requiresAuth && !isAuthenticated.value) return false;
+    if (r.meta.requiresAdmin && !user.value?.is_admin) return false;
     return r.meta.label;
   })
 );

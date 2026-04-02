@@ -204,22 +204,27 @@ module.exports = {
     'Power BI': 'Data/Analytics/Fabric',
     'OneLake': 'Data/Analytics/Fabric',
     'Cosmos DB on Fabric': 'Data/Analytics/Fabric',
-    'Data Engineering and Data Science': 'Data/Analytics/Fabric',
+    // Broad conceptual skill — intentionally NOT Fabric-specific
+    'Data Engineering and Data Science': 'Data/Analytics',
     'Data Factory': 'Data/Analytics/Fabric',
     'Data Warehouse': 'Data/Analytics/Fabric',
     'Fabric Admin, governance, and security': 'Data/Analytics/Fabric',
     'Fabric Purview integration': 'Data/Analytics/Fabric',
     'Real Time Intelligence': 'Data/Analytics/Fabric',
     'Fabric IQ': 'Data/Analytics/Fabric',
+    'Fabric Data Engineering': 'Data/Analytics/Fabric',
+    'Fabric Data Science': 'Data/Analytics/Fabric',
     'MySQL DB on Fabric': 'Data/Analytics/Fabric',
     'PostgreSQL on Fabric': 'Data/Analytics/Fabric',
     'SQL DB on Fabric': 'Data/Analytics/Fabric',
     'Fabric Capacity Management': 'Data/Analytics/Fabric',
     'Fabric OneLake': 'Data/Analytics/Fabric',
+    // Keep this categorized, but do not auto-normalize it into the broad conceptual skill.
     'Fabric Data Engineering and Data Science': 'Data/Analytics/Fabric',
     'Fabric Data Factory': 'Data/Analytics/Fabric',
     'Fabric Data Warehouse': 'Data/Analytics/Fabric',
     'Fabric Real Time Intelligence': 'Data/Analytics/Fabric',
+    'Fabric Real-Time Intelligence': 'Data/Analytics/Fabric',
 
     // === Infra > Compute > Virtual Machine ===
     'VM Sizes': 'Infra/Compute/Virtual Machine',
@@ -294,6 +299,90 @@ module.exports = {
   },
 
   /**
+   * Canonical metadata for skill display/governance.
+   * `name` remains the stable DB identity; `preferredLabel` is what the UI should show.
+   */
+  skillMetadata: {
+    'Azure AI Bot Service': {
+      preferredLabel: 'Azure AI Bot Service',
+      conceptType: 'product',
+      lifecycleStatus: 'legacy',
+      vendorNamespace: 'Azure AI',
+    },
+    'Azure Application Insights': {
+      preferredLabel: 'Azure Monitor Application Insights',
+      conceptType: 'product',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Azure Monitor',
+    },
+    'Managed Redis': {
+      preferredLabel: 'Azure Managed Redis',
+      conceptType: 'product',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Azure',
+    },
+    'Microsoft Foundry': {
+      preferredLabel: 'Microsoft Foundry',
+      conceptType: 'platform',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Microsoft',
+    },
+    'OneLake': {
+      preferredLabel: 'OneLake',
+      conceptType: 'product',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Microsoft Fabric',
+    },
+    'Data Engineering and Data Science': {
+      preferredLabel: 'Data Engineering and Data Science',
+      conceptType: 'practice',
+      lifecycleStatus: 'active',
+      vendorNamespace: null,
+    },
+    'Data Factory': {
+      preferredLabel: 'Fabric Data Factory',
+      conceptType: 'product',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Microsoft Fabric',
+    },
+    'Data Warehouse': {
+      preferredLabel: 'Fabric Data Warehouse',
+      conceptType: 'product',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Microsoft Fabric',
+    },
+    'Real Time Intelligence': {
+      preferredLabel: 'Fabric Real-Time Intelligence',
+      conceptType: 'product',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Microsoft Fabric',
+    },
+    'Fabric Data Engineering': {
+      preferredLabel: 'Fabric Data Engineering',
+      conceptType: 'product',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Microsoft Fabric',
+    },
+    'Fabric Data Science': {
+      preferredLabel: 'Fabric Data Science',
+      conceptType: 'product',
+      lifecycleStatus: 'active',
+      vendorNamespace: 'Microsoft Fabric',
+    },
+  },
+
+  /**
+   * Raw labels that should be surfaced for human review instead of silently merged.
+   */
+  reviewRequired: {
+    'Fabric Data Engineering and Data Science': {
+      suggestedAction: 'split',
+      confidence: 0.25,
+      reviewNotes: 'Combined Fabric workload label is ambiguous. Keep the broad conceptual skill separate and prefer the official Microsoft names "Fabric Data Engineering" and "Fabric Data Science".',
+    },
+  },
+
+  /**
    * Name aliases: maps non-canonical names to their canonical form.
    * Used by normalizeSkillName() and migration dedup.
    */
@@ -305,10 +394,10 @@ module.exports = {
     'C%23 / .NET': 'C# / .NET',
     // Fabric prefixed variants
     'Fabric OneLake': 'OneLake',
-    'Fabric Data Engineering and Data Science': 'Data Engineering and Data Science',
     'Fabric Data Factory': 'Data Factory',
     'Fabric Data Warehouse': 'Data Warehouse',
     'Fabric Real Time Intelligence': 'Real Time Intelligence',
+    'Fabric Real-Time Intelligence': 'Real Time Intelligence',
     // SharePoint-vs-seed name mismatches
     'Azure AI Document Intelligence': 'Azure Document Intelligence',
     'Azure AI Vision': 'Azure Vision',
@@ -322,6 +411,7 @@ module.exports = {
     'Azure Pipelines': 'Azure Pipelines (Azure DevOps Pipelines)',
     'Azure App Service': 'App Service',
     'Azure VMware Solution': 'Azure VMWare Solution',
+    'Azure Managed Redis': 'Managed Redis',
     'ExpressRoute': 'Express Route',
     // Typos found in production data
     'Dedicatd Hosts': 'Dedicated Hosts',

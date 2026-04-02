@@ -8,6 +8,15 @@ import { fetchAuthConfig, buildMsalConfig, buildLoginRequest } from '../auth/aut
 import { getBaseUrl } from '../utils/config';
 
 // ── Singleton state ──────────────────────────────────
+const LOCAL_DEMO_USER = Object.freeze({
+  id: 1,
+  name: 'Demo User',
+  email: 'demo@example.com',
+  role: 'Demo Admin',
+  team: 'Offline',
+  is_admin: true,
+});
+
 const user = ref(null);
 const isLoading = ref(true);
 const authEnabled = ref(false);
@@ -160,10 +169,13 @@ export function useAuth() {
       const res = await fetch(`${getBaseUrl()}/api/auth/me`);
       if (res.ok) {
         user.value = await res.json();
+        return;
       }
     } catch {
       // Backend not available — that's fine, run offline
     }
+
+    user.value = { ...LOCAL_DEMO_USER };
   }
 
   return {

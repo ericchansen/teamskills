@@ -1,7 +1,6 @@
 const db = require('./db');
 const logger = require('./logger');
-const { normalizeSkillName } = require('./utils/normalizeSkill');
-const nameMap = require('./data/skill-name-map.json');
+const { normalizeSkillName, getCanonicalSkillInfo, suggestSkillProposal } = require('./utils/normalizeSkill');
 const taxonomy = require('./data/skill-taxonomy');
 
 /**
@@ -41,6 +40,10 @@ async function runMigrations() {
       DO $$ BEGIN
         IF to_regclass('public.skills') IS NOT NULL THEN
           ALTER TABLE skills ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+          ALTER TABLE skills ADD COLUMN IF NOT EXISTS preferred_label VARCHAR(255);
+          ALTER TABLE skills ADD COLUMN IF NOT EXISTS concept_type VARCHAR(50);
+          ALTER TABLE skills ADD COLUMN IF NOT EXISTS lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'active';
+          ALTER TABLE skills ADD COLUMN IF NOT EXISTS vendor_namespace VARCHAR(100);
         END IF;
       END $$;
 
@@ -52,6 +55,40 @@ async function runMigrations() {
           CREATE INDEX IF NOT EXISTS idx_users_entra_oid ON users(entra_oid) WHERE entra_oid IS NOT NULL;
         END IF;
       END $$;
+
+      CREATE TABLE IF NOT EXISTS skill_proposals (
+        id SERIAL PRIMARY KEY,
+        proposed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        name VARCHAR(255) NOT NULL,
+        category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
+        description TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+        reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_proposals_status ON skill_proposals(status);
+
+      DO $$ BEGIN
+        IF to_regclass('public.skill_proposals') IS NOT NULL THEN
+          ALTER TABLE skill_proposals ADD COLUMN IF NOT EXISTS canonical_skill_id INTEGER REFERENCES skills(id) ON DELETE SET NULL;
+          ALTER TABLE skill_proposals ADD COLUMN IF NOT EXISTS suggested_action VARCHAR(20);
+          ALTER TABLE skill_proposals ADD COLUMN IF NOT EXISTS confidence NUMERIC(4,3);
+          ALTER TABLE skill_proposals ADD COLUMN IF NOT EXISTS review_notes TEXT;
+          CREATE INDEX IF NOT EXISTS idx_skill_proposals_canonical_skill ON skill_proposals(canonical_skill_id);
+        END IF;
+      END $$;
+
+      CREATE TABLE IF NOT EXISTS skill_aliases (
+        id SERIAL PRIMARY KEY,
+        skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+        alias VARCHAR(255) NOT NULL,
+        source VARCHAR(50) DEFAULT 'manual',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(skill_id, alias)
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_aliases_skill ON skill_aliases(skill_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_aliases_alias_lower ON skill_aliases (LOWER(alias));
 
       -- Admin audit log (used by /api/admin endpoints)
       CREATE TABLE IF NOT EXISTS admin_audit_log (
@@ -253,7 +290,9 @@ async function repointRelationships(keepId, removeId) {
  * 1. Ensure "Soft Skills" top-level category exists with its 8 skills
  * 2. Merge duplicate skills (dedup suffix variants → canonical name)
  * 3. Assign categories to any remaining uncategorized skills
- * 4. Add unique index on skills.name to prevent future duplicates
+ * 4. Sync canonical labels/metadata and alias records
+ * 5. Surface review-required labels through the existing proposal queue
+ * 6. Add unique index on skills.name to prevent future duplicates
  */
 async function cleanupSkillCategories(pathToId) {
   // Cache table existence for optional tables (may not exist on older schemas)
@@ -272,7 +311,14 @@ async function cleanupSkillCategories(pathToId) {
   // Step 3: Assign categories to uncategorized skills by name-matching
   await assignUncategorizedSkills(pathToId);
 
-  // Step 4: Add unique index (only works after duplicates are resolved)
+  // Step 4: Sync display/governance metadata and alias registry
+  await syncCanonicalSkillMetadata();
+  await syncSkillAliases();
+
+  // Step 5: Surface ambiguous terms for explicit approval
+  await flagReviewRequiredSkills();
+
+  // Step 6: Add unique index (only works after duplicates are resolved)
   await addSkillNameUniqueIndex();
 }
 
@@ -280,7 +326,7 @@ async function cleanupSkillCategories(pathToId) {
  * Ensure the "Soft Skills" top-level category and its 8 skills exist.
  */
 async function ensureSoftSkills() {
-  const softSkills = taxonomy.softSkills.length > 0 ? taxonomy.softSkills : (nameMap.softSkills || []);
+  const softSkills = taxonomy.softSkills || [];
   if (softSkills.length === 0) return;
 
   // Upsert the top-level category
@@ -329,8 +375,7 @@ async function ensureSoftSkills() {
  * For each known alias, move user_skills to the canonical skill and delete the duplicate.
  */
 async function mergeDuplicateSkills(hasHistory, hasRelationships) {
-  // Combine aliases from both sources (taxonomy takes precedence)
-  const combinedAliases = { ...(nameMap.aliases || {}), ...taxonomy.aliases };
+  const combinedAliases = taxonomy.aliases || {};
 
   for (const [aliasName, canonicalName] of Object.entries(combinedAliases)) {
     const aliasResult = await db.query('SELECT id FROM skills WHERE name = $1', [aliasName]);
@@ -411,6 +456,145 @@ async function mergeExactNameDuplicates(hasHistory, hasRelationships) {
 
       logger.info(`Merged exact-name duplicate "${row.name}" (id=${removeId}) → (id=${keepId})`);
     }
+  }
+}
+
+/**
+ * Backfill canonical metadata onto existing skills so the UI can prefer
+ * official Microsoft product naming without renaming the DB identity.
+ */
+async function syncCanonicalSkillMetadata() {
+  const knownNames = new Set([
+    ...Object.keys(taxonomy.skillCategoryMap || {}),
+    ...Object.keys(taxonomy.skillMetadata || {}),
+  ]);
+
+  // Build reverse alias map: canonical name → [import names that alias to it]
+  const reverseAliases = {};
+  for (const [alias, canonical] of Object.entries(taxonomy.aliases || {})) {
+    if (!reverseAliases[canonical]) reverseAliases[canonical] = [];
+    reverseAliases[canonical].push(alias);
+  }
+
+  for (const skillName of knownNames) {
+    const info = getCanonicalSkillInfo(skillName);
+    // Try the canonical name first, then any import aliases that resolve to it
+    const namesToTry = [skillName, ...(reverseAliases[skillName] || [])];
+
+    for (const dbName of namesToTry) {
+      await db.query(
+        `UPDATE skills
+         SET preferred_label = $1,
+             concept_type = COALESCE($2, concept_type),
+             lifecycle_status = COALESCE($3, lifecycle_status),
+             vendor_namespace = COALESCE($4, vendor_namespace)
+         WHERE name = $5
+           AND (
+             preferred_label IS DISTINCT FROM $1 OR
+             concept_type IS DISTINCT FROM COALESCE($2, concept_type) OR
+             lifecycle_status IS DISTINCT FROM COALESCE($3, lifecycle_status) OR
+             vendor_namespace IS DISTINCT FROM COALESCE($4, vendor_namespace)
+           )`,
+        [
+          info.preferredLabel,
+          info.conceptType,
+          info.lifecycleStatus,
+          info.vendorNamespace,
+          dbName,
+        ]
+      );
+    }
+  }
+
+  // Every skill should have a display label, even when no explicit metadata exists yet.
+  await db.query(
+    'UPDATE skills SET preferred_label = name WHERE preferred_label IS NULL'
+  );
+}
+
+/**
+ * Persist the approved alias registry so future proposal review can show
+ * canonical suggestions and external systems can inspect the mapping.
+ */
+async function syncSkillAliases() {
+  for (const [alias, canonicalName] of Object.entries(taxonomy.aliases || {})) {
+    const canonical = await db.query('SELECT id FROM skills WHERE name = $1', [canonicalName]);
+    if (canonical.rows.length === 0) continue;
+
+    await db.query(
+      `INSERT INTO skill_aliases (skill_id, alias, source)
+       SELECT $1::int, $2::varchar, $3::varchar
+       WHERE NOT EXISTS (
+         SELECT 1 FROM skill_aliases WHERE LOWER(alias) = LOWER($2::varchar)
+       )`,
+      [canonical.rows[0].id, alias, 'taxonomy']
+    );
+  }
+
+  for (const [skillName, meta] of Object.entries(taxonomy.skillMetadata || {})) {
+    if (!meta.preferredLabel || meta.preferredLabel === skillName) continue;
+
+    const canonical = await db.query('SELECT id FROM skills WHERE name = $1', [skillName]);
+    if (canonical.rows.length === 0) continue;
+
+    await db.query(
+      `INSERT INTO skill_aliases (skill_id, alias, source)
+       SELECT $1::int, $2::varchar, $3::varchar
+       WHERE NOT EXISTS (
+         SELECT 1 FROM skill_aliases WHERE LOWER(alias) = LOWER($2::varchar)
+       )`,
+      [canonical.rows[0].id, meta.preferredLabel, 'preferred-label']
+    );
+  }
+}
+
+/**
+ * Seed pending proposals for labels we explicitly do not want to auto-merge.
+ */
+async function flagReviewRequiredSkills() {
+  for (const [skillName, reviewHint] of Object.entries(taxonomy.reviewRequired || {})) {
+    const existingSkill = await db.query(
+      'SELECT id, category_id FROM skills WHERE name = $1 LIMIT 1',
+      [skillName]
+    );
+    if (existingSkill.rows.length === 0) continue;
+
+    const suggestion = suggestSkillProposal(skillName);
+    let canonicalSkillId = null;
+    if (suggestion.canonicalName && suggestion.canonicalName !== skillName) {
+      const canonical = await db.query(
+        'SELECT id FROM skills WHERE name = $1 LIMIT 1',
+        [suggestion.canonicalName]
+      );
+      canonicalSkillId = canonical.rows[0]?.id || null;
+    }
+
+    await db.query(
+      `INSERT INTO skill_proposals (
+         proposed_by,
+         name,
+         category_id,
+         description,
+         canonical_skill_id,
+         suggested_action,
+         confidence,
+         review_notes
+       )
+       SELECT NULL, $1::varchar, $2::int, $3::text, $4::int, $5::varchar, $6::numeric, $7::text
+       WHERE NOT EXISTS (
+         SELECT 1 FROM skill_proposals
+         WHERE LOWER(name) = LOWER($1::varchar)
+       )`,
+      [
+        skillName,
+        existingSkill.rows[0].category_id || null,
+        'Imported label requires taxonomy review before consolidation.',
+        canonicalSkillId,
+        reviewHint.suggestedAction || suggestion.suggestedAction || 'review',
+        reviewHint.confidence ?? suggestion.confidence ?? null,
+        reviewHint.reviewNotes || suggestion.reviewNotes || null,
+      ]
+    );
   }
 }
 

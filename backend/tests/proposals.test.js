@@ -106,11 +106,13 @@ describe('Proposals API', () => {
 
   describe('POST /api/proposals/:id/approve', () => {
     test('should approve a pending proposal and create the skill', async () => {
-      const mockProposal = { id: 1, name: 'Azure Quantum', category_id: 1, description: 'Quantum' };
+      const mockProposal = { id: 1, name: 'Azure Quantum', category_id: 1, description: 'Quantum', suggested_action: 'new_skill' };
       const mockSkill = { id: 10, name: 'Azure Quantum', category_id: 1 };
 
       // Get proposal
       db.query.mockResolvedValueOnce({ rows: [mockProposal] });
+      // Check for existing skill with the same name
+      db.query.mockResolvedValueOnce({ rows: [] });
       // Create skill
       db.query.mockResolvedValueOnce({ rows: [mockSkill] });
       // Update proposal status

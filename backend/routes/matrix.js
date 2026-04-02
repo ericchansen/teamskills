@@ -14,7 +14,8 @@ router.get('/', async (req, res) => {
 
   // Get all skills with full category path
   const skillsResult = await db.query(`
-    SELECT s.id, s.name, s.category_id, s.description, s.target_level, s.is_core, s.sort_order,
+    SELECT s.id, s.name, s.preferred_label, s.concept_type, s.lifecycle_status, s.vendor_namespace,
+           s.category_id, s.description, s.target_level, s.is_core, s.sort_order,
            sc.name as category_name,
            sc.parent_id as category_parent_id,
            sc.level as category_level

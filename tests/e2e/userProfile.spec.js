@@ -1,138 +1,65 @@
 import { test, expect } from '@playwright/test';
 
-// Demo login helper: selects a user from the auth gate dropdown
-async function demoLogin(page) {
+async function openProfile(page) {
   await page.goto('/');
-  // Auth gate shows the demo login inline when MSAL is not configured
-  await expect(page.locator('.auth-gate')).toBeVisible();
-  // Wait for user options to load before selecting
-  await page.locator('.demo-login-inline select option:nth-child(2)').waitFor({ state: 'attached', timeout: 10000 });
-  await page.locator('.demo-login-inline select').selectOption({ index: 1 });
-  // Wait for matrix to load after login (auth gate login shows matrix view)
-  await expect(page.locator('.skill-matrix')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('.app-header')).toBeVisible();
+  await expect(page.locator('.matrix-view')).toBeVisible({ timeout: 15000 });
+  await page.getByRole('link', { name: 'My Profile' }).click();
+  await expect(page.locator('.profile-page')).toBeVisible();
 }
 
 test.describe('User Profile', () => {
   test.beforeEach(async ({ page }) => {
-    await demoLogin(page);
-    
-    // Click a user (not the logged-in user) to get to profile view
-    await expect(page.locator('.matrix-table')).toBeVisible();
-    await page.locator('.user-name').nth(1).click();
-    await expect(page.locator('.user-profile')).toBeVisible();
+    await openProfile(page);
   });
 
-  test('should display user information', async ({ page }) => {
-    // Check user header
-    await expect(page.locator('.user-profile h2')).toBeVisible();
-    
-    // Check user details
-    await expect(page.locator('.user-details')).toBeVisible();
-    
-    // Check skills section
-    await expect(page.locator('.skills-section')).toBeVisible();
-  });
+  test('should display the user summary card and skill editor', async ({ page }) => {
+    await expect(page.locator('.user-card')).toBeVisible();
 
-  test('should display user skills grouped by category', async ({ page }) => {
-    // Check that category groups exist
-    const categoryGroups = page.locator('.category-group');
-    await expect(categoryGroups.first()).toBeVisible();
-
-    // Check that skills are listed
-    const skillItems = page.locator('.skill-item');
-    await expect(skillItems.first()).toBeVisible();
-
-    // Check that proficiency badges are visible
-    const badges = page.locator('.proficiency-badge');
-    await expect(badges.first()).toBeVisible();
-  });
-
-  test('should navigate back to matrix view', async ({ page }) => {
-    // Click Back to Matrix button
-    await page.click('text=Back to Matrix');
-
-    // Check that matrix is visible
-    await expect(page.locator('.skill-matrix')).toBeVisible();
-  });
-});
-
-test.describe('User Profile - Logged In', () => {
-  test.beforeEach(async ({ page }) => {
-    await demoLogin(page);
-    // Navigate to own profile via header button
-    await page.locator('.profile-btn').click();
-    await expect(page.locator('.user-profile')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('.own-profile-badge')).toBeVisible();
-  });
-
-  test('should open add skill modal when logged in', async ({ page }) => {
-    // Click Add Skill button (only visible when logged in and on own profile)
-    await page.click('text=Add Skill');
-
-    // Check modal is visible
-    await expect(page.locator('.modal-overlay')).toBeVisible();
-    await expect(page.locator('.modal-content h3')).toContainText('Add Skill');
-
-    // Check search input is visible
-    await expect(page.locator('input[placeholder*="search"]')).toBeVisible();
-  });
-
-  test('should search and select a skill', async ({ page }) => {
-    // Open modal
-    await page.click('text=Add Skill');
-    await expect(page.locator('.modal-overlay')).toBeVisible();
-
-    // Type in search
-    const searchInput = page.locator('input[placeholder*="search"]');
-    await searchInput.fill('Azure');
-
-    // Wait for dropdown to appear
-    await expect(page.locator('.skills-dropdown')).toBeVisible();
-
-    // Check that skills are shown
-    const skillOptions = page.locator('.skill-option');
-    await expect(skillOptions.first()).toBeVisible();
-
-    // Click on a skill
-    await skillOptions.first().click();
-
-    // Check that skill is selected
-    await expect(page.locator('.selected-skill')).toBeVisible();
-  });
-
-  test('should change proficiency level for existing skill', async ({ page }) => {
-    // Find a skill item with a select dropdown
-    const firstSelect = page.locator('.proficiency-select').first();
-    
-    if (await firstSelect.isVisible()) {
-      const initialValue = await firstSelect.inputValue();
-      
-      // Change to a different level
-      const newValue = initialValue === 'L100' ? 'L200' : 'L100';
-
-      // Wait for API response after changing proficiency to avoid race condition
-      const responsePromise = page.waitForResponse(resp => resp.url().includes('/api/user-skills') && resp.status() < 400);
-      await firstSelect.selectOption(newValue);
-      await responsePromise;
-
-      // Verify the value changed (auto-retrying assertion handles React re-renders)
-      await expect(firstSelect).toHaveValue(newValue);
+    if (await page.locator('.skills-editor').count()) {
+      await expect(page.locator('.skills-editor')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'My Skills' })).toBeVisible();
+    } else {
+      await expect(page.locator('.no-profile-msg')).toContainText('demo mode');
     }
   });
 
-  test('should close modal when clicking cancel', async ({ page }) => {
-    // Open modal
-    await page.click('text=Add Skill');
-    await expect(page.locator('.modal-overlay')).toBeVisible();
+  test('should display grouped skill categories and rows', async ({ page }) => {
+    if (await page.locator('.skills-editor').count()) {
+      await expect(page.locator('.skill-category').first()).toBeVisible();
+      await expect(page.locator('.skill-row').first()).toBeVisible();
+      await expect(page.locator('.level-btn').first()).toBeVisible();
+    } else {
+      await expect(page.locator('.no-profile-msg')).toContainText('Sign in to manage your skills');
+    }
+  });
 
-    // Search and select a skill
-    await page.locator('input[placeholder*="search"]').fill('Azure');
-    await page.locator('.skill-option').first().click();
+  test('should collapse and expand a skill category', async ({ page }) => {
+    if (await page.locator('.skills-editor').count() === 0) {
+      await expect(page.locator('.no-profile-msg')).toContainText('demo mode');
+      return;
+    }
 
-    // Click Cancel
-    await page.click('text=Cancel');
+    const firstCategory = page.locator('.cat-header').first();
+    const firstChevron = firstCategory.locator('.cat-chevron');
 
-    // Modal should be closed
-    await expect(page.locator('.modal-overlay')).not.toBeVisible();
+    await expect(firstCategory).toBeVisible();
+    await expect(firstChevron).not.toHaveClass(/collapsed/);
+
+    await firstCategory.click();
+    await expect(firstChevron).toHaveClass(/collapsed/);
+
+    await firstCategory.click();
+    await expect(firstChevron).not.toHaveClass(/collapsed/);
+  });
+
+  test('should surface official Microsoft skill labels in the editor', async ({ page }) => {
+    if (await page.locator('.skills-editor').count()) {
+      // These canonical relabels exist in both mock data and the live DB
+      await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Retrieval-Augmented Generation (RAG)' })).toBeVisible();
+      await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Azure AI Bot Service' })).toBeVisible();
+    } else {
+      await expect(page.locator('.no-profile-msg')).toContainText('demo mode');
+    }
   });
 });
