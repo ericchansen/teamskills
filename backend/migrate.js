@@ -46,6 +46,9 @@ async function runMigrations() {
       DO $$ BEGIN
         IF to_regclass('public.users') IS NOT NULL THEN
           ALTER TABLE users ADD COLUMN IF NOT EXISTS qualifier VARCHAR(100);
+          -- PR #84: Entra ID integration — add OID column + index for existing deployments
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS entra_oid VARCHAR(36);
+          CREATE INDEX IF NOT EXISTS idx_users_entra_oid ON users(entra_oid) WHERE entra_oid IS NOT NULL;
         END IF;
       END $$;
 
