@@ -24,23 +24,89 @@
         </div>
       </div>
 
-      <div v-for="cat in categoryNames" :key="cat" class="skill-category">
-        <h4 class="cat-header" @click="toggleCategory(cat)">
-          <span class="cat-chevron" :class="{ collapsed: collapsedCats.has(cat) }">▸</span>
-          {{ cat }}
-          <span class="cat-count">{{ skillCategories[cat]?.length || 0 }}</span>
+      <div class="filter-toolbar">
+        <label class="filter-field search-field">
+          <span>Search</span>
+          <input
+            v-model.trim="searchQuery"
+            type="search"
+            class="filter-input"
+            placeholder="Search skills or categories"
+          />
+        </label>
+
+        <label class="filter-field">
+          <span>Level</span>
+          <select v-model="levelFilter" class="filter-input">
+            <option value="any">Any level</option>
+            <option value="unrated">Unrated only</option>
+            <option value="l100plus">L100+</option>
+            <option value="l200plus">L200+</option>
+            <option value="l300plus">L300+</option>
+            <option value="l400plus">L400</option>
+          </select>
+        </label>
+
+        <label class="filter-toggle">
+          <input v-model="ratedOnly" type="checkbox" />
+          <span>Rated only</span>
+        </label>
+
+        <button
+          v-if="hasActiveFilters"
+          type="button"
+          class="clear-filters-btn"
+          @click="clearFilters"
+        >
+          Clear filters
+        </button>
+      </div>
+
+      <div class="catalog-help">
+        <p>
+          Updating a level changes only <strong>your</strong> profile and syncs back to SharePoint when that
+          connection is configured. Skill names, categories, merges, and other taxonomy changes are handled through
+          the admin workflow.
+        </p>
+        <router-link v-if="user?.is_admin" to="/admin/taxonomy" class="catalog-link">
+          Open taxonomy review
+        </router-link>
+      </div>
+
+      <p v-if="!isLoading" class="results-summary">
+        Showing {{ visibleSkillCount }} of {{ totalSkillCount }} skills
+      </p>
+
+      <div v-if="isLoading" class="no-results-msg">
+        Loading skills...
+      </div>
+
+      <div v-else-if="filteredCategories.length === 0" class="no-results-msg">
+        No skills match the current filters.
+      </div>
+
+      <div v-for="cat in filteredCategories" :key="cat.name" class="skill-category">
+        <h4 class="cat-header" @click="toggleCategory(cat.name)">
+          <span class="cat-chevron" :class="{ collapsed: collapsedCats.has(cat.name) }">▸</span>
+          {{ cat.name }}
+          <span class="cat-count">
+            {{ cat.visibleCount }}<template v-if="cat.visibleCount !== cat.totalCount"> / {{ cat.totalCount }}</template>
+          </span>
         </h4>
 
-        <div v-show="!collapsedCats.has(cat)" class="cat-skills">
-          <SkillLevelRow
-            v-for="skill in skillCategories[cat]"
-            :key="skill"
-            :skill-name="skill"
-            :current-level="getMyLevel(skill)"
-            :levels="levels"
-            :can-edit="canEdit"
-            @update:level="setLevel"
-          />
+        <div v-show="!collapsedCats.has(cat.name)" class="cat-skills">
+          <div v-for="group in cat.groups" :key="group.key" class="skill-group">
+            <h5 v-if="group.label" class="group-header">{{ group.label }}</h5>
+            <SkillLevelRow
+              v-for="skill in group.skills"
+              :key="skill.name"
+              :skill-name="skill.name"
+              :current-level="getMyLevel(skill.name)"
+              :levels="levels"
+              :can-edit="canEdit"
+              @update:level="setLevel"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -48,7 +114,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { useSkillsData } from '../composables/useSkillsData';
 import { useApi } from '../composables/useApi';
@@ -57,7 +123,7 @@ import UserProfileCard from './v2/UserProfileCard.vue';
 import SkillLevelRow from './v2/SkillLevelRow.vue';
 
 const { user, isAuthenticated } = useAuth();
-const { people, allSkills, skillCategories, categoryNames, skillIndex, skillNameToId, isLive, levels, load } =
+const { people, allSkills, skillCatalog, skillIndex, skillNameToId, isLive, isLoading, levels, load } =
   useSkillsData();
 const api = useApi();
 
@@ -84,6 +150,114 @@ const {
   isLive,
   api,
 });
+
+const searchQuery = ref('');
+const levelFilter = ref('any');
+const ratedOnly = ref(false);
+
+function compareText(a = '', b = '') {
+  return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
+}
+
+const categoryTotals = computed(() => {
+  const totals = {};
+  for (const skill of skillCatalog.value || []) {
+    const categoryName = skill.topLevelCategory || 'Uncategorized';
+    totals[categoryName] = (totals[categoryName] || 0) + 1;
+  }
+  return totals;
+});
+
+function matchesLevel(level) {
+  switch (levelFilter.value) {
+    case 'unrated':
+      return level === 0;
+    case 'l100plus':
+      return level >= 100;
+    case 'l200plus':
+      return level >= 200;
+    case 'l300plus':
+      return level >= 300;
+    case 'l400plus':
+      return level >= 400;
+    default:
+      return true;
+  }
+}
+
+function matchesSearch(skill) {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return true;
+
+  return [
+    skill.name,
+    skill.topLevelCategory,
+    skill.groupLabel,
+    skill.categoryPath,
+  ]
+    .filter(Boolean)
+    .some((value) => value.toLowerCase().includes(query));
+}
+
+const filteredCategories = computed(() => {
+  const categories = new Map();
+
+  for (const skill of skillCatalog.value || []) {
+    const level = getMyLevel(skill.name);
+    if (ratedOnly.value && level === 0) continue;
+    if (!matchesLevel(level)) continue;
+    if (!matchesSearch(skill)) continue;
+
+    const categoryName = skill.topLevelCategory || 'Uncategorized';
+    if (!categories.has(categoryName)) {
+      categories.set(categoryName, {
+        name: categoryName,
+        totalCount: categoryTotals.value[categoryName] || 0,
+        visibleCount: 0,
+        groups: new Map(),
+      });
+    }
+
+    const category = categories.get(categoryName);
+    const groupKey = skill.groupLabel || '__ungrouped__';
+    if (!category.groups.has(groupKey)) {
+      category.groups.set(groupKey, {
+        key: groupKey,
+        label: skill.groupLabel || '',
+        skills: [],
+      });
+    }
+
+    category.groups.get(groupKey).skills.push(skill);
+    category.visibleCount += 1;
+  }
+
+  return [...categories.values()]
+    .sort((a, b) => compareText(a.name, b.name))
+    .map((category) => ({
+      ...category,
+      groups: [...category.groups.values()]
+        .sort((a, b) => compareText(a.label, b.label))
+        .map((group) => ({
+          ...group,
+          skills: [...group.skills].sort((a, b) => compareText(a.name, b.name)),
+        })),
+    }));
+});
+
+const totalSkillCount = computed(() => (skillCatalog.value || []).length);
+const visibleSkillCount = computed(() =>
+  filteredCategories.value.reduce((sum, category) => sum + category.visibleCount, 0)
+);
+const hasActiveFilters = computed(() =>
+  searchQuery.value.trim().length > 0 || levelFilter.value !== 'any' || ratedOnly.value
+);
+
+function clearFilters() {
+  searchQuery.value = '';
+  levelFilter.value = 'any';
+  ratedOnly.value = false;
+}
 
 onMounted(async () => {
   await load();
@@ -135,6 +309,95 @@ onMounted(async () => {
   font-style: italic;
 }
 
+.filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 140px;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #a0a0b0);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.search-field {
+  flex: 1 1 260px;
+}
+
+.filter-input {
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2a4a);
+  background: var(--bg-primary, #12121f);
+  color: var(--text-primary, #e0e0e0);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: 0.85rem;
+  padding-bottom: 0.55rem;
+}
+
+.clear-filters-btn,
+.catalog-link {
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2a4a);
+  background: transparent;
+  color: var(--text-primary, #e0e0e0);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.clear-filters-btn {
+  cursor: pointer;
+}
+
+.catalog-help {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.85rem;
+  padding: 0.85rem 1rem;
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.18);
+  border-radius: 10px;
+}
+
+.catalog-help p {
+  margin: 0;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  flex: 1 1 460px;
+}
+
+.catalog-link:hover,
+.clear-filters-btn:hover {
+  background: rgba(129, 140, 248, 0.12);
+}
+
+.results-summary,
+.no-results-msg {
+  margin: 0 0 0.85rem;
+  color: var(--text-secondary, #a0a0b0);
+  font-size: 0.85rem;
+}
+
 .skill-category {
   margin-bottom: 0.5rem;
 }
@@ -175,6 +438,19 @@ onMounted(async () => {
 
 .cat-skills {
   padding: 0.25rem 0 0.25rem 1rem;
+}
+
+.skill-group + .skill-group {
+  margin-top: 1rem;
+}
+
+.group-header {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, #a0a0b0);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .no-profile-msg {

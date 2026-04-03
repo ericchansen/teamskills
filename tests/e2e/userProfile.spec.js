@@ -34,6 +34,30 @@ test.describe('User Profile', () => {
     }
   });
 
+  test('should show profile filters and explain the taxonomy workflow', async ({ page }) => {
+    if (await page.locator('.skills-editor').count()) {
+      await expect(page.getByPlaceholder('Search skills or categories')).toBeVisible();
+      await expect(page.getByRole('combobox').first()).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Rated only' })).toBeVisible();
+      await expect(page.locator('.catalog-help')).toContainText('admin workflow');
+    } else {
+      await expect(page.locator('.no-profile-msg')).toContainText('demo mode');
+    }
+  });
+
+  test('should filter visible skills by search text', async ({ page }) => {
+    if (await page.locator('.skills-editor').count() === 0) {
+      await expect(page.locator('.no-profile-msg')).toContainText('demo mode');
+      return;
+    }
+
+    const searchInput = page.getByPlaceholder('Search skills or categories');
+    await searchInput.fill('Bot Service');
+
+    await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Azure AI Bot Service' })).toBeVisible();
+    await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Retrieval-Augmented Generation (RAG)' })).toHaveCount(0);
+  });
+
   test('should collapse and expand a skill category', async ({ page }) => {
     if (await page.locator('.skills-editor').count() === 0) {
       await expect(page.locator('.no-profile-msg')).toContainText('demo mode');
