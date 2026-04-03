@@ -2,7 +2,7 @@
  * Singleton composable — reactive skills matrix data.
  * Tries to load from /api/matrix; falls back to static mock data.
  */
-import { ref, reactive, toRefs, readonly } from 'vue';
+import { reactive, toRefs, readonly } from 'vue';
 import { useApi } from './useApi';
 
 // Static levels map (same in API and mock)
@@ -17,6 +17,7 @@ const LEVELS = {
 const state = reactive({
   people: [],
   allSkills: [],
+  skillCatalog: [],
   skillCategories: {},
   categoryNames: [],
   skillToCategory: {},
@@ -46,57 +47,117 @@ function getSkillDisplayName(skill) {
   return skill?.preferred_label || skill?.name;
 }
 
-/**
- * Collect all skill names from the category tree in hierarchy order.
- */
-function collectSkillsFromTree(categoryTree, skills) {
-  const catSkills = new Map();
-  for (const skill of skills) {
-    if (!skill.category_id) continue;
-    if (!catSkills.has(skill.category_id)) catSkills.set(skill.category_id, []);
-    catSkills.get(skill.category_id).push(getSkillDisplayName(skill));
-  }
-
-  const result = [];
-  function walk(node) {
-    // Push any skills directly assigned to this node first
-    const names = catSkills.get(node.id) || [];
-    if (names.length > 0) result.push(...names);
-    // Then recurse into children
-    if (node.children && node.children.length > 0) {
-      for (const child of node.children) walk(child);
-    }
-  }
-  for (const role of categoryTree) walk(role);
-
-  // Append any uncategorized skills
-  const inTree = new Set(result);
-  for (const skill of skills) {
-    const displayName = getSkillDisplayName(skill);
-    if (!inTree.has(displayName)) result.push(displayName);
-  }
-  return result;
+function compareText(a = '', b = '') {
+  return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
 }
 
-/**
- * Build skill -> top-level role mapping for backward compat.
- */
-function buildSkillToCategory(categoryTree, skills) {
-  const catToRoot = new Map();
-  function mapToRoot(node, rootName) {
-    catToRoot.set(node.id, rootName);
-    if (node.children) {
-      for (const child of node.children) mapToRoot(child, rootName);
-    }
-  }
-  for (const role of categoryTree) mapToRoot(role, role.name);
+function comparePathSegments(aParts = [], bParts = []) {
+  const maxLength = Math.max(aParts.length, bParts.length);
+  for (let i = 0; i < maxLength; i++) {
+    const aPart = aParts[i];
+    const bPart = bParts[i];
+    if (aPart === undefined && bPart === undefined) return 0;
+    if (aPart === undefined) return -1;
+    if (bPart === undefined) return 1;
 
-  const result = {};
-  for (const skill of skills) {
-    const displayName = getSkillDisplayName(skill);
-    result[displayName] = catToRoot.get(skill.category_id) || 'Uncategorized';
+    const comparison = compareText(aPart, bPart);
+    if (comparison !== 0) return comparison;
   }
-  return result;
+
+  return 0;
+}
+
+function cloneAndSortCategoryTree(nodes = []) {
+  return [...nodes]
+    .map((node) => ({
+      ...node,
+      children: cloneAndSortCategoryTree(node.children || []),
+    }))
+    .sort((a, b) => compareText(a.name, b.name));
+}
+
+function buildSkillRecord({
+  id = null,
+  rawName,
+  displayName,
+  categoryId = null,
+  categoryPathNames = [],
+  conceptType = null,
+  lifecycleStatus = 'active',
+  vendorNamespace = null,
+}) {
+  const normalizedPathNames = categoryPathNames.length > 0 ? categoryPathNames : ['Uncategorized'];
+  const [topLevelCategory = 'Uncategorized'] = normalizedPathNames;
+  const groupPathNames = normalizedPathNames.slice(1);
+
+  return {
+    id,
+    name: displayName,
+    rawName,
+    categoryId,
+    categoryPath: normalizedPathNames.join(' > '),
+    categoryPathNames: normalizedPathNames,
+    topLevelCategory,
+    groupPathNames,
+    groupLabel: groupPathNames.join(' > '),
+    domain: groupPathNames[0] || null,
+    subdomain: groupPathNames[1] || null,
+    conceptType,
+    lifecycleStatus,
+    vendorNamespace,
+  };
+}
+
+function buildSkillCatalog(skills) {
+  return skills
+    .map((skill) => {
+      const categoryPathNames = Array.isArray(skill?.categoryPathNames)
+        ? skill.categoryPathNames
+        : typeof skill?.categoryPath === 'string'
+          ? skill.categoryPath.split(' > ').map((part) => part.trim()).filter(Boolean)
+          : typeof skill?.category_path === 'string'
+            ? skill.category_path.split(' > ').map((part) => part.trim()).filter(Boolean)
+            : [];
+
+      return buildSkillRecord({
+        id: skill?.id ?? null,
+        rawName: skill?.name ?? getSkillDisplayName(skill),
+        displayName: getSkillDisplayName(skill),
+        categoryId: skill?.category_id ?? null,
+        categoryPathNames,
+        conceptType: skill?.concept_type ?? null,
+        lifecycleStatus: skill?.lifecycle_status ?? 'active',
+        vendorNamespace: skill?.vendor_namespace ?? null,
+      })
+    })
+    .sort((a, b) => {
+      const pathComparison = comparePathSegments(a.categoryPathNames, b.categoryPathNames);
+      if (pathComparison !== 0) return pathComparison;
+      return compareText(a.name, b.name);
+    });
+}
+
+function buildFlatCategories(skillCatalog) {
+  const flatCategories = new Map();
+
+  for (const skill of skillCatalog) {
+    const categoryName = skill.topLevelCategory || 'Uncategorized';
+    if (!flatCategories.has(categoryName)) flatCategories.set(categoryName, []);
+    flatCategories.get(categoryName).push(skill.name);
+  }
+
+  const categoryNames = [...flatCategories.keys()].sort(compareText);
+  const skillCategories = Object.fromEntries(
+    categoryNames.map((categoryName) => [
+      categoryName,
+      [...flatCategories.get(categoryName)].sort(compareText),
+    ])
+  );
+
+  return {
+    skillCategories,
+    categoryNames,
+  };
 }
 
 /**
@@ -104,24 +165,13 @@ function buildSkillToCategory(categoryTree, skills) {
  */
 function transformApiData(apiData) {
   const { users, skills, userSkills, categories: categoryTree = [] } = apiData;
-
-  // Backward-compat flat skillCategories: top-level role -> flat list of skills
-  const skillToCat = buildSkillToCategory(categoryTree, skills);
-  const flatCategories = new Map();
-  for (const skill of skills) {
-    const displayName = getSkillDisplayName(skill);
-    const cat = skillToCat[displayName] || 'Uncategorized';
-    if (!flatCategories.has(cat)) flatCategories.set(cat, []);
-    flatCategories.get(cat).push(displayName);
-  }
-
-  const skillCategories = Object.fromEntries(flatCategories);
-  const categoryNames = [...flatCategories.keys()];
-
-  // Use tree-ordered skill list for consistent column ordering
-  const allSkills = collectSkillsFromTree(categoryTree, skills);
-
-  const skillToCategory = skillToCat;
+  const sortedCategoryTree = cloneAndSortCategoryTree(categoryTree);
+  const skillCatalog = buildSkillCatalog(skills);
+  const { skillCategories, categoryNames } = buildFlatCategories(skillCatalog);
+  const allSkills = skillCatalog.map((skill) => skill.name);
+  const skillToCategory = Object.fromEntries(
+    skillCatalog.map((skill) => [skill.name, skill.topLevelCategory || 'Uncategorized'])
+  );
 
   const skillIndex = {};
   allSkills.forEach((name, i) => {
@@ -174,7 +224,7 @@ function transformApiData(apiData) {
       if (n.children) flattenCatTree(n.children);
     }
   }
-  flattenCatTree(categoryTree);
+  flattenCatTree(sortedCategoryTree);
 
   const skillAncestorIds = {};
   for (const skill of skills) {
@@ -192,12 +242,13 @@ function transformApiData(apiData) {
   return {
     people,
     allSkills,
+    skillCatalog,
     skillCategories,
     categoryNames,
     skillToCategory,
     skillIndex,
     skillNameToId,
-    categoryTree,
+    categoryTree: sortedCategoryTree,
     skillAncestorIds,
   };
 }
@@ -233,14 +284,38 @@ export function useSkillsData() {
         console.warn('API unavailable, using mock data:', err.message);
         try {
           const mock = await import('../data.js');
-          state.people = mock.people;
-          state.allSkills = mock.allSkills;
-          state.skillCategories = mock.skillCategories;
-          state.categoryNames = mock.categoryNames;
-          state.skillToCategory = mock.skillToCategory;
-          state.skillIndex = mock.skillIndex;
+          const mockSkills = Object.entries(mock.skillCategories || {}).flatMap(([categoryName, skills]) =>
+            skills.map((skillName) =>
+              buildSkillRecord({
+                rawName: skillName,
+                displayName: skillName,
+                categoryPathNames: categoryName ? [categoryName] : [],
+              })
+            )
+          );
+          const skillCatalog = buildSkillCatalog(mockSkills);
+          const { skillCategories, categoryNames } = buildFlatCategories(skillCatalog);
+          const allSkills = skillCatalog.map((skill) => skill.name);
+          const oldSkillIndex = mock.skillIndex || Object.fromEntries((mock.allSkills || []).map((skill, index) => [skill, index]));
+          const skillIndex = Object.fromEntries(allSkills.map((skill, index) => [skill, index]));
+
+          state.people = (mock.people || []).map((person) => ({
+            ...person,
+            skills: allSkills.map((skillName) => {
+              const oldIndex = oldSkillIndex[skillName];
+              return oldIndex !== undefined ? person.skills[oldIndex] || 0 : 0;
+            }),
+          }));
+          state.allSkills = allSkills;
+          state.skillCatalog = skillCatalog;
+          state.skillCategories = skillCategories;
+          state.categoryNames = categoryNames;
+          state.skillToCategory = Object.fromEntries(
+            skillCatalog.map((skill) => [skill.name, skill.topLevelCategory || 'Uncategorized'])
+          );
+          state.skillIndex = skillIndex;
           // Build minimal categoryTree from flat skillCategories for offline mode
-          state.categoryTree = (mock.categoryNames || []).map((name, i) => ({
+          state.categoryTree = categoryNames.map((name, i) => ({
             id: -(i + 1),
             name,
             parent_id: null,
@@ -250,7 +325,7 @@ export function useSkillsData() {
           }));
           // Build skillAncestorIds from flat categories
           const ancestorIds = {};
-          for (const [cat, skills] of Object.entries(mock.skillCategories || {})) {
+          for (const [cat, skills] of Object.entries(skillCategories)) {
             const catNode = state.categoryTree.find(n => n.name === cat);
             if (catNode) {
               for (const skill of skills) {
