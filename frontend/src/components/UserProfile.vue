@@ -119,6 +119,7 @@ import { useAuth } from '../composables/useAuth';
 import { useSkillsData } from '../composables/useSkillsData';
 import { useApi } from '../composables/useApi';
 import { useProfileSkills } from '../composables/useProfileSkills';
+import { compareText } from '../utils/textSort';
 import UserProfileCard from './v2/UserProfileCard.vue';
 import SkillLevelRow from './v2/SkillLevelRow.vue';
 
@@ -154,10 +155,6 @@ const {
 const searchQuery = ref('');
 const levelFilter = ref('any');
 const ratedOnly = ref(false);
-
-function compareText(a = '', b = '') {
-  return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
-}
 
 const categoryTotals = computed(() => {
   const totals = {};

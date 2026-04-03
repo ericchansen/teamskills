@@ -3,6 +3,7 @@
  * Tries to load from /api/matrix; falls back to static mock data.
  */
 import { reactive, toRefs, readonly } from 'vue';
+import { compareText } from '../utils/textSort';
 import { useApi } from './useApi';
 
 // Static levels map (same in API and mock)
@@ -45,10 +46,6 @@ function parseLevel(val) {
 
 function getSkillDisplayName(skill) {
   return skill?.preferred_label || skill?.name;
-}
-
-function compareText(a = '', b = '') {
-  return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
 }
 
 function comparePathSegments(aParts = [], bParts = []) {
@@ -314,6 +311,7 @@ export function useSkillsData() {
             skillCatalog.map((skill) => [skill.name, skill.topLevelCategory || 'Uncategorized'])
           );
           state.skillIndex = skillIndex;
+          state.skillNameToId = {};
           // Build minimal categoryTree from flat skillCategories for offline mode
           state.categoryTree = categoryNames.map((name, i) => ({
             id: -(i + 1),
