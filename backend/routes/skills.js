@@ -28,7 +28,37 @@ function createRouteError(status, message, details = {}) {
   const error = new Error(message);
   error.status = status;
   error.details = details;
+  error.expose = true;
   return error;
+}
+
+function deriveSkillMetadata(name, existingSkill = null, applyNameMetadata = true) {
+  const info = getCanonicalSkillInfo(name);
+
+  if (!existingSkill) {
+    return {
+      preferredLabel: info.preferredLabel,
+      conceptType: info.conceptType,
+      lifecycleStatus: info.lifecycleStatus,
+      vendorNamespace: info.vendorNamespace,
+    };
+  }
+
+  if (!applyNameMetadata) {
+    return {
+      preferredLabel: existingSkill.preferred_label || existingSkill.name,
+      conceptType: existingSkill.concept_type ?? null,
+      lifecycleStatus: existingSkill.lifecycle_status ?? 'active',
+      vendorNamespace: existingSkill.vendor_namespace ?? null,
+    };
+  }
+
+  return {
+    preferredLabel: info.preferredLabel,
+    conceptType: info.hasMetadata ? info.conceptType : existingSkill.concept_type ?? null,
+    lifecycleStatus: info.hasMetadata ? info.lifecycleStatus : existingSkill.lifecycle_status ?? 'active',
+    vendorNamespace: info.hasMetadata ? info.vendorNamespace : existingSkill.vendor_namespace ?? null,
+  };
 }
 
 async function ensureCategoryExists(categoryId, queryable = db) {
@@ -157,56 +187,49 @@ router.get('/:id/related', async (req, res) => {
 });
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const name = normalizeText(req.body.name);
-    const description = normalizeText(req.body.description) || null;
-    const categoryId = req.body.category_id === null || req.body.category_id === undefined
-      ? null
-      : parsePositiveInt(req.body.category_id);
+  const name = normalizeText(req.body.name);
+  const description = normalizeText(req.body.description) || null;
+  const categoryId = req.body.category_id === null || req.body.category_id === undefined
+    ? null
+    : parsePositiveInt(req.body.category_id);
 
-    if (!name) {
-      throw createRouteError(400, 'Skill name is required');
-    }
-
-    if (req.body.category_id !== undefined && req.body.category_id !== null && !categoryId) {
-      throw createRouteError(400, 'A valid category is required');
-    }
-
-    await ensureCategoryExists(categoryId);
-    await assertSkillNameAvailable(name);
-
-    const info = getCanonicalSkillInfo(name);
-    const result = await db.query(
-      `INSERT INTO skills (
-         name,
-         category_id,
-         description,
-         preferred_label,
-         concept_type,
-         lifecycle_status,
-         vendor_namespace
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id`,
-      [
-        name,
-        categoryId,
-        description,
-        info.preferredLabel,
-        info.conceptType,
-        info.lifecycleStatus,
-        info.vendorNamespace,
-      ]
-    );
-
-    const skill = await fetchSkillById(result.rows[0].id);
-    return res.status(201).json(skill);
-  } catch (error) {
-    return res.status(error.status || 500).json({
-      error: error.message,
-      ...(error.details || {}),
-    });
+  if (!name) {
+    throw createRouteError(400, 'Skill name is required');
   }
+
+  if (req.body.category_id !== undefined && req.body.category_id !== null && !categoryId) {
+    throw createRouteError(400, 'A valid category is required');
+  }
+
+  await ensureCategoryExists(categoryId);
+  await assertSkillNameAvailable(name);
+
+  const metadata = deriveSkillMetadata(name);
+  const result = await db.query(
+    `INSERT INTO skills (
+       name,
+       category_id,
+       description,
+       preferred_label,
+       concept_type,
+       lifecycle_status,
+       vendor_namespace
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id`,
+    [
+      name,
+      categoryId,
+      description,
+      metadata.preferredLabel,
+      metadata.conceptType,
+      metadata.lifecycleStatus,
+      metadata.vendorNamespace,
+    ]
+  );
+
+  const skill = await fetchSkillById(result.rows[0].id);
+  return res.status(201).json(skill);
 });
 
 router.post('/merge', requireAuth, requireAdmin, async (req, res) => {
@@ -218,237 +241,223 @@ router.post('/merge', requireAuth, requireAdmin, async (req, res) => {
   const hasTargetCategory = req.body.target_category_id !== undefined && req.body.target_category_id !== null;
   const targetCategoryId = hasTargetCategory ? parsePositiveInt(req.body.target_category_id) : null;
 
+  if (!survivingSkillId) {
+    throw createRouteError(400, 'A surviving skill is required');
+  }
+
+  if (mergedSkillIds.length === 0) {
+    throw createRouteError(400, 'Select at least one duplicate skill to merge');
+  }
+
+  if (mergedSkillIds.includes(survivingSkillId)) {
+    throw createRouteError(400, 'The surviving skill cannot also be merged away');
+  }
+
+  if (hasTargetCategory && !targetCategoryId) {
+    throw createRouteError(400, 'A valid target category is required');
+  }
+
+  const allSkillIds = [survivingSkillId, ...mergedSkillIds];
+  const skillsResult = await db.query(
+    `SELECT id, name, preferred_label, category_id, concept_type, lifecycle_status, vendor_namespace
+     FROM skills
+     WHERE id = ANY($1::int[])`,
+    [allSkillIds]
+  );
+  const skillMap = new Map(skillsResult.rows.map((row) => [row.id, row]));
+
+  if (skillMap.size !== allSkillIds.length) {
+    throw createRouteError(400, 'One or more selected skills no longer exist');
+  }
+
+  if (desiredName) {
+    await assertSkillNameAvailable(desiredName, allSkillIds);
+  }
+
+  await ensureCategoryExists(hasTargetCategory ? targetCategoryId : null);
+
+  const survivingSkill = skillMap.get(survivingSkillId);
+  const finalName = desiredName || survivingSkill.name;
+  const finalCategoryId = hasTargetCategory ? targetCategoryId : survivingSkill.category_id;
+  const metadata = deriveSkillMetadata(finalName, survivingSkill, Boolean(desiredName));
+  const client = await db.pool.connect();
+
   try {
-    if (!survivingSkillId) {
-      throw createRouteError(400, 'A surviving skill is required');
+    await client.query('BEGIN');
+    await client.query('SELECT id FROM skills WHERE id = ANY($1::int[]) FOR UPDATE', [allSkillIds]);
+
+    const aliasRows = await client.query(
+      'SELECT alias FROM skill_aliases WHERE skill_id = ANY($1::int[])',
+      [mergedSkillIds]
+    );
+    const aliases = new Set(
+      mergedSkillIds
+        .map((skillId) => skillMap.get(skillId)?.name)
+        .concat(aliasRows.rows.map((row) => row.alias))
+        .map(normalizeText)
+        .filter(Boolean)
+    );
+
+    for (const alias of aliases) {
+      if (alias.toLowerCase() === finalName.toLowerCase()) {
+        continue;
+      }
+
+      await client.query(
+        `INSERT INTO skill_aliases (skill_id, alias, source)
+         VALUES ($1, $2, 'skill-merge')
+         ON CONFLICT DO NOTHING`,
+        [survivingSkillId, alias]
+      );
     }
 
-    if (mergedSkillIds.length === 0) {
-      throw createRouteError(400, 'Select at least one duplicate skill to merge');
+    const mergedUserSkills = await client.query(
+      `SELECT user_id, proficiency_level, notes
+       FROM user_skills
+       WHERE skill_id = ANY($1::int[])`,
+      [mergedSkillIds]
+    );
+
+    for (const row of mergedUserSkills.rows) {
+      await client.query(
+        `INSERT INTO user_skills (user_id, skill_id, proficiency_level, notes)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, skill_id) DO UPDATE SET
+           proficiency_level = CASE
+             WHEN ${PROFICIENCY_ORDER_SQL.replace(/%s/g, 'EXCLUDED.proficiency_level')}
+               > ${PROFICIENCY_ORDER_SQL.replace(/%s/g, 'user_skills.proficiency_level')}
+             THEN EXCLUDED.proficiency_level
+             ELSE user_skills.proficiency_level
+           END,
+           notes = COALESCE(user_skills.notes, EXCLUDED.notes),
+           last_updated = CURRENT_TIMESTAMP`,
+        [row.user_id, survivingSkillId, row.proficiency_level, row.notes || null]
+      );
     }
 
-    if (mergedSkillIds.includes(survivingSkillId)) {
-      throw createRouteError(400, 'The surviving skill cannot also be merged away');
-    }
+    await client.query('DELETE FROM user_skills WHERE skill_id = ANY($1::int[])', [mergedSkillIds]);
 
-    if (hasTargetCategory && !targetCategoryId) {
-      throw createRouteError(400, 'A valid target category is required');
-    }
-
-    const allSkillIds = [survivingSkillId, ...mergedSkillIds];
-    const skillsResult = await db.query(
-      `SELECT id, name, category_id, lifecycle_status, vendor_namespace
-       FROM skills
-       WHERE id = ANY($1::int[])`,
+    const relationshipRows = await client.query(
+      `SELECT parent_skill_id, child_skill_id, relationship_type
+       FROM skill_relationships
+       WHERE parent_skill_id = ANY($1::int[])
+          OR child_skill_id = ANY($1::int[])`,
       [allSkillIds]
     );
-    const skillMap = new Map(skillsResult.rows.map((row) => [row.id, row]));
 
-    if (skillMap.size !== allSkillIds.length) {
-      throw createRouteError(400, 'One or more selected skills no longer exist');
+    const remappedRelationships = new Map();
+    for (const row of relationshipRows.rows) {
+      const parentSkillId = mergedSkillIds.includes(row.parent_skill_id)
+        ? survivingSkillId
+        : row.parent_skill_id;
+      const childSkillId = mergedSkillIds.includes(row.child_skill_id)
+        ? survivingSkillId
+        : row.child_skill_id;
+
+      if (parentSkillId === childSkillId) {
+        continue;
+      }
+
+      const key = `${parentSkillId}:${childSkillId}:${row.relationship_type}`;
+      remappedRelationships.set(key, {
+        parentSkillId,
+        childSkillId,
+        relationshipType: row.relationship_type,
+      });
     }
 
-    if (desiredName) {
-      await assertSkillNameAvailable(desiredName, allSkillIds);
-    }
+    await client.query(
+      `DELETE FROM skill_relationships
+       WHERE parent_skill_id = ANY($1::int[])
+          OR child_skill_id = ANY($1::int[])`,
+      [allSkillIds]
+    );
 
-    await ensureCategoryExists(hasTargetCategory ? targetCategoryId : null);
-
-    const survivingSkill = skillMap.get(survivingSkillId);
-    const finalName = desiredName || survivingSkill.name;
-    const finalCategoryId = hasTargetCategory ? targetCategoryId : survivingSkill.category_id;
-    const info = getCanonicalSkillInfo(finalName);
-    const client = await db.pool.connect();
-
-    try {
-      await client.query('BEGIN');
-      await client.query('SELECT id FROM skills WHERE id = ANY($1::int[]) FOR UPDATE', [allSkillIds]);
-
-      const aliasRows = await client.query(
-        'SELECT alias FROM skill_aliases WHERE skill_id = ANY($1::int[])',
-        [mergedSkillIds]
-      );
-      const aliases = new Set(
-        mergedSkillIds
-          .map((skillId) => skillMap.get(skillId)?.name)
-          .concat(aliasRows.rows.map((row) => row.alias))
-          .map(normalizeText)
-          .filter(Boolean)
-      );
-
-      for (const alias of aliases) {
-        if (alias.toLowerCase() === finalName.toLowerCase()) {
-          continue;
-        }
-
-        await client.query(
-          `INSERT INTO skill_aliases (skill_id, alias, source)
-           VALUES ($1, $2, 'skill-merge')
-           ON CONFLICT DO NOTHING`,
-          [survivingSkillId, alias]
-        );
-      }
-
-      const mergedUserSkills = await client.query(
-        `SELECT user_id, proficiency_level, notes
-         FROM user_skills
-         WHERE skill_id = ANY($1::int[])`,
-        [mergedSkillIds]
-      );
-
-      for (const row of mergedUserSkills.rows) {
-        await client.query(
-          `INSERT INTO user_skills (user_id, skill_id, proficiency_level, notes)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (user_id, skill_id) DO UPDATE SET
-             proficiency_level = CASE
-               WHEN ${PROFICIENCY_ORDER_SQL.replace(/%s/g, 'EXCLUDED.proficiency_level')}
-                 > ${PROFICIENCY_ORDER_SQL.replace(/%s/g, 'user_skills.proficiency_level')}
-               THEN EXCLUDED.proficiency_level
-               ELSE user_skills.proficiency_level
-             END,
-             notes = COALESCE(user_skills.notes, EXCLUDED.notes),
-             last_updated = CURRENT_TIMESTAMP`,
-          [row.user_id, survivingSkillId, row.proficiency_level, row.notes || null]
-        );
-      }
-
-      await client.query('DELETE FROM user_skills WHERE skill_id = ANY($1::int[])', [mergedSkillIds]);
-
-      const relationshipRows = await client.query(
-        `SELECT parent_skill_id, child_skill_id, relationship_type
-         FROM skill_relationships
-         WHERE parent_skill_id = ANY($1::int[])
-            OR child_skill_id = ANY($1::int[])`,
-        [allSkillIds]
-      );
-
-      const remappedRelationships = new Map();
-      for (const row of relationshipRows.rows) {
-        const parentSkillId = mergedSkillIds.includes(row.parent_skill_id)
-          ? survivingSkillId
-          : row.parent_skill_id;
-        const childSkillId = mergedSkillIds.includes(row.child_skill_id)
-          ? survivingSkillId
-          : row.child_skill_id;
-
-        if (parentSkillId === childSkillId) {
-          continue;
-        }
-
-        const key = `${parentSkillId}:${childSkillId}:${row.relationship_type}`;
-        remappedRelationships.set(key, {
-          parentSkillId,
-          childSkillId,
-          relationshipType: row.relationship_type,
-        });
-      }
-
+    for (const relationship of remappedRelationships.values()) {
       await client.query(
-        `DELETE FROM skill_relationships
-         WHERE parent_skill_id = ANY($1::int[])
-            OR child_skill_id = ANY($1::int[])`,
-        [allSkillIds]
+        `INSERT INTO skill_relationships (parent_skill_id, child_skill_id, relationship_type)
+         VALUES ($1, $2, $3)
+         ON CONFLICT DO NOTHING`,
+        [relationship.parentSkillId, relationship.childSkillId, relationship.relationshipType]
       );
-
-      for (const relationship of remappedRelationships.values()) {
-        await client.query(
-          `INSERT INTO skill_relationships (parent_skill_id, child_skill_id, relationship_type)
-           VALUES ($1, $2, $3)
-           ON CONFLICT DO NOTHING`,
-          [relationship.parentSkillId, relationship.childSkillId, relationship.relationshipType]
-        );
-      }
-
-      await client.query(
-        `UPDATE skills
-         SET name = $1,
-             preferred_label = $2,
-             concept_type = $3,
-             lifecycle_status = $4,
-             vendor_namespace = $5,
-             category_id = $6
-         WHERE id = $7`,
-        [
-          finalName,
-          info.preferredLabel,
-          info.conceptType,
-          desiredName ? info.lifecycleStatus : survivingSkill.lifecycle_status,
-          desiredName ? info.vendorNamespace : survivingSkill.vendor_namespace,
-          finalCategoryId,
-          survivingSkillId,
-        ]
-      );
-
-      await client.query('DELETE FROM skills WHERE id = ANY($1::int[])', [mergedSkillIds]);
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
     }
 
-    const skill = await fetchSkillById(survivingSkillId);
-    return res.json({
-      message: 'Skills merged successfully',
-      skill,
-    });
-  } catch (error) {
-    return res.status(error.status || 500).json({
-      error: error.message,
-      ...(error.details || {}),
-    });
-  }
-});
-
-router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const existingSkill = await fetchSkillById(req.params.id);
-    if (!existingSkill) {
-      return res.status(404).json({ error: 'Skill not found' });
-    }
-
-    const nextState = buildNextSkillState(existingSkill, req.body);
-    if (nextState.hasCategory) {
-      await ensureCategoryExists(nextState.categoryId);
-    }
-
-    if (nextState.hasName) {
-      await assertSkillNameAvailable(nextState.name, [existingSkill.id]);
-    }
-
-    const info = getCanonicalSkillInfo(nextState.name);
-    await db.query(
+    await client.query(
       `UPDATE skills
        SET name = $1,
-           category_id = $2,
-           description = $3,
-           preferred_label = $4,
-           concept_type = $5,
-           lifecycle_status = $6,
-           vendor_namespace = $7
-       WHERE id = $8`,
+           preferred_label = $2,
+           concept_type = $3,
+           lifecycle_status = $4,
+           vendor_namespace = $5,
+           category_id = $6
+       WHERE id = $7`,
       [
-        nextState.name,
-        nextState.categoryId,
-        nextState.description,
-        info.preferredLabel,
-        info.conceptType,
-        nextState.lifecycleStatus,
-        info.vendorNamespace,
-        existingSkill.id,
+        finalName,
+        metadata.preferredLabel,
+        metadata.conceptType,
+        metadata.lifecycleStatus,
+        metadata.vendorNamespace,
+        finalCategoryId,
+        survivingSkillId,
       ]
     );
 
-    const updatedSkill = await fetchSkillById(existingSkill.id);
-    return res.json(updatedSkill);
+    await client.query('DELETE FROM skills WHERE id = ANY($1::int[])', [mergedSkillIds]);
+    await client.query('COMMIT');
   } catch (error) {
-    return res.status(error.status || 500).json({
-      error: error.message,
-      ...(error.details || {}),
-    });
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+
+  const skill = await fetchSkillById(survivingSkillId);
+  return res.json({
+    message: 'Skills merged successfully',
+    skill,
+  });
+});
+
+router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
+  const existingSkill = await fetchSkillById(req.params.id);
+  if (!existingSkill) {
+    return res.status(404).json({ error: 'Skill not found' });
+  }
+
+  const nextState = buildNextSkillState(existingSkill, req.body);
+  if (nextState.hasCategory) {
+    await ensureCategoryExists(nextState.categoryId);
+  }
+
+  if (nextState.hasName) {
+    await assertSkillNameAvailable(nextState.name, [existingSkill.id]);
+  }
+
+  const metadata = deriveSkillMetadata(nextState.name, existingSkill, nextState.hasName);
+  await db.query(
+    `UPDATE skills
+     SET name = $1,
+         category_id = $2,
+         description = $3,
+         preferred_label = $4,
+         concept_type = $5,
+         lifecycle_status = $6,
+         vendor_namespace = $7
+     WHERE id = $8`,
+    [
+      nextState.name,
+      nextState.categoryId,
+      nextState.description,
+      metadata.preferredLabel,
+      metadata.conceptType,
+      nextState.lifecycleStatus,
+      metadata.vendorNamespace,
+      existingSkill.id,
+    ]
+  );
+
+  const updatedSkill = await fetchSkillById(existingSkill.id);
+  return res.json(updatedSkill);
 });
 
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {

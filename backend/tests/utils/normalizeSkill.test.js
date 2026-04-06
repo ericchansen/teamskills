@@ -74,10 +74,21 @@ describe('normalizeSkillName', () => {
     it('returns preferred display labels for Microsoft product names', () => {
       expect(getCanonicalSkillInfo('Data Factory')).toMatchObject({
         canonicalName: 'Data Factory',
+        hasMetadata: true,
         preferredLabel: 'Fabric Data Factory',
         vendorNamespace: 'Microsoft Fabric',
       });
     });
 
+    it('reports when no taxonomy metadata exists for a custom skill', () => {
+      expect(getCanonicalSkillInfo('Contoso Skill')).toMatchObject({
+        canonicalName: 'Contoso Skill',
+        hasMetadata: false,
+        preferredLabel: 'Contoso Skill',
+        conceptType: null,
+        lifecycleStatus: 'active',
+        vendorNamespace: null,
+      });
+    });
   });
 });

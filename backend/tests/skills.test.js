@@ -75,6 +75,21 @@ describe('Skills API', () => {
       expect(response.status).toBe(409);
       expect(response.body.error).toMatch(/already exists/i);
     });
+
+    test('masks unexpected server errors', async () => {
+      db.query.mockRejectedValueOnce(new Error('database exploded'));
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/skills')
+        .send({
+          name: 'Azure OpenAI',
+          category_id: 3,
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Internal server error' });
+    });
   });
 
   describe('POST /api/skills/merge', () => {
@@ -85,8 +100,24 @@ describe('Skills API', () => {
       db.query
         .mockResolvedValueOnce({
           rows: [
-            { id: 1, name: 'Microsoft Fabric', category_id: 4, lifecycle_status: 'active', vendor_namespace: null },
-            { id: 2, name: 'Fabric Data Engineering', category_id: 4, lifecycle_status: 'active', vendor_namespace: null },
+            {
+              id: 1,
+              name: 'Microsoft Fabric',
+              preferred_label: 'Microsoft Fabric',
+              category_id: 4,
+              concept_type: 'platform',
+              lifecycle_status: 'active',
+              vendor_namespace: 'Microsoft',
+            },
+            {
+              id: 2,
+              name: 'Fabric Data Engineering',
+              preferred_label: 'Fabric Data Engineering',
+              category_id: 4,
+              concept_type: 'product',
+              lifecycle_status: 'active',
+              vendor_namespace: 'Microsoft Fabric',
+            },
           ],
         })
         .mockResolvedValueOnce({})
@@ -123,6 +154,93 @@ describe('Skills API', () => {
       expect(response.body.skill.name).toBe('Microsoft Fabric');
       expect(db.pool.connect).toHaveBeenCalled();
       expect(release).toHaveBeenCalled();
+    });
+
+    test('preserves existing metadata when merging without renaming to a taxonomy skill', async () => {
+      const release = jest.fn();
+      db.pool.connect.mockResolvedValueOnce({ query: db.query, release });
+
+      db.query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 1,
+              name: 'Contoso Accelerator',
+              preferred_label: 'Contoso Accelerator',
+              category_id: 4,
+              concept_type: 'practice',
+              lifecycle_status: 'legacy',
+              vendor_namespace: 'Contoso',
+            },
+            {
+              id: 2,
+              name: 'Contoso Accelerator Duplicate',
+              preferred_label: 'Contoso Accelerator Duplicate',
+              category_id: 4,
+              concept_type: 'practice',
+              lifecycle_status: 'active',
+              vendor_namespace: 'Contoso',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Contoso Accelerator',
+            category_id: 4,
+            category_name: 'Data Platform',
+            preferred_label: 'Contoso Accelerator',
+            concept_type: 'practice',
+            lifecycle_status: 'legacy',
+            vendor_namespace: 'Contoso',
+          }],
+        });
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/skills/merge')
+        .send({
+          surviving_skill_id: 1,
+          merged_skill_ids: [2],
+        });
+
+      expect(response.status).toBe(200);
+      const updateCall = db.query.mock.calls.find(([query]) => query.includes('UPDATE skills'));
+      expect(updateCall[1]).toEqual([
+        'Contoso Accelerator',
+        'Contoso Accelerator',
+        'practice',
+        'legacy',
+        'Contoso',
+        4,
+        1,
+      ]);
+    });
+
+    test('masks unexpected merge errors', async () => {
+      db.query.mockRejectedValueOnce(new Error('database exploded'));
+
+      const app = require('../server');
+      const response = await request(app)
+        .post('/api/skills/merge')
+        .send({
+          surviving_skill_id: 1,
+          merged_skill_ids: [2],
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Internal server error' });
     });
   });
 
@@ -161,6 +279,56 @@ describe('Skills API', () => {
       expect(response.body.name).toBe('Microsoft Copilot Studio');
     });
 
+    test('preserves concept metadata when updating fields other than the name', async () => {
+      db.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 7,
+            name: 'Contoso Accelerator',
+            preferred_label: 'Contoso Accelerator',
+            category_id: 4,
+            category_name: 'Business Applications',
+            description: 'Legacy description',
+            concept_type: 'practice',
+            lifecycle_status: 'active',
+            vendor_namespace: 'Contoso',
+          }],
+        })
+        .mockResolvedValueOnce({ rows: [{ id: 9 }] })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 7,
+            name: 'Contoso Accelerator',
+            preferred_label: 'Contoso Accelerator',
+            category_id: 9,
+            category_name: 'Apps & AI',
+            description: 'Legacy description',
+            concept_type: 'practice',
+            lifecycle_status: 'active',
+            vendor_namespace: 'Contoso',
+          }],
+        });
+
+      const app = require('../server');
+      const response = await request(app)
+        .put('/api/skills/7')
+        .send({ category_id: 9 });
+
+      expect(response.status).toBe(200);
+      const updateCall = db.query.mock.calls.find(([query]) => query.includes('UPDATE skills'));
+      expect(updateCall[1]).toEqual([
+        'Contoso Accelerator',
+        9,
+        'Legacy description',
+        'Contoso Accelerator',
+        'practice',
+        'active',
+        'Contoso',
+        7,
+      ]);
+    });
+
     test('supports retiring a skill', async () => {
       db.query
         .mockResolvedValueOnce({
@@ -192,6 +360,32 @@ describe('Skills API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.lifecycle_status).toBe('retired');
+    });
+
+    test('masks unexpected update errors', async () => {
+      db.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 6,
+            name: 'Legacy Skill',
+            preferred_label: 'Legacy Skill',
+            category_id: 2,
+            category_name: 'Apps & AI',
+            description: null,
+            concept_type: 'product',
+            lifecycle_status: 'active',
+            vendor_namespace: 'Microsoft',
+          }],
+        })
+        .mockRejectedValueOnce(new Error('database exploded'));
+
+      const app = require('../server');
+      const response = await request(app)
+        .put('/api/skills/6')
+        .send({ name: 'Legacy Skill v2' });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Internal server error' });
     });
   });
 

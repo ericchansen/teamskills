@@ -51,14 +51,15 @@ function normalizeSkillName(name) {
 
 function getCanonicalSkillInfo(name) {
   const canonicalName = normalizeSkillName(name);
-  const metadata = skillMetadata[canonicalName] || {};
+  const metadata = skillMetadata[canonicalName];
 
   return {
     canonicalName,
-    preferredLabel: metadata.preferredLabel || canonicalName,
-    conceptType: metadata.conceptType || null,
-    lifecycleStatus: metadata.lifecycleStatus || 'active',
-    vendorNamespace: metadata.vendorNamespace || null,
+    hasMetadata: Boolean(metadata),
+    preferredLabel: metadata?.preferredLabel || canonicalName,
+    conceptType: metadata?.conceptType || null,
+    lifecycleStatus: metadata?.lifecycleStatus || 'active',
+    vendorNamespace: metadata?.vendorNamespace || null,
   };
 }
 
