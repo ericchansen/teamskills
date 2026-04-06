@@ -44,6 +44,8 @@
       :option="chartOption"
       autoresize
     />
+
+    <pre class="chart-test-summary" data-testid="gap-metric-summary">{{ metricSummary }}</pre>
   </div>
 </template>
 
@@ -168,6 +170,12 @@ const chartOption = computed(() => {
     ],
   };
 });
+
+const metricSummary = computed(() =>
+  JSON.stringify(
+    Object.fromEntries(filteredSkills.value.map((skillName) => [skillName, calcMetric(skillName)]))
+  )
+);
 </script>
 
 <style scoped>
@@ -175,6 +183,7 @@ const chartOption = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: relative;
 }
 
 .controls {
@@ -225,6 +234,18 @@ const chartOption = computed(() => {
   text-align: center;
   font-size: 0.85rem;
   padding: 4px 6px;
+}
+
+.chart-test-summary {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 

@@ -13,6 +13,7 @@ export function useProfileSkills({
   skillNameToId,
   isLive,
   api,
+  updatePersonSkillLevel,
 }) {
   // ── Local state ────────────────────────────────
   const collapsedCats = reactive(new Set());
@@ -97,18 +98,21 @@ export function useProfileSkills({
   async function setLevel(skillName, level) {
     if (!canEdit.value || !user.value) return;
 
-    // Optimistic update
-    const oldLevel = mySkills.get(skillName);
+    const skillId = skillNameToId.value[skillName];
+    if (!skillId) {
+      console.warn('No backend skill ID for', skillName);
+      return;
+    }
+
+    const oldLevel = mySkills.get(skillName) || 0;
     const newLevel = oldLevel === level ? 0 : level; // toggle off if same
     mySkills.set(skillName, newLevel);
 
-    // Find skill ID from the people data
-    const idx = skillIndex.value[skillName];
-    if (idx === undefined) return;
-
-    // Also update the person's skills array for chart reactivity
-    if (myPerson.value) {
-      myPerson.value.skills[idx] = newLevel;
+    const sharedStateUpdated = updatePersonSkillLevel(user.value.id, skillName, newLevel);
+    if (!sharedStateUpdated) {
+      mySkills.set(skillName, oldLevel);
+      console.warn('No shared skills entry for', skillName);
+      return;
     }
 
     // Per-skill debounced save to API
@@ -120,14 +124,6 @@ export function useProfileSkills({
     saveTimeouts.set(skillName, setTimeout(async () => {
       saveTimeouts.delete(skillName);
       try {
-        // Look up the real backend skill ID from the name → ID map
-        const skillId = skillNameToId.value[skillName];
-        if (!skillId) {
-          console.warn('No backend skill ID for', skillName);
-          saveStatus.value = '';
-          return;
-        }
-
         if (newLevel === 0) {
           // Delete the skill rating via backend DELETE endpoint
           await api.del('/api/user-skills', {
@@ -150,9 +146,7 @@ export function useProfileSkills({
         console.error('Failed to save skill:', err);
         // Revert optimistic update
         mySkills.set(skillName, oldLevel);
-        if (myPerson.value) {
-          myPerson.value.skills[idx] = oldLevel;
-        }
+        updatePersonSkillLevel(user.value.id, skillName, oldLevel);
         saveStatus.value = 'error';
         setTimeout(() => {
           saveStatus.value = '';

@@ -356,6 +356,34 @@ export function useSkillsData() {
   }
 
   /**
+   * Update one skill level for one person in shared state.
+   * Replaces both the nested skills array and the top-level people array so
+   * downstream chart views recompute from a fresh reactive reference.
+   */
+  function updatePersonSkillLevel(personId, skillName, nextLevel) {
+    const skillIdx = state.skillIndex[skillName];
+    if (skillIdx === undefined) return false;
+
+    const personIdx = state.people.findIndex((person) => person.id === personId);
+    if (personIdx === -1) return false;
+
+    const person = state.people[personIdx];
+    if (!Array.isArray(person.skills) || skillIdx >= person.skills.length) return false;
+
+    const updatedSkills = [...person.skills];
+    updatedSkills[skillIdx] = parseLevel(nextLevel);
+
+    const updatedPeople = [...state.people];
+    updatedPeople[personIdx] = {
+      ...person,
+      skills: updatedSkills,
+    };
+
+    state.people = updatedPeople;
+    return true;
+  }
+
+  /**
    * Get a person's level for a given skill.
    */
   function getSkillLevel(person, skillName) {
@@ -377,5 +405,6 @@ export function useSkillsData() {
     refresh,
     getSkillLevel,
     levelLabel,
+    updatePersonSkillLevel,
   };
 }

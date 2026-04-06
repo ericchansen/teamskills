@@ -140,7 +140,7 @@ import UserProfileCard from './v2/UserProfileCard.vue';
 import SkillLevelRow from './v2/SkillLevelRow.vue';
 
 const { user, isAuthenticated } = useAuth();
-const { people, allSkills, skillCatalog, skillIndex, skillNameToId, isLive, isLoading, levels, load } =
+const { people, allSkills, skillCatalog, skillIndex, skillNameToId, isLive, isLoading, levels, load, updatePersonSkillLevel } =
   useSkillsData();
 const api = useApi();
 
@@ -166,6 +166,7 @@ const {
   skillNameToId,
   isLive,
   api,
+  updatePersonSkillLevel,
 });
 
 const searchQuery = ref('');

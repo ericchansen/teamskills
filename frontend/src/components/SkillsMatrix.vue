@@ -33,14 +33,18 @@
       :option="chartOption"
       autoresize
     />
+
+    <pre class="chart-test-summary" data-testid="matrix-current-user-levels">{{ currentUserSkillLevelsSummary }}</pre>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
+import { useAuth } from '../composables/useAuth';
 import { useSkillsData } from '../composables/useSkillsData';
 import { escapeHtml, baseChartOption, chartContainerStyle } from '../composables/useChartDefaults';
 
+const { user } = useAuth();
 const {
   people,
   allSkills,
@@ -106,6 +110,20 @@ const visibleSkills = computed(() => {
 });
 
 const personNames = computed(() => (people.value || []).map((p) => p.name));
+
+const currentUserSkillLevelsSummary = computed(() => {
+  const currentUserId = user.value?.id;
+  if (!currentUserId) return '{}';
+
+  const currentPerson = people.value.find((person) => person.id === currentUserId);
+  if (!currentPerson) return '{}';
+
+  return JSON.stringify(
+    Object.fromEntries(
+      visibleSkills.value.map((skillName) => [skillName, getSkillLevel(currentPerson, skillName)])
+    )
+  );
+});
 
 const chartOption = computed(() => {
   const skills = visibleSkills.value;
@@ -203,6 +221,7 @@ const chartOption = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: relative;
 }
 
 .controls {
@@ -256,6 +275,18 @@ const chartOption = computed(() => {
 .cat-arrow {
   font-size: 0.7rem;
   color: var(--text-secondary);
+}
+
+.chart-test-summary {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .cat-count {
