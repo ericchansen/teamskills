@@ -1,13 +1,9 @@
 import { test, expect } from '@playwright/test';
-
-async function loadDashboard(page) {
-  await page.goto('/');
-  await expect(page.locator('.app-header')).toBeVisible();
-  await expect(page.locator('.matrix-view')).toBeVisible({ timeout: 15000 });
-}
+import { loadDashboard, mockDashboardApi } from './helpers/mockDashboardApi.js';
 
 test.describe('Skills Matrix', () => {
   test.beforeEach(async ({ page }) => {
+    await mockDashboardApi(page);
     await loadDashboard(page);
   });
 
@@ -32,7 +28,7 @@ test.describe('Skills Matrix', () => {
   });
 
   test('should navigate to the profile page from the header', async ({ page }) => {
-    const profileLink = page.getByRole('link', { name: 'My Profile' });
+    const profileLink = page.locator('.header-user').getByRole('link', { name: 'Alex Chen' });
 
     await expect(profileLink).toBeVisible();
     await profileLink.click();
@@ -43,16 +39,10 @@ test.describe('Skills Matrix', () => {
   });
 
   test('should show canonical labels in the profile editor', async ({ page }) => {
-    await page.getByRole('link', { name: 'My Profile' }).click();
+    await page.locator('.header-user').getByRole('link', { name: 'Alex Chen' }).click();
 
     await expect(page.locator('.profile-page')).toBeVisible();
-
-    if (await page.locator('.skills-editor').count()) {
-      // These canonical relabels exist in both mock data and the live DB
-      await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Microsoft Foundry' })).toBeVisible();
-      await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Azure AI Services (OpenAI)' })).toBeVisible();
-    } else {
-      await expect(page.locator('.no-profile-msg')).toContainText('demo mode');
-    }
+    await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Microsoft Foundry' })).toBeVisible();
+    await expect(page.locator('.skill-row .skill-name').filter({ hasText: 'Azure AI Services (OpenAI)' })).toBeVisible();
   });
 });

@@ -1,6 +1,6 @@
 const db = require('./db');
 const logger = require('./logger');
-const { normalizeSkillName, getCanonicalSkillInfo, suggestSkillProposal } = require('./utils/normalizeSkill');
+const { normalizeSkillName, getCanonicalSkillInfo } = require('./utils/normalizeSkill');
 const taxonomy = require('./data/skill-taxonomy');
 
 /**
@@ -53,29 +53,6 @@ async function runMigrations() {
           -- PR #84: Entra ID integration — add OID column + index for existing deployments
           ALTER TABLE users ADD COLUMN IF NOT EXISTS entra_oid VARCHAR(36);
           CREATE INDEX IF NOT EXISTS idx_users_entra_oid ON users(entra_oid) WHERE entra_oid IS NOT NULL;
-        END IF;
-      END $$;
-
-      CREATE TABLE IF NOT EXISTS skill_proposals (
-        id SERIAL PRIMARY KEY,
-        proposed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        name VARCHAR(255) NOT NULL,
-        category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
-        description TEXT,
-        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-        reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        reviewed_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_skill_proposals_status ON skill_proposals(status);
-
-      DO $$ BEGIN
-        IF to_regclass('public.skill_proposals') IS NOT NULL THEN
-          ALTER TABLE skill_proposals ADD COLUMN IF NOT EXISTS canonical_skill_id INTEGER REFERENCES skills(id) ON DELETE SET NULL;
-          ALTER TABLE skill_proposals ADD COLUMN IF NOT EXISTS suggested_action VARCHAR(20);
-          ALTER TABLE skill_proposals ADD COLUMN IF NOT EXISTS confidence NUMERIC(4,3);
-          ALTER TABLE skill_proposals ADD COLUMN IF NOT EXISTS review_notes TEXT;
-          CREATE INDEX IF NOT EXISTS idx_skill_proposals_canonical_skill ON skill_proposals(canonical_skill_id);
         END IF;
       END $$;
 
@@ -291,8 +268,7 @@ async function repointRelationships(keepId, removeId) {
  * 2. Merge duplicate skills (dedup suffix variants → canonical name)
  * 3. Assign categories to any remaining uncategorized skills
  * 4. Sync canonical labels/metadata and alias records
- * 5. Surface review-required labels through the existing proposal queue
- * 6. Add unique index on skills.name to prevent future duplicates
+ * 5. Add unique index on skills.name to prevent future duplicates
  */
 async function cleanupSkillCategories(pathToId) {
   // Cache table existence for optional tables (may not exist on older schemas)
@@ -315,10 +291,7 @@ async function cleanupSkillCategories(pathToId) {
   await syncCanonicalSkillMetadata();
   await syncSkillAliases();
 
-  // Step 5: Surface ambiguous terms for explicit approval
-  await flagReviewRequiredSkills();
-
-  // Step 6: Add unique index (only works after duplicates are resolved)
+  // Step 5: Add unique index (only works after duplicates are resolved)
   await addSkillNameUniqueIndex();
 }
 
@@ -513,8 +486,7 @@ async function syncCanonicalSkillMetadata() {
 }
 
 /**
- * Persist the approved alias registry so future proposal review can show
- * canonical suggestions and external systems can inspect the mapping.
+ * Persist the approved alias registry so external systems can inspect the mapping.
  */
 async function syncSkillAliases() {
   for (const [alias, canonicalName] of Object.entries(taxonomy.aliases || {})) {
@@ -544,56 +516,6 @@ async function syncSkillAliases() {
          SELECT 1 FROM skill_aliases WHERE LOWER(alias) = LOWER($2::varchar)
        )`,
       [canonical.rows[0].id, meta.preferredLabel, 'preferred-label']
-    );
-  }
-}
-
-/**
- * Seed pending proposals for labels we explicitly do not want to auto-merge.
- */
-async function flagReviewRequiredSkills() {
-  for (const [skillName, reviewHint] of Object.entries(taxonomy.reviewRequired || {})) {
-    const existingSkill = await db.query(
-      'SELECT id, category_id FROM skills WHERE name = $1 LIMIT 1',
-      [skillName]
-    );
-    if (existingSkill.rows.length === 0) continue;
-
-    const suggestion = suggestSkillProposal(skillName);
-    let canonicalSkillId = null;
-    if (suggestion.canonicalName && suggestion.canonicalName !== skillName) {
-      const canonical = await db.query(
-        'SELECT id FROM skills WHERE name = $1 LIMIT 1',
-        [suggestion.canonicalName]
-      );
-      canonicalSkillId = canonical.rows[0]?.id || null;
-    }
-
-    await db.query(
-      `INSERT INTO skill_proposals (
-         proposed_by,
-         name,
-         category_id,
-         description,
-         canonical_skill_id,
-         suggested_action,
-         confidence,
-         review_notes
-       )
-       SELECT NULL, $1::varchar, $2::int, $3::text, $4::int, $5::varchar, $6::numeric, $7::text
-       WHERE NOT EXISTS (
-         SELECT 1 FROM skill_proposals
-         WHERE LOWER(name) = LOWER($1::varchar)
-       )`,
-      [
-        skillName,
-        existingSkill.rows[0].category_id || null,
-        'Imported label requires taxonomy review before consolidation.',
-        canonicalSkillId,
-        reviewHint.suggestedAction || suggestion.suggestedAction || 'review',
-        reviewHint.confidence ?? suggestion.confidence ?? null,
-        reviewHint.reviewNotes || suggestion.reviewNotes || null,
-      ]
     );
   }
 }

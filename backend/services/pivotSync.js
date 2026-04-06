@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../db');
-const { normalizeSkillName, getCanonicalSkillInfo, suggestSkillProposal } = require('../utils/normalizeSkill');
+const { normalizeSkillName, getCanonicalSkillInfo } = require('../utils/normalizeSkill');
 const { parsePivotCSV, parseCSVContent, parseCSV } = require('./csvParser');
 const { ensureSchemaExtensions, fetchFromSharePoint, syncToDatabase } = require('./sharepoint');
 const taxonomy = require('../data/skill-taxonomy');
@@ -39,48 +39,6 @@ async function applySkillMetadata(skillId, skillName) {
   );
 }
 
-async function queueTaxonomyProposal(rawName, categoryId, suggestion, hasProposalTable) {
-  if (!hasProposalTable) return;
-  if (!suggestion?.needsReview && !['review', 'split', 'keep_distinct'].includes(suggestion?.suggestedAction)) {
-    return;
-  }
-
-  let canonicalSkillId = null;
-  if (suggestion.canonicalName && suggestion.canonicalName !== rawName) {
-    const canonical = await db.query(
-      'SELECT id FROM skills WHERE name = $1 LIMIT 1',
-      [suggestion.canonicalName]
-    );
-    canonicalSkillId = canonical.rows[0]?.id || null;
-  }
-
-  await db.query(
-    `INSERT INTO skill_proposals (
-       proposed_by,
-       name,
-       category_id,
-       description,
-       canonical_skill_id,
-       suggested_action,
-       confidence,
-       review_notes
-     )
-     SELECT NULL, $1, $2, $3, $4, $5, $6, $7
-     WHERE NOT EXISTS (
-       SELECT 1 FROM skill_proposals WHERE LOWER(name) = LOWER($1) AND status = 'pending'
-     )`,
-    [
-      rawName,
-      categoryId,
-      'Imported skill label needs taxonomy review.',
-      canonicalSkillId,
-      suggestion.suggestedAction || 'review',
-      suggestion.confidence ?? null,
-      suggestion.reviewNotes || null,
-    ]
-  );
-}
-
 /**
  * Sync pivot-table CSV into PostgreSQL (users, skills, user_skills).
  * Generates placeholder emails for users without one.
@@ -96,8 +54,6 @@ async function syncPivotToDatabase(pivotData) {
   };
 
   await ensureSchemaExtensions();
-  const proposalTable = await db.query(`SELECT to_regclass('public.skill_proposals') AS t`);
-  const hasProposalTable = !!proposalTable.rows[0]?.t;
 
   // Phase 1: Upsert all skills from column headers (with name normalization)
   // canonicalIdMap prevents redundant DB queries when multiple raw names
@@ -106,13 +62,11 @@ async function syncPivotToDatabase(pivotData) {
   const canonicalIdMap = new Map();
   for (const rawName of skillNames) {
     const skillName = normalizeSkillName(rawName);
-    const suggestion = suggestSkillProposal(rawName);
 
     // If we already resolved this canonical name, reuse the same ID
     if (canonicalIdMap.has(skillName)) {
       skillIdMap.set(rawName, canonicalIdMap.get(skillName));
       stats.skills.existing++;
-      await queueTaxonomyProposal(rawName, null, suggestion, hasProposalTable);
       continue;
     }
 
@@ -122,7 +76,6 @@ async function syncPivotToDatabase(pivotData) {
       canonicalIdMap.set(skillName, existing.rows[0].id);
       await applySkillMetadata(existing.rows[0].id, skillName);
       stats.skills.existing++;
-      await queueTaxonomyProposal(rawName, null, suggestion, hasProposalTable);
     } else {
       // For truly new skills, use taxonomy map first, then fall back to partial name match
       let categoryId = null;
@@ -193,7 +146,6 @@ async function syncPivotToDatabase(pivotData) {
       skillIdMap.set(rawName, result.rows[0].id);
       canonicalIdMap.set(skillName, result.rows[0].id);
       stats.skills.created++;
-      await queueTaxonomyProposal(rawName, categoryId, suggestion, hasProposalTable);
     }
   }
 

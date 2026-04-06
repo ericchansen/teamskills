@@ -25,6 +25,7 @@ const error = ref(null);
 let msalInstance = null;
 let loginRequest = null;
 let initialized = false;
+let initializePromise = null;
 
 // ── Public composable ────────────────────────────────
 export function useAuth() {
@@ -36,44 +37,51 @@ export function useAuth() {
    * handles redirect callback, checks for existing session.
    */
   async function initialize() {
+    if (initializePromise) return initializePromise;
     if (initialized) return;
-    initialized = true;
-    isLoading.value = true;
-    error.value = null;
 
-    try {
-      const cfg = await fetchAuthConfig();
-      authEnabled.value = cfg.enabled;
+    initializePromise = (async () => {
+      initialized = true;
+      isLoading.value = true;
+      error.value = null;
 
-      if (!cfg.enabled) {
-        // Demo mode — try to get demo user from backend
-        await loadDemoUser();
-        return;
+      try {
+        const cfg = await fetchAuthConfig();
+        authEnabled.value = cfg.enabled;
+
+        if (!cfg.enabled) {
+          // Demo mode — try to get demo user from backend
+          await loadDemoUser();
+          return;
+        }
+
+        // Initialize MSAL
+        msalInstance = new PublicClientApplication(buildMsalConfig(cfg));
+        loginRequest = buildLoginRequest(cfg);
+        await msalInstance.initialize();
+
+        // Handle redirect callback (if returning from login redirect)
+        const response = await msalInstance.handleRedirectPromise();
+        if (response?.account) {
+          msalInstance.setActiveAccount(response.account);
+        }
+
+        // Check for existing session
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length > 0) {
+          msalInstance.setActiveAccount(accounts[0]);
+          await loadCurrentUser();
+        }
+      } catch (err) {
+        console.error('Auth initialization failed:', err);
+        error.value = err.message;
+      } finally {
+        isLoading.value = false;
+        initializePromise = null;
       }
+    })();
 
-      // Initialize MSAL
-      msalInstance = new PublicClientApplication(buildMsalConfig(cfg));
-      loginRequest = buildLoginRequest(cfg);
-      await msalInstance.initialize();
-
-      // Handle redirect callback (if returning from login redirect)
-      const response = await msalInstance.handleRedirectPromise();
-      if (response?.account) {
-        msalInstance.setActiveAccount(response.account);
-      }
-
-      // Check for existing session
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length > 0) {
-        msalInstance.setActiveAccount(accounts[0]);
-        await loadCurrentUser();
-      }
-    } catch (err) {
-      console.error('Auth initialization failed:', err);
-      error.value = err.message;
-    } finally {
-      isLoading.value = false;
-    }
+    return initializePromise;
   }
 
   /**

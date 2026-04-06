@@ -47,11 +47,14 @@ const { user, isAuthenticated, isLoading, authEnabled, login, logout } = useAuth
 const { isLive } = useSkillsData();
 
 const navRoutes = computed(() =>
-  router.getRoutes().filter((r) => {
-    if (r.meta.requiresAuth && !isAuthenticated.value) return false;
-    if (r.meta.requiresAdmin && !user.value?.is_admin) return false;
-    return r.meta.label;
-  })
+  router.getRoutes()
+    .filter((route) => route.meta.primaryNav)
+    .filter((route) => {
+      if (route.meta.requiresAuth && !isAuthenticated.value) return false;
+      if (route.meta.requiresAdmin && !user.value?.is_admin) return false;
+      return route.meta.label;
+    })
+    .sort((a, b) => (a.meta.navOrder || 0) - (b.meta.navOrder || 0))
 );
 </script>
 

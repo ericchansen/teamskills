@@ -1,4 +1,4 @@
-const { normalizeSkillName, getCanonicalSkillInfo, suggestSkillProposal } = require('../../utils/normalizeSkill');
+const { normalizeSkillName, getCanonicalSkillInfo } = require('../../utils/normalizeSkill');
 
 describe('normalizeSkillName', () => {
   describe('explicit aliases', () => {
@@ -79,11 +79,5 @@ describe('normalizeSkillName', () => {
       });
     });
 
-    it('flags review-required Fabric combined labels for approval', () => {
-      expect(suggestSkillProposal('Fabric Data Engineering and Data Science')).toMatchObject({
-        suggestedAction: 'split',
-        needsReview: true,
-      });
-    });
   });
 });
