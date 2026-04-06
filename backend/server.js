@@ -76,7 +76,6 @@ const userSkillsRouter = require('./routes/userSkills');
 const matrixRouter = require('./routes/matrix');
 const adminRouter = require('./routes/admin');
 const authRouter = require('./routes/authRoutes');
-const proposalsRouter = require('./routes/proposals');
 const trendsRouter = require('./routes/trends');
 const sharepointRouter = require('./routes/sharepoint');
 const { requireAuth } = require('./auth');
@@ -97,7 +96,6 @@ app.use('/api/skills', skillsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/user-skills', userSkillsRouter);
 app.use('/api/matrix', matrixRouter);
-app.use('/api/proposals', proposalsRouter);
 app.use('/api/trends', trendsRouter);
 app.use('/api/sharepoint', sharepointRouter);
 

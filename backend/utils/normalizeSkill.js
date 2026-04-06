@@ -10,11 +10,6 @@ const taxonomy = require('../data/skill-taxonomy');
 
 const aliases = taxonomy.aliases || {};
 const skillMetadata = taxonomy.skillMetadata || {};
-const reviewRequired = taxonomy.reviewRequired || {};
-const knownSkills = new Set([
-  ...Object.keys(taxonomy.skillCategoryMap || {}),
-  ...Object.keys(skillMetadata),
-]);
 
 /**
  * Normalize a skill name: apply explicit alias map (includes Fabric-prefixed
@@ -67,57 +62,8 @@ function getCanonicalSkillInfo(name) {
   };
 }
 
-function suggestSkillProposal(name) {
-  if (!name) {
-    return {
-      canonicalName: null,
-      preferredLabel: null,
-      suggestedAction: 'new_skill',
-      needsReview: false,
-      confidence: null,
-      reviewNotes: null,
-    };
-  }
-
-  const trimmed = name.trim();
-  const canonicalInfo = getCanonicalSkillInfo(trimmed);
-  const reviewHint = reviewRequired[trimmed] || reviewRequired[canonicalInfo.canonicalName];
-  if (reviewHint) {
-    return {
-      canonicalName: canonicalInfo.canonicalName,
-      preferredLabel: canonicalInfo.preferredLabel,
-      suggestedAction: reviewHint.suggestedAction || 'review',
-      needsReview: true,
-      confidence: reviewHint.confidence ?? null,
-      reviewNotes: reviewHint.reviewNotes || null,
-    };
-  }
-
-  if (canonicalInfo.canonicalName !== trimmed) {
-    return {
-      canonicalName: canonicalInfo.canonicalName,
-      preferredLabel: canonicalInfo.preferredLabel,
-      suggestedAction: 'alias',
-      needsReview: false,
-      confidence: 1,
-      reviewNotes: `Normalize "${trimmed}" to "${canonicalInfo.preferredLabel}".`,
-    };
-  }
-
-  const needsReview = !knownSkills.has(canonicalInfo.canonicalName);
-  return {
-    canonicalName: canonicalInfo.canonicalName,
-    preferredLabel: canonicalInfo.preferredLabel,
-    suggestedAction: 'new_skill',
-    needsReview,
-    confidence: null,
-    reviewNotes: needsReview ? 'New label is not yet part of the approved skill taxonomy.' : null,
-  };
-}
-
 module.exports = {
   normalizeSkillName,
   aliases,
   getCanonicalSkillInfo,
-  suggestSkillProposal,
 };

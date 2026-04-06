@@ -62,15 +62,31 @@
         </button>
       </div>
 
-      <div class="catalog-help">
-        <p>
-          Updating a level changes only <strong>your</strong> profile and syncs back to SharePoint when that
-          connection is configured. Skill names, categories, merges, and other taxonomy changes are handled through
-          the admin workflow.
-        </p>
-        <router-link v-if="user?.is_admin" to="/admin/taxonomy" class="catalog-link">
-          Open taxonomy review
-        </router-link>
+      <div v-if="canEdit || user?.is_admin" class="profile-help-grid">
+        <section v-if="canEdit" class="profile-help-card profile-sync-help">
+          <div class="profile-help-copy">
+            <h4>Profile updates</h4>
+            <p>
+              In this environment, updating a level changes only <strong>your</strong> profile in this app. It does not
+              update SharePoint or another external system.
+            </p>
+          </div>
+        </section>
+
+        <section v-if="user?.is_admin" class="profile-help-card catalog-help">
+          <div class="profile-help-copy">
+            <h4>Shared skill catalog</h4>
+            <p>
+              Editing the shared skill catalog is a separate admin task. Use the admin editor to add, rename, merge,
+              move, retire, or remove approved skills.
+            </p>
+          </div>
+          <div class="catalog-actions">
+            <router-link to="/skill-catalog" class="catalog-link">
+              Open skill catalog editor
+            </router-link>
+          </div>
+        </section>
       </div>
 
       <p v-if="!isLoading" class="results-summary">
@@ -362,25 +378,58 @@ onMounted(async () => {
   cursor: pointer;
 }
 
-.catalog-help {
+.profile-help-grid {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.profile-help-card {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0.75rem;
   align-items: center;
-  margin-bottom: 0.85rem;
   padding: 0.85rem 1rem;
-  background: rgba(129, 140, 248, 0.08);
-  border: 1px solid rgba(129, 140, 248, 0.18);
   border-radius: 10px;
 }
 
-.catalog-help p {
+.profile-sync-help {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.catalog-help {
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.18);
+}
+
+.profile-help-copy {
+  flex: 1 1 460px;
+}
+
+.profile-help-copy h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.profile-help-copy p {
   margin: 0;
   color: var(--text-secondary, #a0a0b0);
   font-size: 0.85rem;
   line-height: 1.5;
-  flex: 1 1 460px;
+}
+
+.catalog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.catalog-link.secondary {
+  border-style: dashed;
 }
 
 .catalog-link:hover,

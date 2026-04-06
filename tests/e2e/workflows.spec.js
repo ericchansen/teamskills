@@ -1,13 +1,9 @@
 import { test, expect } from '@playwright/test';
-
-async function loadDashboard(page) {
-  await page.goto('/');
-  await expect(page.locator('.app-header')).toBeVisible();
-  await expect(page.locator('.matrix-view')).toBeVisible({ timeout: 15000 });
-}
+import { loadDashboard, mockDashboardApi } from './helpers/mockDashboardApi.js';
 
 test.describe('Dashboard workflows', () => {
   test.beforeEach(async ({ page }) => {
+    await mockDashboardApi(page);
     await loadDashboard(page);
   });
 
@@ -54,21 +50,24 @@ test.describe('Dashboard workflows', () => {
     await expect(page.locator('.threshold-input').nth(1)).toHaveValue('175');
   });
 
-  test('should load the taxonomy review page for admins', async ({ page }) => {
-    const taxonomyLink = page.getByRole('link', { name: 'Taxonomy Review' });
-    await expect(taxonomyLink).toBeVisible();
+  test('should keep the skill catalog editor out of the primary nav and open it from profile', async ({ page }) => {
+    await expect(page.getByRole('link', { name: 'Skill Catalog' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'My Profile' })).toHaveCount(0);
 
-    await taxonomyLink.click();
+    await page.locator('.header-user').getByRole('link', { name: 'Alex Chen' }).click();
+    await expect(page.locator('.profile-page')).toBeVisible();
 
-    await expect(page).toHaveURL(/\/admin\/taxonomy$/);
-    await expect(page.locator('.taxonomy-review')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Taxonomy Review' })).toBeVisible();
+    await page.getByRole('link', { name: 'Open skill catalog editor' }).click();
 
-    const proposalCards = page.locator('.proposal-card');
-    if (await proposalCards.count()) {
-      await expect(proposalCards.first()).toContainText(/Suggested action:/);
-    } else {
-      await expect(page.locator('.info-card')).toContainText(/No proposals found|Could not load proposals/i);
-    }
+    await expect(page).toHaveURL(/\/skill-catalog$/);
+    await expect(page.locator('.skill-catalog-admin')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Skill Catalog' })).toBeVisible();
+  });
+
+  test('should redirect unknown routes back to the matrix', async ({ page }) => {
+    await page.goto('/not-a-real-route');
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator('.matrix-view')).toBeVisible();
   });
 });

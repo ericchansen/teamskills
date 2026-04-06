@@ -199,25 +199,6 @@ router.post('/init', checkInitSecret, async (req, res) => {
        CREATE INDEX IF NOT EXISTS idx_skill_aliases_skill ON skill_aliases(skill_id);
        CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_aliases_alias_lower ON skill_aliases(LOWER(alias));
 
-       CREATE TABLE IF NOT EXISTS skill_proposals (
-           id SERIAL PRIMARY KEY,
-           proposed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-           name VARCHAR(255) NOT NULL,
-           category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
-           description TEXT,
-           canonical_skill_id INTEGER REFERENCES skills(id) ON DELETE SET NULL,
-           suggested_action VARCHAR(20),
-           confidence NUMERIC(4,3),
-           review_notes TEXT,
-           status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-           reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-           reviewed_at TIMESTAMP,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-       CREATE INDEX IF NOT EXISTS idx_skill_proposals_status ON skill_proposals(status);
-       CREATE INDEX IF NOT EXISTS idx_skill_proposals_canonical_skill ON skill_proposals(canonical_skill_id);
-
       CREATE OR REPLACE FUNCTION update_user_skills_timestamp()
       RETURNS TRIGGER AS $$
       BEGIN
