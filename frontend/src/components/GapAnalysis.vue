@@ -45,7 +45,12 @@
       autoresize
     />
 
-    <pre class="chart-test-summary" data-testid="gap-metric-summary">{{ metricSummary }}</pre>
+    <pre
+      v-if="showTestSummary"
+      class="chart-test-summary"
+      data-testid="gap-metric-summary"
+      aria-hidden="true"
+    >{{ metricSummary }}</pre>
   </div>
 </template>
 
@@ -53,8 +58,10 @@
 import { ref, computed, watch } from 'vue';
 import { useSkillsData } from '../composables/useSkillsData';
 import { escapeHtml, baseChartOption, chartContainerStyle } from '../composables/useChartDefaults';
+import { isE2ETestMode } from '../utils/testMode';
 
 const { people, skillCategories, categoryNames, getSkillLevel } = useSkillsData();
+const showTestSummary = isE2ETestMode();
 
 const modeDefaults = {
   expert:   { good: 2,   warn: 1,   step: 1  },
@@ -82,6 +89,18 @@ const filteredSkills = computed(() => {
   return skillCategories.value[selectedCategory.value] || [];
 });
 
+const chartMetrics = computed(() => {
+  const skills = filteredSkills.value;
+  const values = skills.map((skillName) => calcMetric(skillName));
+  const colors = values.map((value) => barColor(value));
+
+  return {
+    skills,
+    values,
+    colors,
+  };
+});
+
 function calcMetric(skill) {
   if (mode.value === 'average') {
     const total = people.value.reduce((sum, p) => sum + getSkillLevel(p, skill), 0);
@@ -102,9 +121,7 @@ function barColor(val) {
 }
 
 const chartOption = computed(() => {
-  const skills = filteredSkills.value;
-  const values = skills.map((s) => calcMetric(s));
-  const colors = values.map((v) => barColor(v));
+  const { skills, values, colors } = chartMetrics.value;
 
   const suffix =
     mode.value === 'average'
@@ -173,7 +190,9 @@ const chartOption = computed(() => {
 
 const metricSummary = computed(() =>
   JSON.stringify(
-    Object.fromEntries(filteredSkills.value.map((skillName) => [skillName, calcMetric(skillName)]))
+    Object.fromEntries(
+      chartMetrics.value.skills.map((skillName, index) => [skillName, chartMetrics.value.values[index]])
+    )
   )
 );
 </script>

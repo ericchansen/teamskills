@@ -179,6 +179,9 @@ export function buildMockMatrixResponse() {
 }
 
 export async function loadDashboard(page) {
+  await page.addInitScript(() => {
+    globalThis.__E2E_TEST__ = true;
+  });
   await page.goto('/');
   await expect(page.locator('.app-header')).toBeVisible();
   await expect(page.locator('.matrix-view')).toBeVisible({ timeout: 15000 });
