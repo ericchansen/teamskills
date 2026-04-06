@@ -184,11 +184,30 @@ export async function loadDashboard(page) {
   await expect(page.locator('.matrix-view')).toBeVisible({ timeout: 15000 });
 }
 
-export async function mockDashboardApi(page, { userType = 'admin' } = {}) {
+export async function readJsonSummary(page, testId) {
+  const raw = await page.getByTestId(testId).textContent();
+  return JSON.parse(raw || '{}');
+}
+
+export async function readGraphEdgeCount(page) {
+  const raw = await page.getByTestId('graph-edge-count').textContent();
+  return Number.parseInt(raw || '0', 10);
+}
+
+export function chooseTargetLevel(currentLevel) {
+  return currentLevel === 400 ? 300 : 400;
+}
+
+export function thresholdDelta(currentLevel) {
+  return currentLevel === 400 ? -1 : 1;
+}
+
+export async function mockDashboardApi(page, { userType = 'admin', failNextSave = false } = {}) {
   const matrixData = clone(buildMockMatrixResponse());
   const currentUser = buildMockUser(userType);
   const categoryMap = flattenCategories(matrixData.categories);
   const categoryPathMap = buildCategoryPathMap(matrixData.categories);
+  let shouldFail = failNextSave;
 
   function getSkillMap() {
     return new Map(
@@ -239,6 +258,54 @@ export async function mockDashboardApi(page, { userType = 'admin' } = {}) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(matrixData),
+    });
+  });
+
+  await page.route('**/api/user-skills', async (route) => {
+    const method = route.request().method();
+
+    if (method !== 'PUT' && method !== 'DELETE') {
+      await route.continue();
+      return;
+    }
+
+    const requestBody = route.request().postDataJSON();
+    const key = `${requestBody.user_id}-${requestBody.skill_id}`;
+
+    if (shouldFail) {
+      shouldFail = false;
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Forced failure for rollback test' }),
+      });
+      return;
+    }
+
+    if (method === 'PUT') {
+      matrixData.userSkills[key] = {
+        proficiency_level: requestBody.proficiency_level,
+        notes: requestBody.notes || '',
+      };
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: requestBody.user_id,
+          skill_id: requestBody.skill_id,
+          proficiency_level: requestBody.proficiency_level,
+          notes: requestBody.notes || '',
+        }),
+      });
+      return;
+    }
+
+    delete matrixData.userSkills[key];
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'User skill deleted successfully' }),
     });
   });
 

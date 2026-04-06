@@ -14,7 +14,7 @@
       <span class="threshold-badge">
         ≥ {{ threshold }} ({{ levels[threshold] }})
       </span>
-      <span class="edge-count">{{ edgeCount }} connections</span>
+      <span class="edge-count" data-testid="graph-edge-count">{{ edgeCount }} connections</span>
     </div>
 
     <v-chart
