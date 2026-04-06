@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "echo \"No frontend linter configured\" && exit 0",
+    "lint": "npx eslint \"src/**/*.{js,vue}\"",
     "test": "npm run build"
   },
   "dependencies": {

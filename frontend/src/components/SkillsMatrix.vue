@@ -34,7 +34,12 @@
       autoresize
     />
 
-    <pre class="chart-test-summary" data-testid="matrix-current-user-levels">{{ currentUserSkillLevelsSummary }}</pre>
+    <pre
+      v-if="showTestSummary"
+      class="chart-test-summary"
+      data-testid="matrix-current-user-levels"
+      aria-hidden="true"
+    >{{ currentUserSkillLevelsSummary }}</pre>
   </div>
 </template>
 
@@ -43,6 +48,7 @@ import { ref, computed } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { useSkillsData } from '../composables/useSkillsData';
 import { escapeHtml, baseChartOption, chartContainerStyle } from '../composables/useChartDefaults';
+import { isE2ETestMode } from '../utils/testMode';
 
 const { user } = useAuth();
 const {
@@ -54,6 +60,7 @@ const {
   getSkillLevel,
 } = useSkillsData();
 
+const showTestSummary = isE2ETestMode();
 const collapsedNodes = ref(new Set());
 
 function toggleNode(nodeId) {

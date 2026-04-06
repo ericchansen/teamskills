@@ -1,9 +1,25 @@
+import { defineConfig, globalIgnores } from 'eslint/config';
 import js from '@eslint/js';
 import globals from 'globals';
+import pluginVue from 'eslint-plugin-vue';
 
-export default [
+const sharedRules = {
+  'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+  'no-console': 'off',
+};
+
+export default defineConfig([
+  globalIgnores([
+    'node_modules/**',
+    'coverage/**',
+    'playwright-report/**',
+    'test-results/**',
+    '.playwright-mcp/**',
+    'frontend/dist/**',
+  ]),
   js.configs.recommended,
   {
+    files: ['backend/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'commonjs',
@@ -12,18 +28,29 @@ export default [
         ...globals.jest,
       },
     },
-    rules: {
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      'no-console': 'off',
-    },
+    rules: sharedRules,
   },
   {
-    files: ['playwright.config.js', 'tests/e2e/**/*.js'],
+    files: ['playwright.config.js', 'tests/e2e/**/*.js', 'eslint.config.mjs'],
     languageOptions: {
+      ecmaVersion: 2022,
       sourceType: 'module',
+      globals: {
+        ...globals.node,
+      },
     },
+    rules: sharedRules,
   },
+  ...pluginVue.configs['flat/essential'],
   {
-    ignores: ['node_modules/', 'frontend/', 'coverage/', 'eslint.config.mjs'],
+    files: ['frontend/src/**/*.{js,vue}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+      },
+    },
+    rules: sharedRules,
   },
-];
+]);
