@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loadDashboard, mockDashboardApi } from './helpers/mockDashboardApi.js';
+import { loadDashboard, mockDashboardApi, readJsonSummary } from './helpers/mockDashboardApi.js';
 
 test.describe('Dashboard workflows', () => {
   test.beforeEach(async ({ page }) => {
@@ -31,23 +31,91 @@ test.describe('Dashboard workflows', () => {
     await expect(page.locator('.threshold-badge')).toContainText('300');
   });
 
-  test('should show the gap analysis page with configurable thresholds', async ({ page }) => {
+  test('should show the gap analysis page with configurable level controls', async ({ page }) => {
     await page.getByRole('link', { name: 'Gap Analysis' }).click();
 
     await expect(page).toHaveURL(/\/gap-analysis$/);
     await expect(page.locator('.gap-view')).toBeVisible();
-    await expect(page.locator('#mode-select')).toHaveValue('expert');
-    await expect(page.locator('.threshold-input').first()).toHaveValue('2');
-    await expect(page.locator('.threshold-input').nth(1)).toHaveValue('1');
+    await expect(page.locator('#mode-select option')).toHaveText([
+      'Average Level',
+      'Coverage',
+      'Expert Count',
+      'Proficiency Breakdown',
+    ]);
+    await expect(page.locator('#mode-select')).toHaveValue('stacked');
+    await expect(page.locator('#level-select')).toHaveCount(0);
+    await expect(page.locator('.threshold-input')).toHaveCount(0);
+    await expect(page.getByRole('checkbox', { name: 'L100' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'L200' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'L300' })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'L400' })).toBeChecked();
   });
 
-  test('should update gap-analysis thresholds when switching modes', async ({ page }) => {
+  test('should update gap-analysis controls when switching modes', async ({ page }) => {
     await page.getByRole('link', { name: 'Gap Analysis' }).click();
 
-    await page.locator('#mode-select').selectOption('average');
+    await page.locator('#mode-select').selectOption('coverage');
+    await expect(page.locator('#level-select')).toHaveValue('200');
+    await expect(page.locator('.threshold-input').first()).toHaveValue('50');
+    await expect(page.locator('.threshold-input').nth(1)).toHaveValue('25');
 
+    await page.locator('#mode-select').selectOption('average');
+    await expect(page.locator('#level-select')).toHaveCount(0);
     await expect(page.locator('.threshold-input').first()).toHaveValue('250');
     await expect(page.locator('.threshold-input').nth(1)).toHaveValue('175');
+
+    await page.locator('#mode-select').selectOption('stacked');
+    await expect(page.locator('#level-select')).toHaveCount(0);
+    await expect(page.locator('.threshold-input')).toHaveCount(0);
+    await expect(page.getByRole('checkbox', { name: 'L100' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'L200' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'L300' })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'L400' })).toBeChecked();
+  });
+
+  test('should recalculate expert and coverage metrics when the target level changes', async ({ page }) => {
+    const trackedSkill = 'Azure AI Services (OpenAI)';
+
+    await page.getByRole('link', { name: 'Gap Analysis' }).click();
+    await page.locator('#mode-select').selectOption('expert');
+
+    let summary = await readJsonSummary(page, 'gap-metric-summary');
+    expect(summary[trackedSkill]).toBe(1);
+
+    await page.locator('#level-select').selectOption('400');
+    summary = await readJsonSummary(page, 'gap-metric-summary');
+    expect(summary[trackedSkill]).toBe(0);
+
+    await page.locator('#mode-select').selectOption('coverage');
+    summary = await readJsonSummary(page, 'gap-metric-summary');
+    expect(summary[trackedSkill]).toBe(100);
+
+    await page.locator('#level-select').selectOption('300');
+    summary = await readJsonSummary(page, 'gap-metric-summary');
+    expect(summary[trackedSkill]).toBe(33);
+  });
+
+  test('should show stacked proficiency counts for visible levels and allow toggling levels', async ({ page }) => {
+    const trackedSkill = 'Microsoft Foundry';
+
+    await page.getByRole('link', { name: 'Gap Analysis' }).click();
+    await page.locator('#mode-select').selectOption('stacked');
+
+    let summary = await readJsonSummary(page, 'gap-metric-summary');
+    expect(summary[trackedSkill]).toEqual({
+      L300: 1,
+      L400: 1,
+    });
+
+    await page.getByRole('checkbox', { name: 'L100' }).evaluate((element) => {
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    summary = await readJsonSummary(page, 'gap-metric-summary');
+    expect(summary[trackedSkill]).toEqual({
+      L100: 1,
+      L300: 1,
+      L400: 1,
+    });
   });
 
   test('should keep the skill catalog editor out of the primary nav and open it from profile', async ({ page }) => {
