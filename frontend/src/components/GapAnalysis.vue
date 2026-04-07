@@ -191,12 +191,18 @@ function countPeopleAtOrAbove(skill, targetLevel) {
 }
 
 function buildLevelBreakdown(skill) {
-  return Object.fromEntries(
-    levelOptions.map((level) => [
-      `L${level}`,
-      people.value.filter((person) => getSkillLevel(person, skill) === level).length,
-    ])
+  const breakdown = Object.fromEntries(
+    levelOptions.map((level) => [`L${level}`, 0])
   );
+
+  for (const person of people.value) {
+    const levelKey = `L${getSkillLevel(person, skill)}`;
+    if (Object.prototype.hasOwnProperty.call(breakdown, levelKey)) {
+      breakdown[levelKey] += 1;
+    }
+  }
+
+  return breakdown;
 }
 
 function isStackedLevelVisible(level) {
