@@ -14,6 +14,21 @@ async function openProfile(page) {
   await expect(page.locator('.profile-page')).toBeVisible();
 }
 
+function updateVisibleGapBreakdown(metric, fromLevel, toLevel) {
+  const nextMetric = { ...metric };
+  const trackedLevels = [300, 400];
+
+  if (trackedLevels.includes(fromLevel)) {
+    nextMetric[`L${fromLevel}`] = Math.max((nextMetric[`L${fromLevel}`] || 0) - 1, 0);
+  }
+
+  if (trackedLevels.includes(toLevel)) {
+    nextMetric[`L${toLevel}`] = (nextMetric[`L${toLevel}`] || 0) + 1;
+  }
+
+  return nextMetric;
+}
+
 test.describe('User Profile', () => {
   test.beforeEach(async ({ page }) => {
     await mockDashboardApi(page);
@@ -112,7 +127,9 @@ test.describe('Profile shared state sync', () => {
     await page.getByRole('link', { name: 'Gap Analysis' }).click();
     await expect(page.locator('.gap-view')).toBeVisible();
     const updatedGapSummary = await readJsonSummary(page, 'gap-metric-summary');
-    expect(updatedGapSummary[trackedSkill]).toBe(initialGapMetric + expectedDelta);
+    expect(updatedGapSummary[trackedSkill]).toEqual(
+      updateVisibleGapBreakdown(initialGapMetric, initialLevel, nextLevel)
+    );
   });
 
   test('should roll back shared views when a profile skill save fails', async ({ page }) => {
@@ -158,6 +175,6 @@ test.describe('Profile shared state sync', () => {
     await page.getByRole('link', { name: 'Gap Analysis' }).click();
     await expect(page.locator('.gap-view')).toBeVisible();
     const rolledBackGapSummary = await readJsonSummary(page, 'gap-metric-summary');
-    expect(rolledBackGapSummary[trackedSkill]).toBe(initialGapMetric);
+    expect(rolledBackGapSummary[trackedSkill]).toEqual(initialGapMetric);
   });
 });
