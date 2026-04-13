@@ -61,15 +61,17 @@ function parseCSV(csvPath) {
 
 /**
  * Parse a pivot-table CSV (SharePoint skills matrix export).
- * Header: Title, Alias, Qualifier, Skill1, Skill2, ...
- * Rows: Name, Alias, Team, 100, 200, 300, 400, "", ...
- * Returns { skillNames: string[], rows: { name, team, skills: { skillName: 'L100'|... }[] } }
+ * Header: Title, Email, Qualifier, Skill1, Skill2, ...
+ * Rows: Name, email@microsoft.com, Team, 100, 200, 300, 400, "", ...
+ * Column 1 ("Email") was previously "Alias" (unused). Now carries the user's
+ * real email so pivotSync can create users without placeholder addresses.
+ * Returns { skillNames: string[], rows: { name, email, team, skills: { skillName: 'L100'|... }[] } }
  */
 function parsePivotCSV(content) {
   const lines = content.split('\n').filter(line => line.trim());
   const headers = parseCSVLine(lines[0]).map(h => h.trim());
 
-  // Columns 0=Title, 1=Alias, 2=Qualifier, 3+=skill names
+  // Columns 0=Title, 1=Email, 2=Qualifier, 3+=skill names
   const skillNames = headers.slice(3);
 
   const rows = [];
@@ -78,6 +80,7 @@ function parsePivotCSV(content) {
     const name = (values[0] || '').trim();
     if (!name) continue;
 
+    const email = (values[1] || '').trim();
     const team = (values[2] || '').trim();
     const skills = {};
 
@@ -86,14 +89,13 @@ function parsePivotCSV(content) {
       if (!raw) continue;
       const numVal = parseInt(raw, 10);
       if (!numVal || numVal < 100) continue;
-      // Map 100→L100, 200→L200, etc.
       const level = `L${numVal}`;
       if (['L100', 'L200', 'L300', 'L400'].includes(level)) {
         skills[skillNames[s]] = level;
       }
     }
 
-    rows.push({ name, team, skills });
+    rows.push({ name, email, team, skills });
   }
 
   return { skillNames, rows };
