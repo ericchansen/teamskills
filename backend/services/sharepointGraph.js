@@ -156,6 +156,8 @@ function clearCache() {
 }
 
 module.exports = {
+  SHAREPOINT_SITE,
+  SHAREPOINT_LIST_NAME,
   resolveSiteAndList,
   getSkillColumnMap,
   fetchPivotFromSharePoint,
