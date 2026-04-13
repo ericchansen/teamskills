@@ -9,10 +9,12 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../db');
+const logger = require('../logger');
 const { normalizeSkillName, getCanonicalSkillInfo } = require('../utils/normalizeSkill');
 const { parsePivotCSV, parseCSVContent, parseCSV } = require('./csvParser');
 const { ensureSchemaExtensions, fetchFromSharePoint, syncToDatabase } = require('./sharepoint');
 const taxonomy = require('../data/skill-taxonomy');
+const { getPathToIdMap } = require('../migrate');
 
 async function applySkillMetadata(skillId, skillName) {
   const info = getCanonicalSkillInfo(skillName);
@@ -41,7 +43,8 @@ async function applySkillMetadata(skillId, skillName) {
 
 /**
  * Sync pivot-table CSV into PostgreSQL (users, skills, user_skills).
- * Generates placeholder emails for users without one.
+ * Requires each CSV row to include an email address; rows without one are skipped.
+ * Uses batch SQL operations (UNNEST + ON CONFLICT) to minimize round-trips.
  */
 async function syncPivotToDatabase(pivotData) {
   const { skillNames, rows } = pivotData;
@@ -55,154 +58,163 @@ async function syncPivotToDatabase(pivotData) {
 
   await ensureSchemaExtensions();
 
-  // Phase 1: Upsert all skills from column headers (with name normalization)
-  // canonicalIdMap prevents redundant DB queries when multiple raw names
-  // normalize to the same canonical skill (e.g., "Azure Functions" + "Azure Functions3")
-  const skillIdMap = new Map();
-  const canonicalIdMap = new Map();
+  // --- Phase 1: Resolve all skills (normalize, deduplicate, batch-upsert new ones) ---
+  const skillIdMap = new Map();     // rawName → DB id
+  const canonicalIdMap = new Map(); // normalizedName → DB id
+
+  // Build the unique set of canonical skill names
+  const canonicalNames = [];
+  const rawToCanonical = new Map();
   for (const rawName of skillNames) {
-    const skillName = normalizeSkillName(rawName);
-
-    // If we already resolved this canonical name, reuse the same ID
-    if (canonicalIdMap.has(skillName)) {
-      skillIdMap.set(rawName, canonicalIdMap.get(skillName));
-      stats.skills.existing++;
-      continue;
-    }
-
-    const existing = await db.query('SELECT id FROM skills WHERE name = $1', [skillName]);
-    if (existing.rows.length > 0) {
-      skillIdMap.set(rawName, existing.rows[0].id);
-      canonicalIdMap.set(skillName, existing.rows[0].id);
-      await applySkillMetadata(existing.rows[0].id, skillName);
-      stats.skills.existing++;
-    } else {
-      // For truly new skills, use taxonomy map first, then fall back to partial name match
-      let categoryId = null;
-
-      // Strategy 1: Taxonomy path-based lookup
-      const catPath = taxonomy.skillCategoryMap[skillName];
-      if (catPath) {
-        // Resolve path by walking the category tree in the DB
-        const parts = catPath.split('/');
-        // Also try top-level aliases (e.g., "Infra" might be "Infrastructure" in DB)
-        const l1Alias = taxonomy.topLevelAliases[parts[0]];
-        const l1Variants = l1Alias ? [parts[0], l1Alias] : [parts[0]];
-        // Reverse aliases: if canonical is parts[0], find alternatives
-        for (const [alt, canonical] of Object.entries(taxonomy.topLevelAliases)) {
-          if (canonical === parts[0] && !l1Variants.includes(alt)) l1Variants.push(alt);
-        }
-
-        let parentId = null;
-        let resolved = true;
-        for (let i = 0; i < parts.length; i++) {
-          const variants = i === 0 ? l1Variants : [parts[i]];
-          const offset = parentId === null ? 1 : 2;
-          const placeholders = variants.map((_, j) => `$${j + offset}`).join(', ');
-          const q = parentId === null
-            ? `SELECT id FROM skill_categories WHERE parent_id IS NULL AND name IN (${placeholders})`
-            : `SELECT id FROM skill_categories WHERE parent_id = $1 AND name IN (${placeholders})`;
-          const params = parentId === null ? variants : [parentId, ...variants];
-          const r = await db.query(q, params);
-          if (r.rows.length > 0) {
-            parentId = r.rows[0].id;
-          } else {
-            resolved = false;
-            break;
-          }
-        }
-        if (resolved && parentId) categoryId = parentId;
-      }
-
-      // Strategy 2: SQL partial match against category names (fallback)
-      if (!categoryId) {
-        const catResult = await db.query(`
-          SELECT sc.id as category_id FROM skill_categories sc
-          WHERE $1 ILIKE '%' || sc.name || '%' AND sc.level >= 2
-            AND NOT EXISTS (
-              SELECT 1 FROM skill_categories sc2
-              WHERE sc2.name = sc.name AND sc2.id <> sc.id
-            )
-          ORDER BY sc.level DESC, length(sc.name) DESC
-          LIMIT 1
-        `, [skillName]);
-        if (catResult.rows.length > 0) categoryId = catResult.rows[0].category_id;
-      }
-
-      const info = getCanonicalSkillInfo(skillName);
-      const result = await db.query(
-        `INSERT INTO skills (name, category_id, preferred_label, concept_type, lifecycle_status, vendor_namespace)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id`,
-        [
-          skillName,
-          categoryId,
-          info.preferredLabel,
-          info.conceptType,
-          info.lifecycleStatus,
-          info.vendorNamespace,
-        ]
-      );
-      skillIdMap.set(rawName, result.rows[0].id);
-      canonicalIdMap.set(skillName, result.rows[0].id);
-      stats.skills.created++;
+    const canonical = normalizeSkillName(rawName);
+    rawToCanonical.set(rawName, canonical);
+    if (!canonicalNames.includes(canonical)) {
+      canonicalNames.push(canonical);
     }
   }
 
-  // Phase 2: Upsert users and their skills
+  // Batch-fetch existing skills
+  if (canonicalNames.length > 0) {
+    const existingSkills = await db.query(
+      'SELECT id, name FROM skills WHERE name = ANY($1)',
+      [canonicalNames]
+    );
+    for (const row of existingSkills.rows) {
+      canonicalIdMap.set(row.name, row.id);
+    }
+  }
+
+  // Batch-insert new skills (those not already in DB)
+  const newSkills = canonicalNames.filter(n => !canonicalIdMap.has(n));
+  if (newSkills.length > 0) {
+    const pathToId = getPathToIdMap();
+    const names = [], categoryIds = [], preferredLabels = [], conceptTypes = [],
+      lifecycleStatuses = [], vendorNamespaces = [];
+
+    for (const skillName of newSkills) {
+      const catPath = taxonomy.skillCategoryMap[skillName];
+      const categoryId = catPath ? (pathToId.get(catPath) || null) : null;
+      const info = getCanonicalSkillInfo(skillName);
+
+      names.push(skillName);
+      categoryIds.push(categoryId);
+      preferredLabels.push(info.preferredLabel);
+      conceptTypes.push(info.conceptType || null);
+      lifecycleStatuses.push(info.lifecycleStatus || 'active');
+      vendorNamespaces.push(info.vendorNamespace || null);
+    }
+
+    const inserted = await db.query(
+      `INSERT INTO skills (name, category_id, preferred_label, concept_type, lifecycle_status, vendor_namespace)
+       SELECT * FROM UNNEST($1::text[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[])
+       ON CONFLICT (name) DO NOTHING
+       RETURNING id, name`,
+      [names, categoryIds, preferredLabels, conceptTypes, lifecycleStatuses, vendorNamespaces]
+    );
+    for (const row of inserted.rows) {
+      canonicalIdMap.set(row.name, row.id);
+    }
+    stats.skills.created = inserted.rows.length;
+  }
+
+  // Any skills that existed via ON CONFLICT but weren't returned — re-fetch
+  const missing = canonicalNames.filter(n => !canonicalIdMap.has(n));
+  if (missing.length > 0) {
+    const refetch = await db.query('SELECT id, name FROM skills WHERE name = ANY($1)', [missing]);
+    for (const row of refetch.rows) {
+      canonicalIdMap.set(row.name, row.id);
+    }
+  }
+
+  stats.skills.existing = canonicalNames.length - stats.skills.created;
+
+  // Build rawName → id map
+  for (const rawName of skillNames) {
+    const canonical = rawToCanonical.get(rawName);
+    const id = canonicalIdMap.get(canonical);
+    if (id) skillIdMap.set(rawName, id);
+  }
+
+  // Batch-update metadata for existing skills
+  for (const [name, id] of canonicalIdMap) {
+    await applySkillMetadata(id, name);
+  }
+
+  // --- Phase 2: Upsert users ---
+  const userIdMap = new Map(); // userName (lowercase) → DB id
   for (const row of rows) {
-    // Match existing user by display name (case-insensitive) to avoid duplicates
-    let userResult = await db.query('SELECT id FROM users WHERE LOWER(name) = LOWER($1)', [row.name]);
+    if (!row.email) {
+      logger.warn({ name: row.name }, 'Skipping user without email in CSV');
+      continue;
+    }
+
+    const userResult = await db.query('SELECT id FROM users WHERE LOWER(name) = LOWER($1)', [row.name]);
     if (userResult.rows.length > 0) {
-      // Update team but preserve existing email and entra_oid
-      await db.query(
-        'UPDATE users SET team = $1 WHERE id = $2',
-        [row.team, userResult.rows[0].id]
-      );
+      await db.query('UPDATE users SET team = $1 WHERE id = $2', [row.team, userResult.rows[0].id]);
+      userIdMap.set(row.name.toLowerCase(), userResult.rows[0].id);
       stats.users.updated++;
     } else {
-      // No existing user — create with placeholder email
-      const emailSlug = row.name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
-      const email = `${emailSlug}@placeholder.local`;
-      userResult = await db.query(
+      const inserted = await db.query(
         'INSERT INTO users (name, email, team) VALUES ($1, $2, $3) RETURNING id',
-        [row.name, email, row.team]
+        [row.name, row.email, row.team]
       );
+      userIdMap.set(row.name.toLowerCase(), inserted.rows[0].id);
       stats.users.created++;
     }
-    const userId = userResult.rows[0].id;
+  }
 
-    // Phase 3: Upsert user_skills (take MAX when dedup columns map to the same skill)
-    for (const [skillName, level] of Object.entries(row.skills)) {
-      const skillId = skillIdMap.get(skillName);
+  // --- Phase 3: Batch-upsert user_skills with MAX-wins ---
+  const usUserIds = [], usSkillIds = [], usLevels = [];
+  for (const row of rows) {
+    if (!row.email) continue;
+    const userId = userIdMap.get(row.name.toLowerCase());
+    if (!userId) continue;
+
+    for (const [rawSkillName, level] of Object.entries(row.skills)) {
+      const skillId = skillIdMap.get(rawSkillName);
       if (!skillId) { stats.userSkills.skipped++; continue; }
-
-      const existing = await db.query(
-        'SELECT proficiency_level FROM user_skills WHERE user_id = $1 AND skill_id = $2',
-        [userId, skillId]
-      );
-
-      if (existing.rows.length > 0) {
-        const existingNum = parseInt(existing.rows[0].proficiency_level.replace('L', ''), 10);
-        const newNum = parseInt(level.replace('L', ''), 10);
-        // Only update if the new level is higher (MAX wins for dedup columns)
-        if (newNum > existingNum) {
-          await db.query(
-            'UPDATE user_skills SET proficiency_level = $1 WHERE user_id = $2 AND skill_id = $3',
-            [level, userId, skillId]
-          );
-          stats.userSkills.updated++;
-        } else {
-          stats.userSkills.skipped++;
-        }
-      } else {
-        await db.query(
-          'INSERT INTO user_skills (user_id, skill_id, proficiency_level) VALUES ($1, $2, $3)',
-          [userId, skillId, level]
-        );
-        stats.userSkills.created++;
-      }
+      usUserIds.push(userId);
+      usSkillIds.push(skillId);
+      usLevels.push(level);
     }
+  }
+
+  if (usUserIds.length > 0) {
+    const result = await db.query(
+      `WITH input AS (
+         SELECT * FROM UNNEST($1::int[], $2::int[], $3::text[])
+           AS t(user_id, skill_id, proficiency_level)
+       ),
+       upserted AS (
+         INSERT INTO user_skills (user_id, skill_id, proficiency_level)
+         SELECT user_id, skill_id, proficiency_level FROM input
+         ON CONFLICT (user_id, skill_id) DO UPDATE SET
+           proficiency_level = CASE
+             WHEN regexp_replace(EXCLUDED.proficiency_level, '^L', '')::int >
+                  regexp_replace(user_skills.proficiency_level, '^L', '')::int
+             THEN EXCLUDED.proficiency_level
+             ELSE user_skills.proficiency_level
+           END
+         RETURNING
+           (xmax = 0) AS was_insert,
+           proficiency_level = (
+             SELECT proficiency_level FROM input i
+             WHERE i.user_id = user_skills.user_id AND i.skill_id = user_skills.skill_id
+             LIMIT 1
+           ) AS level_changed
+       )
+       SELECT
+         COUNT(*) FILTER (WHERE was_insert) AS created,
+         COUNT(*) FILTER (WHERE NOT was_insert AND level_changed) AS updated,
+         COUNT(*) FILTER (WHERE NOT was_insert AND NOT level_changed) AS skipped
+       FROM upserted`,
+      [usUserIds, usSkillIds, usLevels]
+    );
+
+    const r = result.rows[0];
+    stats.userSkills.created = parseInt(r.created, 10);
+    stats.userSkills.updated = parseInt(r.updated, 10);
+    stats.userSkills.skipped += parseInt(r.skipped, 10);
   }
 
   return stats;
