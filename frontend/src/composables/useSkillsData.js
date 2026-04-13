@@ -278,65 +278,9 @@ export function useSkillsData() {
       const shouldUseMockData = statusCode === null || (import.meta.env.DEV && statusCode >= 500);
 
       if (shouldUseMockData) {
-        console.warn('API unavailable, using mock data:', err.message);
-        try {
-          const mock = await import('../data.js');
-          const mockSkills = Object.entries(mock.skillCategories || {}).flatMap(([categoryName, skills]) =>
-            skills.map((skillName) =>
-              buildSkillRecord({
-                rawName: skillName,
-                displayName: skillName,
-                categoryPathNames: categoryName ? [categoryName] : [],
-              })
-            )
-          );
-          const skillCatalog = buildSkillCatalog(mockSkills);
-          const { skillCategories, categoryNames } = buildFlatCategories(skillCatalog);
-          const allSkills = skillCatalog.map((skill) => skill.name);
-          const oldSkillIndex = mock.skillIndex || Object.fromEntries((mock.allSkills || []).map((skill, index) => [skill, index]));
-          const skillIndex = Object.fromEntries(allSkills.map((skill, index) => [skill, index]));
-
-          state.people = (mock.people || []).map((person) => ({
-            ...person,
-            skills: allSkills.map((skillName) => {
-              const oldIndex = oldSkillIndex[skillName];
-              return oldIndex !== undefined ? person.skills[oldIndex] || 0 : 0;
-            }),
-          }));
-          state.allSkills = allSkills;
-          state.skillCatalog = skillCatalog;
-          state.skillCategories = skillCategories;
-          state.categoryNames = categoryNames;
-          state.skillToCategory = Object.fromEntries(
-            skillCatalog.map((skill) => [skill.name, skill.topLevelCategory || 'Uncategorized'])
-          );
-          state.skillIndex = skillIndex;
-          state.skillNameToId = {};
-          // Build minimal categoryTree from flat skillCategories for offline mode
-          state.categoryTree = categoryNames.map((name, i) => ({
-            id: -(i + 1),
-            name,
-            parent_id: null,
-            level: 1,
-            sort_order: i,
-            children: [],
-          }));
-          // Build skillAncestorIds from flat categories
-          const ancestorIds = {};
-          for (const [cat, skills] of Object.entries(skillCategories)) {
-            const catNode = state.categoryTree.find(n => n.name === cat);
-            if (catNode) {
-              for (const skill of skills) {
-                ancestorIds[skill] = [catNode.id];
-              }
-            }
-          }
-          state.skillAncestorIds = ancestorIds;
-          state.isLive = false;
-        } catch (mockErr) {
-          state.error = 'Failed to load skills data';
-          console.error('Mock data also failed:', mockErr);
-        }
+        console.warn('API unavailable — no mock fallback. Start the backend to use the app.');
+        state.error = 'API unavailable. Please ensure the backend is running.';
+        state.isLive = false;
       } else {
         console.error('API error:', err.message);
         state.error = err.message;
