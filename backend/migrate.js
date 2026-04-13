@@ -112,6 +112,17 @@ async function tableExists(tableName) {
   return !!result.rows[0]?.t;
 }
 
+// Module-level cache of the category path → DB ID map, populated by ensureCategoryHierarchy.
+let _pathToIdCache = new Map();
+
+/**
+ * Get the category path → DB ID map built during startup migrations.
+ * Returns an empty Map if migrations haven't run yet.
+ */
+function getPathToIdMap() {
+  return _pathToIdCache;
+}
+
 /**
  * Ensure the full hierarchical category tree exists.
  * Uses the tree structure from skill-taxonomy.js.
@@ -192,6 +203,7 @@ async function ensureCategoryHierarchy() {
     logger.info(`Category hierarchy: created ${created} new categories (${pathToId.size} total)`);
   }
 
+  _pathToIdCache = pathToId;
   return pathToId;
 }
 
@@ -665,4 +677,4 @@ async function addSkillNameUniqueIndex() {
   }
 }
 
-module.exports = { runMigrations };
+module.exports = { runMigrations, getPathToIdMap };
