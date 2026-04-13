@@ -115,157 +115,9 @@ router.post('/init', checkInitSecret, async (req, res) => {
       }
     }
 
-    // Run schema
-    const schemaSQL = `
-      -- Team Skills Tracker Database Schema
-      CREATE TABLE IF NOT EXISTS users (
-          id SERIAL PRIMARY KEY,
-          name VARCHAR(255) NOT NULL,
-          email VARCHAR(255) UNIQUE NOT NULL,
-          entra_oid VARCHAR(36),
-          role VARCHAR(100),
-          team VARCHAR(100),
-          qualifier VARCHAR(100),
-          is_admin BOOLEAN DEFAULT false,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_users_entra_oid ON users(entra_oid) WHERE entra_oid IS NOT NULL;
-
-      CREATE TABLE IF NOT EXISTS skill_categories (
-          id SERIAL PRIMARY KEY,
-          name VARCHAR(255) NOT NULL,
-          parent_id INTEGER REFERENCES skill_categories(id) ON DELETE CASCADE,
-          level INTEGER NOT NULL DEFAULT 1,
-          sort_order INTEGER DEFAULT 0,
-          description TEXT,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(parent_id, name)
-      );
-
-       CREATE TABLE IF NOT EXISTS skills (
-           id SERIAL PRIMARY KEY,
-           name VARCHAR(255) NOT NULL,
-           preferred_label VARCHAR(255),
-           concept_type VARCHAR(50),
-           lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'active',
-           vendor_namespace VARCHAR(100),
-           category_id INTEGER REFERENCES skill_categories(id) ON DELETE SET NULL,
-           description TEXT,
-           target_level VARCHAR(10) DEFAULT 'L200',
-          is_core BOOLEAN DEFAULT false,
-          sort_order INTEGER DEFAULT 0,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS user_skills (
-          id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-          skill_id INTEGER REFERENCES skills(id) ON DELETE CASCADE,
-          proficiency_level VARCHAR(10) NOT NULL CHECK (proficiency_level IN ('L100', 'L200', 'L300', 'L400')),
-          notes TEXT,
-          last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(user_id, skill_id)
-      );
-
-      CREATE TABLE IF NOT EXISTS skill_relationships (
-          id SERIAL PRIMARY KEY,
-          parent_skill_id INTEGER REFERENCES skills(id) ON DELETE CASCADE,
-          child_skill_id INTEGER REFERENCES skills(id) ON DELETE CASCADE,
-          relationship_type VARCHAR(50) DEFAULT 'parent-child',
-          UNIQUE(parent_skill_id, child_skill_id),
-          CHECK (parent_skill_id != child_skill_id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_user_skills_user ON user_skills(user_id);
-      CREATE INDEX IF NOT EXISTS idx_user_skills_skill ON user_skills(skill_id);
-      CREATE INDEX IF NOT EXISTS idx_skills_category ON skills(category_id);
-      CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_root_name
-          ON skill_categories(name) WHERE parent_id IS NULL;
-       CREATE INDEX IF NOT EXISTS idx_skill_relationships_parent ON skill_relationships(parent_skill_id);
-       CREATE INDEX IF NOT EXISTS idx_skill_relationships_child ON skill_relationships(child_skill_id);
-
-       CREATE TABLE IF NOT EXISTS skill_aliases (
-           id SERIAL PRIMARY KEY,
-           skill_id INTEGER REFERENCES skills(id) ON DELETE CASCADE NOT NULL,
-           alias VARCHAR(255) NOT NULL,
-           source VARCHAR(50) DEFAULT 'manual',
-           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-           UNIQUE(skill_id, alias)
-       );
-
-       CREATE INDEX IF NOT EXISTS idx_skill_aliases_skill ON skill_aliases(skill_id);
-       CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_aliases_alias_lower ON skill_aliases(LOWER(alias));
-
-      CREATE OR REPLACE FUNCTION update_user_skills_timestamp()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          NEW.last_updated = CURRENT_TIMESTAMP;
-          RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      DROP TRIGGER IF EXISTS update_user_skills_modtime ON user_skills;
-      CREATE TRIGGER update_user_skills_modtime
-          BEFORE UPDATE ON user_skills
-          FOR EACH ROW
-          EXECUTE FUNCTION update_user_skills_timestamp();
-
-      CREATE OR REPLACE FUNCTION update_users_timestamp()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          NEW.updated_at = CURRENT_TIMESTAMP;
-          RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      DROP TRIGGER IF EXISTS update_users_modtime ON users;
-      CREATE TRIGGER update_users_modtime
-          BEFORE UPDATE ON users
-          FOR EACH ROW
-          EXECUTE FUNCTION update_users_timestamp();
-
-      CREATE TABLE IF NOT EXISTS user_skills_history (
-          id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-          skill_id INTEGER REFERENCES skills(id) ON DELETE CASCADE,
-          proficiency_level VARCHAR(10) NOT NULL CHECK (proficiency_level IN ('L100', 'L200', 'L300', 'L400')),
-          changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_user_skills_history_user ON user_skills_history(user_id);
-      CREATE INDEX IF NOT EXISTS idx_user_skills_history_skill ON user_skills_history(skill_id);
-      CREATE INDEX IF NOT EXISTS idx_user_skills_history_changed ON user_skills_history(changed_at);
-
-      CREATE TABLE IF NOT EXISTS admin_audit_log (
-        id SERIAL PRIMARY KEY,
-        action TEXT NOT NULL,
-        performed_by TEXT,
-        details JSONB,
-        ip_address TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE OR REPLACE FUNCTION record_skill_history()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          IF (TG_OP = 'INSERT') OR (OLD.proficiency_level IS DISTINCT FROM NEW.proficiency_level) THEN
-              INSERT INTO user_skills_history (user_id, skill_id, proficiency_level)
-              VALUES (NEW.user_id, NEW.skill_id, NEW.proficiency_level);
-          END IF;
-          RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      DROP TRIGGER IF EXISTS track_skill_changes ON user_skills;
-      CREATE TRIGGER track_skill_changes
-          AFTER INSERT OR UPDATE ON user_skills
-          FOR EACH ROW
-          EXECUTE FUNCTION record_skill_history();
-    `;
-
+    // Run schema from the canonical schema.sql file (single source of truth)
+    const schemaPath = path.resolve(__dirname, '../../database/schema.sql');
+    const schemaSQL = fs.readFileSync(schemaPath, 'utf8');
     await db.query(schemaSQL);
     logger.info('Schema created successfully');
 
@@ -299,8 +151,11 @@ router.post('/init', checkInitSecret, async (req, res) => {
   }
 });
 
+// All routes below require authentication (routes above like /init use their own auth)
+router.use(requireAuth);
+
 // Check database status
-router.get('/status', requireAuth, requireAdmin, async (req, res) => {
+router.get('/status', requireAdmin, async (req, res) => {
   try {
     const result = await db.query('SELECT NOW() as time');
     const userCount = await db.query('SELECT COUNT(*) as count FROM users').catch(() => ({ rows: [{ count: 0 }] }));
@@ -320,7 +175,7 @@ router.get('/status', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // List all users with admin status (admin only)
-router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+router.get('/users', requireAdmin, async (req, res) => {
   const result = await db.query(
     'SELECT id, name, email, role, team, is_admin FROM users ORDER BY name'
   );
@@ -328,7 +183,7 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // Grant or revoke admin access (admin only)
-router.put('/users/:id/admin', requireAuth, requireAdmin, async (req, res) => {
+router.put('/users/:id/admin', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { is_admin } = req.body;
 
@@ -349,7 +204,7 @@ router.put('/users/:id/admin', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // Admin: update any user's skill (bypasses ownership)
-router.put('/user-skills', requireAuth, requireAdmin, async (req, res) => {
+router.put('/user-skills', requireAdmin, async (req, res) => {
   const { user_id, skill_id, proficiency_level } = req.body;
 
   if (!user_id || !skill_id || !proficiency_level) {
@@ -372,7 +227,7 @@ router.put('/user-skills', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // Admin: delete any user's skill (bypasses ownership)
-router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/user-skills', requireAdmin, async (req, res) => {
   const { user_id, skill_id } = req.body;
 
   if (!user_id || !skill_id) {
@@ -389,7 +244,7 @@ router.delete('/user-skills', requireAuth, requireAdmin, async (req, res) => {
 
 // Admin: reset all users (wipe duplicates, start fresh)
 // Defense-in-depth: requires BOTH valid Entra auth AND INIT_SECRET
-router.post('/reset-users', requireAuth, checkAdminAllowlist, checkInitSecret, async (req, res) => {
+router.post('/reset-users', checkAdminAllowlist, checkInitSecret, async (req, res) => {
   const ip = req.ip || req.connection?.remoteAddress || 'unknown';
   const performedBy = req.user?.email || 'unknown';
   await logAdminAction('reset-users', performedBy, { endpoint: '/reset-users' }, ip);
@@ -409,7 +264,7 @@ router.post('/reset-users', requireAuth, checkAdminAllowlist, checkInitSecret, a
 // POST /api/admin/sync-skills
 // Body: { source: 'csv' | 'pivot-csv' | 'sharepoint', secret: string, csvContent?: string, filePath?: string }
 // Defense-in-depth: requires BOTH valid Entra auth AND INIT_SECRET
-router.post('/sync-skills', requireAuth, checkAdminAllowlist, checkInitSecret, async (req, res) => {
+router.post('/sync-skills', checkAdminAllowlist, checkInitSecret, async (req, res) => {
   const { source = 'csv', csvContent, filePath } = req.body;
   const ip = req.ip || req.connection?.remoteAddress || 'unknown';
   const performedBy = req.user?.email || 'unknown';
