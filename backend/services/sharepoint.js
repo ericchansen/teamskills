@@ -18,11 +18,7 @@
  */
 
 const db = require('../db');
-const { getSkillColumnMap, findUserItem, updateSharePointItem } = require('./sharepointGraph');
-
-// SharePoint site and list identifiers
-const SHAREPOINT_SITE = 'microsoft.sharepoint.com:/teams/SDPAccountsShared';
-const SHAREPOINT_LIST_NAME = 'Skills Matrix MVP';
+const { getSkillColumnMap, findUserItem, updateSharePointItem, SHAREPOINT_SITE, SHAREPOINT_LIST_NAME } = require('./sharepointGraph');
 
 /**
  * Fetch skills from SharePoint list via Microsoft Graph API.
