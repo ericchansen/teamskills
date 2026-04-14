@@ -269,16 +269,15 @@ export function useSkillsData() {
       Object.assign(state, transformed);
       state.isLive = true;
     } catch (err) {
-      // Fall back to mock data when the API is unreachable, and also during
-      // local development when the backend proxy returns a 5xx because the API
-      // or database is not running. Auth/permission errors should still surface.
+      // Surface API errors to the user. In dev mode, treat 5xx as "backend not
+      // running" and show a helpful message; auth/permission errors still surface.
       const message = err.message || '';
       const statusMatch = message.match(/\((\d{3})\)/);
       const statusCode = statusMatch ? Number(statusMatch[1]) : null;
-      const shouldUseMockData = statusCode === null || (import.meta.env.DEV && statusCode >= 500);
+      const isRecoverable = statusCode === null || (import.meta.env.DEV && statusCode >= 500);
 
-      if (shouldUseMockData) {
-        console.warn('API unavailable — no mock fallback. Start the backend to use the app.');
+      if (isRecoverable) {
+        console.warn('API unavailable — start the backend to use the app.');
         state.error = 'API unavailable. Please ensure the backend is running.';
         state.isLive = false;
       } else {

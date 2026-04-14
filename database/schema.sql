@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS skill_relationships (
 CREATE INDEX IF NOT EXISTS idx_user_skills_user ON user_skills(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_skills_skill ON user_skills(skill_id);
 CREATE INDEX IF NOT EXISTS idx_skills_category ON skills(category_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_skills_name ON skills(name);
 CREATE INDEX IF NOT EXISTS idx_skill_categories_parent ON skill_categories(parent_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_categories_root_name ON skill_categories(name) WHERE parent_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_skill_relationships_parent ON skill_relationships(parent_skill_id);

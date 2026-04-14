@@ -144,13 +144,25 @@ async function syncPivotToDatabase(pivotData) {
   const userIdMap = new Map(); // userName (lowercase) → DB id
   for (const row of rows) {
     if (!row.email) {
-      logger.warn({ name: row.name }, 'Skipping user without email in CSV');
+      logger.warn({ name: row.name }, 'Row missing email — skipping user creation (will not match existing users by name alone)');
+      // Still allow matching existing users by name so SharePoint pulls aren't silently skipped
+      const userResult = await db.query('SELECT id FROM users WHERE LOWER(name) = LOWER($1)', [row.name]);
+      if (userResult.rows.length > 0) {
+        userIdMap.set(row.name.toLowerCase(), userResult.rows[0].id);
+        stats.users.updated++;
+      } else {
+        stats.users.skipped = (stats.users.skipped || 0) + 1;
+      }
       continue;
     }
 
-    const userResult = await db.query('SELECT id FROM users WHERE LOWER(name) = LOWER($1)', [row.name]);
+    // Match by email first (canonical), then fall back to name
+    let userResult = await db.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [row.email]);
+    if (userResult.rows.length === 0) {
+      userResult = await db.query('SELECT id FROM users WHERE LOWER(name) = LOWER($1)', [row.name]);
+    }
     if (userResult.rows.length > 0) {
-      await db.query('UPDATE users SET team = $1 WHERE id = $2', [row.team, userResult.rows[0].id]);
+      await db.query('UPDATE users SET name = $1, team = $2 WHERE id = $3', [row.name, row.team, userResult.rows[0].id]);
       userIdMap.set(row.name.toLowerCase(), userResult.rows[0].id);
       stats.users.updated++;
     } else {
@@ -164,19 +176,30 @@ async function syncPivotToDatabase(pivotData) {
   }
 
   // --- Phase 3: Batch-upsert user_skills with MAX-wins ---
-  const usUserIds = [], usSkillIds = [], usLevels = [];
+  // Deduplicate (userId, skillId) pairs, keeping the highest proficiency level,
+  // in case multiple raw skill columns normalize to the same skill_id.
+  const dedupMap = new Map(); // "userId:skillId" → level
   for (const row of rows) {
-    if (!row.email) continue;
     const userId = userIdMap.get(row.name.toLowerCase());
     if (!userId) continue;
 
     for (const [rawSkillName, level] of Object.entries(row.skills)) {
       const skillId = skillIdMap.get(rawSkillName);
       if (!skillId) { stats.userSkills.skipped++; continue; }
-      usUserIds.push(userId);
-      usSkillIds.push(skillId);
-      usLevels.push(level);
+      const key = `${userId}:${skillId}`;
+      const existing = dedupMap.get(key);
+      const numLevel = parseInt(level.replace(/^L/, ''), 10);
+      if (!existing || numLevel > existing.numLevel) {
+        dedupMap.set(key, { userId, skillId, level, numLevel });
+      }
     }
+  }
+
+  const usUserIds = [], usSkillIds = [], usLevels = [];
+  for (const { userId, skillId, level } of dedupMap.values()) {
+    usUserIds.push(userId);
+    usSkillIds.push(skillId);
+    usLevels.push(level);
   }
 
   if (usUserIds.length > 0) {
