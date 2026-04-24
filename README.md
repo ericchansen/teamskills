@@ -225,44 +225,16 @@ See [docs/authentication.md](docs/authentication.md) for setup instructions.
 
 Without authentication configured, the app runs in demo mode with a simple user picker.
 
-## PR Preview Environments
+## CI/CD
 
-Every pull request automatically gets an isolated staging environment for review.
+The CI/CD pipeline (`.github/workflows/ci-cd.yml`) runs on every push and PR to `master`/`main`:
 
-### How It Works
-
-1. **Open a PR** → GitHub Actions deploys a staging environment
-2. **Bot comments** on the PR with frontend and backend URLs
-3. **Push updates** → Environment is redeployed with latest changes
-4. **Close/merge PR** → Environment is automatically deleted
-
-### Staging Environment Details
-
-Each PR gets:
-- Isolated Container Apps (backend + frontend)
-- Dedicated PostgreSQL database with demo data
-- Unique URLs: `https://ca-frontend-pr{number}.*.azurecontainerapps.io`
-
-### GitHub Environment Setup
-
-PR staging uses a separate `staging` GitHub Environment (not `production`):
+1. **Lint + Test** — ESLint, Jest (backend + frontend) — runs on all pushes and PRs
+2. **Deploy** — Builds container images via ACR, updates Container Apps — only on push to `master`/`main`
 
 | GitHub Environment | Purpose | Used by |
 |---|---|---|
-| `staging` | PR preview deployments | `pr-staging.yml`, `pr-cleanup.yml` |
-| `production` | Production deployments | `ci-cd.yml` (deploy job, master only) |
-
-**Required setup:**
-1. Create a `staging` GitHub Environment in repo Settings → Environments
-2. Add the same Azure credentials (vars: `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`; secret: `AZURE_CLIENT_SECRET`)
-3. For Dependabot PR staging: also add `AZURE_CLIENT_SECRET` as a [Dependabot secret](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/configuring-access-to-private-registries-for-dependabot)
-
-### Cost Optimization
-
-- Uses cheapest PostgreSQL SKU (B1ms Burstable)
-- Container Apps scale to zero when idle
-- Resources deleted automatically on PR close
-- Shares production ACR to avoid duplicate registry costs
+| `production` | Production deployments | `ci-cd.yml` (deploy job, `master`/`main` only) |
 
 ---
 

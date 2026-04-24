@@ -2,13 +2,12 @@
 
 ## Overview
 
-The Team Skills Tracker uses a three-tier deployment architecture:
+The Team Skills Tracker uses a two-tier deployment architecture:
 
 | Environment | Purpose | Trigger | Infrastructure | Cleanup |
 |------------|---------|---------|----------------|---------|
 | **Local** | Development | Manual | Docker Compose | Manual |
-| **Staging** | Per-PR preview | PR opened/updated | Azure Bicep (per-PR) | PR close (automatic) |
-| **Production** | Live app | Push to `master` | Azure CLI (brownfield) | Manual |
+| **Production** | Live app | Push to `master` or `main` | Azure CLI (brownfield) | Manual |
 
 ---
 
@@ -24,12 +23,12 @@ The Team Skills Tracker uses a three-tier deployment architecture:
 ┌─────────────────────────────────────────────────────────────────┐
 │                          GitHub                                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │  PR opened   │  │ Push master  │  │ Cron 10min   │          │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
-└─────────┼──────────────────┼──────────────────┼──────────────────┘
-          │                  │                  │
-          │ pr-staging.yml   │ ci-cd.yml        │ keep-alive.yml
-          ▼                  ▼                  ▼
+│  │ Push master  │  │ Cron 10min   │                             │
+│  └──────┬───────┘  └──────┬───────┘                             │
+└──────────┼──────────────────┼────────────────────────────────────┘
+           │                  │
+           │ ci-cd.yml        │ keep-alive.yml
+           ▼                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      GitHub Actions                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
@@ -94,76 +93,7 @@ See [DOCKER.md](../DOCKER.md) for:
 
 ---
 
-## 2. Staging (Per-PR Preview)
-
-### Trigger
-
-PR opened/synchronized/reopened against `master`
-
-**File:** `.github/workflows/pr-staging.yml`
-
-### What Happens Step-by-Step
-
-1. **Skip Dependabot PRs** — `if: github.actor != 'dependabot[bot]'`
-
-2. **Concurrency Control** — Only one deployment per PR runs at a time:
-   ```yaml
-   concurrency:
-     group: pr-staging-${{ github.event.pull_request.number }}
-     cancel-in-progress: true
-   ```
-
-3. **Build Container Images**
-   - Backend: `docker build -f Dockerfile.backend`
-   - Frontend: `docker build -f Dockerfile.frontend`
-   - Push to production ACR (reuses existing registry to save cost)
-   - Tag: `<git-sha>`
-
-4. **Wake PostgreSQL** (if stopped — staging PG servers may be paused by MCAPS)
-   - `az postgres flexible-server start`
-   - Production PG is exempt via `CostControl=Ignore` tag
-
-5. **Deploy with Bicep** (`infra/staging/main.bicep`)
-   - Creates per-PR resources with `pr${PR_NUMBER}` naming
-   - Creates Entra ID app registration via Microsoft Graph provider
-   - Deploys Container Apps environment
-   - Creates PostgreSQL Flex Server (if first deploy) or reuses existing
-   - Configures ingress, secrets, environment variables
-
-6. **Initialize Database**
-   - Backend runs idempotent migrations on startup via `backend/migrate.js`
-   - Calls `POST /api/admin/init` with `INIT_SECRET` to seed schema and skills from `database/seed.sql`
-
-7. **Smoke Tests**
-   - Backend health check: `GET /health` → `{"status":"ok"}`
-   - Auth config: `GET /api/auth/config` → has `clientId` and `tenantId`
-   - Frontend config: `GET /config.js` → runtime config injected
-
-8. **PR Comment** — Posts staging URL to the PR
-
-### Cleanup on PR Close
-
-**File:** `.github/workflows/pr-cleanup.yml`
-
-Synchronously deletes (in order):
-1. Entra ID app registration (`az ad app delete`)
-2. Container apps (backend, frontend)
-3. Container Apps environment
-4. PostgreSQL Flex Server
-5. Log Analytics workspace
-6. Verifies all resources deleted (fails workflow if orphans remain)
-
-### Full Details
-
-See [docs/staging-environment.md](staging-environment.md) for:
-- Entra ID bootstrap (one-time admin setup)
-- Bicep parameters
-- Database lifecycle
-- Troubleshooting
-
----
-
-## 3. Production Deployment
+## 2. Production Deployment
 
 ### Trigger
 
@@ -390,14 +320,7 @@ Fails pipeline if any check fails.
 
 **Implication:** Two simultaneous pushes to `master` will trigger parallel deploys, potentially causing race conditions during `az containerapp update`.
 
-**Staging has concurrency control** via:
-```yaml
-concurrency:
-  group: pr-staging-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-```
-
-Consider adding similar for production:
+Consider adding concurrency control for production:
 ```yaml
 concurrency:
   group: production-deploy
@@ -406,24 +329,7 @@ concurrency:
 
 ---
 
-## 4. Staging vs Production Comparison
-
-| Aspect | Staging | Production |
-|--------|---------|------------|
-| **Infra Method** | Bicep + `arm-deploy` action | Direct Azure CLI (`az acr build`, `az containerapp update`) |
-| **Auth Tenant** | Managed env `9c74def4-40b4-4c76-be03-235975db1351` | Microsoft corp `72f988bf-4a3c-4ad2-97fc-2d7430d1fbb5` |
-| **App Registration** | Per-PR (auto-created/deleted via Bicep) | Shared (`69c41897-2a3c-4956-b78d-56670cdb5750`) |
-| **Database Lifecycle** | Created on first PR deploy, reused for subsequent pushes, deleted on PR close | Persistent (manual creation/deletion) |
-| **Image Build** | `docker build` + `docker push` (GitHub runner) | `az acr build` (in Azure) |
-| **Frontend Config** | Runtime injection only (`docker-entrypoint.sh` generates `/config.js` from env vars) | Build-time (`--build-arg VITE_*`) + runtime injection |
-| **Concurrency** | ✅ `cancel-in-progress: true` | ❌ None |
-| **Scale Settings** | Min 0, max 1 (cost savings, cold starts) | Min 1, max 10 (always warm) |
-| **GitHub Environment** | `staging` | `production` |
-| **Resource Group** | `rg-teamskills-staging` | `rg-teamskills-prod` |
-
----
-
-## 5. Environment Variables & Secrets
+## 3. Environment Variables & Secrets
 
 ### GitHub Repository Variables
 
@@ -444,11 +350,11 @@ Set at: `Settings` → `Secrets and variables` → `Actions` → `Variables`
 
 ### GitHub Environment Secrets
 
-Set at: `Settings` → `Environments` → `[production/staging]` → `Secrets`
+Set at: `Settings` → `Environments` → `production` → `Secrets`
 
 | Secret | Environment | Description |
 |--------|-------------|-------------|
-| `AZURE_CLIENT_SECRET` | `staging`, `production` | Service principal secret (for Azure login) |
+| `AZURE_CLIENT_SECRET` | `production` | Service principal secret (for Azure login) |
 | `INIT_SECRET` | `production` | Admin API secret (for backend `/api/admin/init`) |
 
 **Note:** `AZURE_AD_CLIENT_SECRET` was previously used for OBO flow but is NOT currently set in production.
@@ -461,7 +367,7 @@ Set via `--set-env-vars` in `az containerapp update` or Bicep `env:` blocks.
 
 | Variable | Source | Description |
 |----------|--------|-------------|
-| `NODE_ENV` | Deploy command | `production` (prod) or `staging` (staging) |
+| `NODE_ENV` | Deploy command | `production` |
 | `AZURE_AD_CLIENT_ID` | GitHub var | Entra ID app client ID |
 | `AZURE_AD_TENANT_ID` | GitHub var | Entra ID tenant ID |
 | `INIT_SECRET` | Secretref | Admin secret (prod only) |
@@ -477,11 +383,9 @@ Set via `--set-env-vars` in `az containerapp update` or Bicep `env:` blocks.
 | Variable | Source | Description |
 |----------|--------|-------------|
 | `VITE_AGENT_URL` | Deploy command | Agent container app URL (runtime) |
-| `VITE_API_URL` | Build arg (prod only) | Backend URL (baked into image at build time) |
-| `VITE_AZURE_AD_CLIENT_ID` | Build arg (prod only) | Entra ID client ID (baked into image at build time) |
-| `VITE_AZURE_AD_TENANT_ID` | Build arg (prod only) | Entra ID tenant ID (baked into image at build time) |
-
-**Staging difference:** Staging does NOT use build args — all config is runtime-injected by `docker-entrypoint.sh`.
+| `VITE_API_URL` | Build arg | Backend URL (baked into image at build time) |
+| `VITE_AZURE_AD_CLIENT_ID` | Build arg | Entra ID client ID (baked into image at build time) |
+| `VITE_AZURE_AD_TENANT_ID` | Build arg | Entra ID tenant ID (baked into image at build time) |
 
 #### Agent
 
@@ -489,7 +393,7 @@ No environment variables currently required.
 
 ---
 
-## 6. Frontend Configuration Injection
+## 4. Frontend Configuration Injection
 
 The frontend uses a **two-phase configuration strategy**:
 
@@ -505,7 +409,7 @@ az acr build \
 
 Vite bakes `import.meta.env.VITE_*` into the JavaScript bundle at build time.
 
-### Runtime (Both Staging and Production)
+### Runtime
 
 **`frontend/docker-entrypoint.sh`** generates `config.js` from environment variables at container startup:
 ```bash
@@ -538,26 +442,20 @@ export function getConfig(key) {
 
 **Precedence:** `window.__CONFIG__[key]` (runtime) overrides `import.meta.env[key]` (build-time).
 
-**Staging behavior:** Relies entirely on runtime injection (no build args).
-
-**Production behavior:** Uses both (build-time as default, runtime as override).
-
 ---
 
-## 7. Azure Resource Names
+## 5. Azure Resource Names
 
 ### Default Resource Names
 
 | Resource Type | Name | Override Variable |
 |---------------|------|-------------------|
-| **Resource Group (Prod)** | `rg-teamskills-prod` | `vars.RESOURCE_GROUP` |
-| **Resource Group (Staging)** | `rg-teamskills-staging` | N/A (hardcoded) |
+| **Resource Group** | `rg-teamskills-prod` | `vars.RESOURCE_GROUP` |
 | **Container Registry** | `crgvojq4dgzbtk4` | `vars.ACR_NAME` |
 | **Backend Container App** | `ca-backend-gvojq4dgzbtk4` | `vars.BACKEND_APP` |
 | **Frontend Container App** | `ca-frontend-teamskills` | `vars.FRONTEND_APP` |
 | **Agent Container App** | `ca-agent-gvojq4dgzbtk4` | `vars.AGENT_APP` |
-| **PostgreSQL (Prod)** | Manual setup (not in CI/CD) | N/A |
-| **PostgreSQL (Staging)** | `psql-staging-pr{PR_NUMBER}` | N/A |
+| **PostgreSQL** | Manual setup (not in CI/CD) | N/A |
 
 ### Overriding Resource Names
 
@@ -576,7 +474,7 @@ ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}
 
 ---
 
-## 8. Keep-Alive Mechanism
+## 6. Keep-Alive Mechanism
 
 **File:** `.github/workflows/keep-alive.yml`
 
@@ -608,11 +506,11 @@ Zero cost — GitHub Actions free tier covers scheduled workflows.
 
 ### Container Apps Scale-to-Zero
 
-Production backend is configured with `minReplicas: 1` to prevent cold starts. Staging uses `minReplicas: 0` for cost savings.
+Production backend is configured with `minReplicas: 1` to prevent cold starts.
 
 ---
 
-## 9. Troubleshooting
+## 7. Troubleshooting
 
 ### Backend "unreachable" After Deploy
 
@@ -845,30 +743,6 @@ az containerapp update \
 
 ---
 
-### Staging App Registration Permission Errors
-
-**Symptom:** Staging Bicep deploy fails with:
-```
-Insufficient privileges to complete the operation.
-```
-
-**Cause:** CI/CD service principal lacks `Application.ReadWrite.OwnedBy` Graph permission.
-
-**Fix:** One-time admin setup (requires admin in tenant `9c74def4-40b4-4c76-be03-235975db1351`):
-
-```bash
-az login --tenant 9c74def4-40b4-4c76-be03-235975db1351
-
-az ad app permission add \
-  --id 9d8d893b-c810-407e-98bb-5e3b83dc056d \
-  --api 00000003-0000-0000-c000-000000000000 \
-  --api-permissions 18a4783c-866b-4cc7-a460-3d5e5662c884=Role
-
-az ad app permission admin-consent --id 9d8d893b-c810-407e-98bb-5e3b83dc056d
-```
-
-See [docs/staging-environment.md](staging-environment.md) for full details.
-
 ---
 
 ### Container Crash Loops
@@ -915,16 +789,7 @@ See [docs/staging-environment.md](staging-environment.md) for full details.
 
 ### Race Conditions in Concurrent Deploys
 
-**Symptom (Staging):** ARM deployment fails with `DeploymentActive` error.
-
-**Fix:** Already implemented via concurrency control:
-```yaml
-concurrency:
-  group: pr-staging-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-```
-
-**Symptom (Production):** Two simultaneous `master` pushes trigger parallel deploys, causing undefined behavior.
+**Symptom:** Two simultaneous `master` pushes trigger parallel deploys, causing undefined behavior.
 
 **Recommended Fix:** Add concurrency to production deploy job:
 ```yaml
@@ -937,10 +802,9 @@ jobs:
 
 ---
 
-## 10. Related Documentation
+## 8. Related Documentation
 
 - **[Authentication Setup](authentication.md)** — Entra ID app registration, API permissions, SPA redirect URIs
-- **[Staging Environment](staging-environment.md)** — Entra bootstrap, Bicep parameters, database lifecycle
 - **[Docker Development](../DOCKER.md)** — Local setup, demo mode, troubleshooting
 - **[Testing Guide](../TESTING.md)** — E2E tests, unit tests, CI/CD test requirements
 - **[Azure Developer CLI](../azure.yaml)** — azd configuration (for local infra experimentation, NOT used in production CI/CD)
@@ -952,7 +816,6 @@ jobs:
 | Question | Answer |
 |----------|--------|
 | **How do I test changes locally?** | `docker-compose up --build` |
-| **How do I deploy to staging?** | Open a PR against `master` |
 | **How do I deploy to production?** | Merge to `master` (triggers CI/CD automatically) |
 | **How do I rollback production?** | Redeploy with previous commit SHA (see troubleshooting) |
 | **Why did my deploy fail?** | Check smoke test output in CI/CD logs, then see troubleshooting section |
