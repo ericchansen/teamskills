@@ -102,6 +102,9 @@ jobs:
     needs: [test, actionlint]
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false # Let first deploy complete
     permissions:
       id-token: write
       contents: read
@@ -119,6 +122,46 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure PostgreSQL is running
+        run: |
+          PG_SERVER="${{ vars.PG_SERVER_NAME || 'psql-gvojq4dgzbtk4' }}"
+          RG="${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}"
+
+          DB_STATE=$(az postgres flexible-server show \
+            --name "$PG_SERVER" \
+            --resource-group "$RG" \
+            --query "state" -o tsv)
+
+          echo "PostgreSQL state: $DB_STATE"
+
+          if [ "$DB_STATE" = "Ready" ]; then
+            echo "✅ PostgreSQL is Ready"
+            exit 0
+          fi
+
+          if [ "$DB_STATE" = "Stopped" ]; then
+            echo "⚠️ PostgreSQL is Stopped — starting..."
+            az postgres flexible-server start \
+              --name "$PG_SERVER" \
+              --resource-group "$RG"
+          fi
+
+          echo "Waiting for PostgreSQL to reach Ready state..."
+          for i in $(seq 1 30); do
+            STATE=$(az postgres flexible-server show \
+              --name "$PG_SERVER" \
+              --resource-group "$RG" \
+              --query "state" -o tsv)
+            if [ "$STATE" = "Ready" ]; then
+              echo "✅ PostgreSQL is Ready (attempt $i)"
+              exit 0
+            fi
+            echo "  Attempt $i/30: state=$STATE, waiting 10s..."
+            sleep 10
+          done
+          echo "❌ PostgreSQL did not reach Ready state after 5 minutes"
+          exit 1
 
       - name: Build and push backend image
         run: |

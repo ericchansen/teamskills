@@ -316,16 +316,15 @@ Fails pipeline if any check fails.
 
 ### Concurrency
 
-**NONE** — Production deployments do NOT have concurrency control.
+Production deploys use concurrency control to prevent parallel deploy races:
 
-**Implication:** Two simultaneous pushes to `master` will trigger parallel deploys, potentially causing race conditions during `az containerapp update`.
-
-Consider adding concurrency control for production:
 ```yaml
 concurrency:
   group: production-deploy
   cancel-in-progress: false  # Let first deploy complete
 ```
+
+If two pushes to `master` happen simultaneously, the second deploy queues until the first completes.
 
 ---
 
@@ -480,25 +479,24 @@ ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}
 
 ### Why It Exists
 
-Azure Container Apps scale to zero after inactivity. PostgreSQL Flexible Servers auto-pause after inactivity, causing 15-60s cold-start delays on first request.
+Azure Container Apps scale to zero after inactivity. PostgreSQL Flexible Servers can be stopped by MCAPS Cost Control automation (nightly shutdown of untagged resources), causing backend and agent health checks to fail.
 
 ### How It Works
 
-GitHub Actions cron job runs every 10 minutes:
+GitHub Actions cron job runs every 10 minutes with two responsibilities:
 
-```yaml
-on:
-  schedule:
-    - cron: '*/10 * * * *'  # Every 10 minutes
-```
+1. **DB Watchdog** — Checks PostgreSQL server state via Azure CLI. If the server is `Stopped`, it starts it automatically and waits for `Ready` state before proceeding.
+2. **Health Ping** — Pings the backend `/health` endpoint, which queries the database (`SELECT 1`), verifying end-to-end connectivity.
 
-Pings backend health endpoint:
+### Defense in Depth
 
-```bash
-curl -sf https://ca-backend-gvojq4dgzbtk4.greenwater-c5983efd.centralus.azurecontainerapps.io/health
-```
+Three layers prevent database outages:
 
-Health endpoint queries the database (`SELECT 1`), verifying PostgreSQL connectivity. Production PostgreSQL is tagged with `CostControl=Ignore` to prevent MCAPS nightly shutdown.
+| Layer | Mechanism | Prevents |
+|-------|-----------|----------|
+| `CostControl=Ignore` tag | Exempts PostgreSQL from MCAPS nightly shutdown | Automated stops |
+| Pre-deploy DB gate | CI/CD checks DB state and starts if stopped before deploying | Failed deploys |
+| Keep-alive watchdog | Cron checks DB every 10 min and auto-restarts if stopped | Runtime outages |
 
 ### Cost
 
@@ -546,7 +544,7 @@ az postgres flexible-server start \
   --resource-group rg-teamskills-prod
 ```
 
-> **Note:** The keep-alive cron job (every 10 min) pings the backend health endpoint, but if the database is stopped, the keep-alive itself fails silently. Check keep-alive workflow runs for recent failures as an early warning.
+> **Note:** The keep-alive cron job (every 10 min) includes a DB watchdog that automatically starts the PostgreSQL server if stopped, then pings the backend health endpoint. Check keep-alive workflow runs for recent auto-restarts as an early warning of recurring stops.
 
 #### 2. Container Crash Loop
 
@@ -791,14 +789,7 @@ az containerapp update \
 
 **Symptom:** Two simultaneous `master` pushes trigger parallel deploys, causing undefined behavior.
 
-**Recommended Fix:** Add concurrency to production deploy job:
-```yaml
-jobs:
-  deploy:
-    concurrency:
-      group: production-deploy
-      cancel-in-progress: false  # Don't cancel mid-deploy
-```
+**Status:** ✅ Fixed — deploy job now uses `concurrency: { group: production-deploy, cancel-in-progress: false }` to serialize production deploys.
 
 ---
 
