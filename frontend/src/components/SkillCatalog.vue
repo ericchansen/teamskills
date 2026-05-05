@@ -503,7 +503,7 @@ onMounted(async () => {
 .primary-btn {
   border-radius: 10px;
   border: 1px solid var(--border, #2a2a4a);
-  background: var(--bg-tertiary, #111829);
+  background-color: var(--bg-tertiary, #111829);
   color: var(--text-primary, #f4f6fb);
   font: inherit;
 }
@@ -512,6 +512,10 @@ onMounted(async () => {
 .field select,
 .field textarea {
   padding: 0.85rem 1rem;
+}
+
+.field select:not([multiple]) {
+  padding-right: 2.25rem;
 }
 
 .field textarea {
