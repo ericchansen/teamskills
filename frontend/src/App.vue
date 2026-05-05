@@ -107,11 +107,11 @@ watch(isAuthenticated, (signedIn) => {
 
 .error-icon {
   font-size: 2rem;
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .error-screen p {
-  color: #ef4444;
+  color: var(--danger);
   font-size: 1rem;
   margin: 0;
 }
@@ -119,10 +119,10 @@ watch(isAuthenticated, (signedIn) => {
 .retry-btn {
   margin-top: 0.5rem;
   padding: 0.5rem 1.25rem;
-  background: var(--accent);
+  background-color: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 0.9rem;
 }
@@ -152,17 +152,17 @@ watch(isAuthenticated, (signedIn) => {
 }
 
 .auth-error-msg {
-  color: #ef4444 !important;
+  color: var(--danger) !important;
   font-size: 0.9rem;
 }
 
 .login-btn {
   margin-top: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: var(--accent, #3b82f6);
+  background-color: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 1rem;
   display: flex;
