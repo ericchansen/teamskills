@@ -290,9 +290,9 @@ onMounted(async () => {
 
 /* ── Skills editor ──────────────── */
 .skills-editor {
-  background: var(--bg-secondary, #1a1a2e);
+  background-color: var(--bg-secondary);
   border-radius: 12px;
-  border: 1px solid var(--border, #2a2a4a);
+  border: 1px solid var(--border);
   padding: 1rem 1.5rem;
 }
 
@@ -306,18 +306,18 @@ onMounted(async () => {
 .editor-header h3 {
   margin: 0;
   font-size: 1rem;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
 }
 
 .save-status {
   font-size: 0.8rem;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
 }
 .save-status.saved {
-  color: #4ade80;
+  color: var(--success);
 }
 .save-status.error {
-  color: #f87171;
+  color: var(--danger);
 }
 .save-status.muted {
   font-style: italic;
@@ -337,7 +337,7 @@ onMounted(async () => {
   gap: 0.35rem;
   min-width: 140px;
   font-size: 0.75rem;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -347,10 +347,10 @@ onMounted(async () => {
 }
 
 .filter-input {
-  border-radius: 8px;
-  border: 1px solid var(--border, #2a2a4a);
-  background-color: var(--bg-primary, #12121f);
-  color: var(--text-primary, #e0e0e0);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   padding: 0.6rem 0.75rem;
   font-size: 0.9rem;
 }
@@ -363,17 +363,17 @@ select.filter-input {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   font-size: 0.85rem;
   padding-bottom: 0.55rem;
 }
 
 .clear-filters-btn,
 .catalog-link {
-  border-radius: 8px;
-  border: 1px solid var(--border, #2a2a4a);
-  background: transparent;
-  color: var(--text-primary, #e0e0e0);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background-color: transparent;
+  color: var(--text-primary);
   padding: 0.6rem 0.85rem;
   font-size: 0.85rem;
   text-decoration: none;
@@ -396,7 +396,7 @@ select.filter-input {
   gap: 0.75rem;
   align-items: center;
   padding: 0.85rem 1rem;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
 }
 
 .profile-sync-help {
@@ -417,12 +417,12 @@ select.filter-input {
   margin: 0 0 0.25rem;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
 }
 
 .profile-help-copy p {
   margin: 0;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   font-size: 0.85rem;
   line-height: 1.5;
 }
@@ -445,7 +445,7 @@ select.filter-input {
 .results-summary,
 .no-results-msg {
   margin: 0 0 0.85rem;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
@@ -461,14 +461,14 @@ select.filter-input {
   padding: 0.5rem 0;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid var(--border, #2a2a4a);
+  border-bottom: 1px solid var(--border);
 }
 
 .cat-header:hover {
-  color: var(--accent, #818cf8);
+  color: var(--accent);
 }
 
 .cat-chevron {
@@ -483,7 +483,7 @@ select.filter-input {
 
 .cat-count {
   font-size: 0.7rem;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   font-weight: 400;
 }
 
@@ -499,7 +499,7 @@ select.filter-input {
   margin: 0 0 0.35rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }

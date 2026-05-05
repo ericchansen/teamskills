@@ -471,8 +471,8 @@ onMounted(async () => {
 
 .panel-card,
 .info-card {
-  background: var(--bg-secondary, #1a1a2e);
-  border: 1px solid var(--border, #2a2a4a);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 
@@ -493,7 +493,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 0.65rem;
   font-size: 0.9rem;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
 }
 
 .field input,
@@ -501,10 +501,10 @@ onMounted(async () => {
 .field textarea,
 .secondary-btn,
 .primary-btn {
-  border-radius: 10px;
-  border: 1px solid var(--border, #2a2a4a);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
   background-color: var(--bg-tertiary, #111829);
-  color: var(--text-primary, #f4f6fb);
+  color: var(--text-primary);
   font: inherit;
 }
 
@@ -537,7 +537,7 @@ onMounted(async () => {
 
 .field-hint {
   margin: 0.1rem 0 0;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   line-height: 1.45;
 }
 
@@ -561,7 +561,7 @@ onMounted(async () => {
 }
 
 .primary-btn {
-  background: linear-gradient(135deg, #4f74ff, #7b5bff);
+  background: linear-gradient(135deg, var(--accent), #7b5bff);
   border: none;
   color: #fff;
   font-weight: 600;
@@ -580,11 +580,11 @@ onMounted(async () => {
 }
 
 .form-message.success {
-  color: #7dd3a0;
+  color: var(--success);
 }
 
 .form-message.error {
-  color: #ff8f8f;
+  color: var(--danger);
 }
 
 @media (max-width: 640px) {

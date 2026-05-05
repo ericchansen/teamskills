@@ -42,7 +42,7 @@ defineEmits(['update:level']);
 
 .skill-name {
   font-size: 0.8rem;
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -59,17 +59,18 @@ defineEmits(['update:level']);
 .level-btn {
   width: 38px;
   height: 26px;
-  border: 1px solid var(--border, #2a2a4a);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: transparent;
-  color: var(--text-secondary, #a0a0b0);
+  background-color: transparent;
+  color: var(--text-secondary);
   font-size: 0.7rem;
+  padding: 0;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .level-btn:hover:not(:disabled) {
-  border-color: var(--text-secondary, #a0a0b0);
+  border-color: var(--text-secondary);
 }
 
 .level-btn:disabled {
@@ -78,22 +79,22 @@ defineEmits(['update:level']);
 }
 
 .level-btn.active.l100 {
-  background: #334155;
+  background-color: #334155;
   border-color: #475569;
   color: #94a3b8;
 }
 .level-btn.active.l200 {
-  background: #1e3a5f;
+  background-color: #1e3a5f;
   border-color: #2563eb;
   color: #60a5fa;
 }
 .level-btn.active.l300 {
-  background: #14532d;
+  background-color: #14532d;
   border-color: #16a34a;
-  color: #4ade80;
+  color: var(--success);
 }
 .level-btn.active.l400 {
-  background: #581c87;
+  background-color: #581c87;
   border-color: #9333ea;
   color: #c084fc;
 }

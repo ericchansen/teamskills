@@ -64,8 +64,8 @@ const navRoutes = computed(() =>
   align-items: center;
   gap: 1.5rem;
   padding: 0.5rem 1.5rem;
-  background: var(--bg-secondary, #1a1a2e);
-  border-bottom: 1px solid var(--border, #2a2a4a);
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
   min-height: 48px;
 }
 
@@ -80,19 +80,19 @@ const navRoutes = computed(() =>
   font-size: 1.1rem;
   font-weight: 600;
   margin: 0;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
 }
 
 .live-badge {
   font-size: 0.7rem;
-  color: #4ade80;
+  color: var(--success);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .demo-badge {
   font-size: 0.7rem;
-  color: #fbbf24;
+  color: var(--warning);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -106,8 +106,8 @@ const navRoutes = computed(() =>
 
 .nav-link {
   padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  color: var(--text-secondary, #a0a0b0);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.85rem;
   font-weight: 500;
@@ -115,13 +115,13 @@ const navRoutes = computed(() =>
 }
 
 .nav-link:hover {
-  color: var(--text-primary, #e0e0e0);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.06);
 }
 
 .nav-link.active {
-  color: var(--accent, #818cf8);
-  background: rgba(129, 140, 248, 0.12);
+  color: var(--accent);
+  background-color: rgba(129, 140, 248, 0.12);
 }
 
 .header-user {
@@ -133,16 +133,16 @@ const navRoutes = computed(() =>
 
 .user-name {
   font-size: 0.85rem;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
   text-decoration: none;
 }
 
 .user-name:hover {
-  color: var(--accent, #818cf8);
+  color: var(--accent);
 }
 
 .user-name.muted {
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   font-style: italic;
   font-size: 0.75rem;
 }
@@ -150,29 +150,29 @@ const navRoutes = computed(() =>
 .btn-login,
 .btn-logout {
   padding: 0.3rem 0.7rem;
-  border-radius: 6px;
-  border: 1px solid var(--border, #2a2a4a);
-  background: transparent;
-  color: var(--text-secondary, #a0a0b0);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background-color: transparent;
+  color: var(--text-secondary);
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .btn-login:hover {
-  background: var(--accent, #818cf8);
+  background-color: var(--accent);
   color: #fff;
-  border-color: var(--accent, #818cf8);
+  border-color: var(--accent);
 }
 
 .btn-logout:hover {
-  background: rgba(248, 113, 113, 0.15);
-  color: #f87171;
-  border-color: #f87171;
+  background-color: rgba(248, 113, 113, 0.15);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .loading-dot {
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--text-secondary);
   animation: pulse 1.5s infinite;
 }
 

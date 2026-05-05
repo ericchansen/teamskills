@@ -528,18 +528,18 @@ const metricSummary = computed(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  border: 1px solid var(--border, #2a2a4a);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--text-secondary, #a0a0b0);
+  background-color: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
 .level-toggle.active {
-  border-color: var(--text-primary, #e4e6ed);
-  color: var(--text-primary, #e4e6ed);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .level-toggle.disabled {
@@ -548,7 +548,7 @@ const metricSummary = computed(() => {
 
 .level-toggle input {
   margin: 0;
-  accent-color: var(--accent, #4f8ff7);
+  accent-color: var(--accent);
 }
 
 .level-toggle-swatch {
@@ -568,11 +568,11 @@ const metricSummary = computed(() => {
 }
 
 .threshold-label.good {
-  color: #84cfa1;
+  color: var(--success);
 }
 
 .threshold-label.warn {
-  color: #d6b175;
+  color: var(--warning);
 }
 
 .threshold-input {
