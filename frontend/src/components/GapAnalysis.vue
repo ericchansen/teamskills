@@ -190,6 +190,26 @@ function countPeopleAtOrAbove(skill, targetLevel) {
   return people.value.filter((person) => getSkillLevel(person, skill) >= targetLevel).length;
 }
 
+function getPeopleNamesAtLevel(skill, level) {
+  return people.value
+    .filter((person) => getSkillLevel(person, skill) === level)
+    .map((person) => person.name);
+}
+
+function getPeopleNamesAtOrAbove(skill, level) {
+  return people.value
+    .filter((person) => getSkillLevel(person, skill) >= level)
+    .map((person) => person.name);
+}
+
+function formatNameList(names) {
+  if (names.length === 0) return '';
+  const sorted = [...names].sort((a, b) => a.localeCompare(b));
+  const escaped = sorted.map(escapeHtml);
+  if (escaped.length <= 8) return escaped.join(', ');
+  return `${escaped.slice(0, 8).join(', ')} +${escaped.length - 8} more`;
+}
+
 function buildLevelBreakdown(skill) {
   const breakdown = Object.fromEntries(
     levelOptions.map((level) => [`L${level}`, 0])
@@ -282,17 +302,23 @@ const chartOption = computed(() => {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
         formatter(params) {
+          const skillName = params[0]?.name || '';
           const total = params.reduce((sum, entry) => sum + Number(entry.value || 0), 0);
           const detailLines = params
             .filter((entry) => Number(entry.value || 0) > 0)
-            .map((entry) => `${escapeHtml(entry.seriesName)}: ${entry.value}`);
+            .map((entry) => {
+              const level = Number(entry.seriesName.replace('L', ''));
+              const names = getPeopleNamesAtLevel(skillName, level);
+              const nameStr = names.length > 0 ? ` — ${formatNameList(names)}` : '';
+              return `${escapeHtml(entry.seriesName)}: ${entry.value}${nameStr}`;
+            });
 
           if (detailLines.length === 0) {
             detailLines.push('No matching people');
           }
 
           detailLines.push(`<b>Total:</b> ${total} people`);
-          return `<b>${escapeHtml(params[0]?.name || '')}</b><br/>${detailLines.join('<br/>')}`;
+          return `<b>${escapeHtml(skillName)}</b><br/>${detailLines.join('<br/>')}`;
         },
       },
       grid: {
@@ -365,7 +391,15 @@ const chartOption = computed(() => {
       axisPointer: { type: 'shadow' },
       formatter(params) {
         const p = params[0];
-        return `<b>${escapeHtml(p.name)}</b><br/>${tooltipValueLabel(p.value)}`;
+        let nameList = '';
+        if (mode.value === 'expert') {
+          const names = getPeopleNamesAtOrAbove(p.name, expertLevel.value);
+          if (names.length > 0) nameList = `<br/>${formatNameList(names)}`;
+        } else if (mode.value === 'coverage') {
+          const names = getPeopleNamesAtOrAbove(p.name, coverageLevel.value);
+          if (names.length > 0) nameList = `<br/>${formatNameList(names)}`;
+        }
+        return `<b>${escapeHtml(p.name)}</b><br/>${tooltipValueLabel(p.value)}${nameList}`;
       },
     },
     grid: {
