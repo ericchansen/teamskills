@@ -349,10 +349,14 @@ onMounted(async () => {
 .filter-input {
   border-radius: 8px;
   border: 1px solid var(--border, #2a2a4a);
-  background: var(--bg-primary, #12121f);
+  background-color: var(--bg-primary, #12121f);
   color: var(--text-primary, #e0e0e0);
   padding: 0.6rem 0.75rem;
   font-size: 0.9rem;
+}
+
+select.filter-input {
+  padding-right: 2.25rem;
 }
 
 .filter-toggle {

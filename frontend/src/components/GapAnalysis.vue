@@ -508,7 +508,7 @@ const metricSummary = computed(() => {
 }
 
 .mode-select {
-  padding: 6px 12px;
+  padding: 6px 2rem 6px 12px;
   font-size: 0.85rem;
 }
 
