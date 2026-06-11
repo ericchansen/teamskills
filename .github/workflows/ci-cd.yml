@@ -233,12 +233,7 @@ jobs:
               continue
             }
 
-            CRITICAL_COUNT=$(echo "$FINDINGS" | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          criticals = [f for f in data if f.get('severity') in ('Critical', 'High')]
-          print(len(criticals))
-          ") || {
+            CRITICAL_COUNT=$(echo "$FINDINGS" | python3 -c "import sys,json; data=json.load(sys.stdin); print(len([f for f in data if f.get('severity') in ('Critical','High')]))") || {
               echo "⚠️  WARNING: Failed to parse Defender results for $REPO"
               QUERY_FAILED=true
               continue
