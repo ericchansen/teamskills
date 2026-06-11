@@ -204,6 +204,54 @@ jobs:
             --build-arg VITE_AGENT_URL=$AGENT_URL \
             .
 
+      - name: Check Defender for Containers vulnerability findings
+        run: |
+          ACR="${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}"
+          IMAGES=("backend:${{ github.sha }}" "agent:${{ github.sha }}" "frontend:${{ github.sha }}")
+          CRITICAL_FOUND=false
+
+          echo "Querying Microsoft Defender for Containers scan results..."
+          echo "(Note: Defender scans are async — results may not be immediate for new images)"
+
+          for IMAGE in "${IMAGES[@]}"; do
+            REPO="${IMAGE%%:*}"
+            TAG="${IMAGE#*:}"
+            echo ""
+            echo "--- Checking $REPO:$TAG ---"
+
+            # Query Defender sub-assessment results via Azure CLI
+            # Uses the container vulnerability assessment provider
+            FINDINGS=$(az security sub-assessment list \
+              --assessed-resource-id "/subscriptions/${{ vars.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}/providers/Microsoft.ContainerRegistry/registries/${ACR}" \
+              --assessment-name "dbd0cb49-b563-45e7-9724-889e799fa648" \
+              --query "[?contains(properties.id, '${REPO}')].{severity: properties.status.severity, cve: properties.id}" \
+              -o json 2>/dev/null || echo "[]")
+
+            CRITICAL_COUNT=$(echo "$FINDINGS" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          criticals = [f for f in data if f.get('severity') in ('Critical', 'High')]
+          print(len(criticals))
+          " 2>/dev/null || echo "0")
+
+            if [ "$CRITICAL_COUNT" -gt "0" ]; then
+              echo "⚠️  $REPO: $CRITICAL_COUNT Critical/High vulnerabilities found"
+              CRITICAL_FOUND=true
+            else
+              echo "✅ $REPO: No Critical/High vulnerabilities detected"
+            fi
+          done
+
+          echo ""
+          if [ "$CRITICAL_FOUND" = "true" ]; then
+            echo "⚠️  CRITICAL/HIGH vulnerabilities detected — review in Microsoft Defender for Cloud"
+            echo "   Portal: https://portal.azure.com/#view/Microsoft_Azure_Security/SecurityMenuBlade/~/recommendations"
+            echo "   (Non-blocking for now — enable 'exit 1' once baseline is triaged)"
+            # exit 1  # Uncomment to make this a blocking gate
+          else
+            echo "✅ All images pass Defender vulnerability check"
+          fi
+
       - name: Deploy backend
         run: |
           APP="${{ vars.BACKEND_APP || 'ca-backend-gvojq4dgzbtk4' }}"

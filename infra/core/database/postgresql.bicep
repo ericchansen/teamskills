@@ -31,16 +31,22 @@ param storage object = {
 @description('PostgreSQL version')
 param version string = '16'
 
+@description('Disable public network access (requires private endpoint)')
+param publicNetworkAccess string = 'Disabled'
+
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
   name: name
   location: location
-  tags: tags
+  tags: union(tags, { CostControl: 'Ignore' })
   sku: sku
   properties: {
     administratorLogin: administratorLogin
     administratorLoginPassword: administratorLoginPassword
     storage: storage
     version: version
+    network: {
+      publicNetworkAccess: publicNetworkAccess
+    }
     highAvailability: {
       mode: 'Disabled'
     }
@@ -48,16 +54,6 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-pr
       backupRetentionDays: 7
       geoRedundantBackup: 'Disabled'
     }
-  }
-}
-
-// Firewall rule to allow Azure services
-resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2023-06-01-preview' = {
-  parent: postgresServer
-  name: 'AllowAllAzureServices'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
   }
 }
 

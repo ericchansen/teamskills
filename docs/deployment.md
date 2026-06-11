@@ -473,38 +473,33 @@ ${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}
 
 ---
 
-## 6. Keep-Alive Mechanism
+## 6. Azure-Native Resilience
 
-**File:** `.github/workflows/keep-alive.yml`
+### PostgreSQL Auto-Stop Protection
 
-### Why It Exists
+The production PostgreSQL server is protected from MCAPS cost-control automation (which stops untagged servers nightly) via two Azure-native layers:
 
-Azure Container Apps scale to zero after inactivity. PostgreSQL Flexible Servers can be stopped by MCAPS Cost Control automation (nightly shutdown of untagged resources), causing backend and agent health checks to fail.
+| Layer | Mechanism | Effect |
+|-------|-----------|--------|
+| **Tag exemption** | `CostControl=Ignore` tag on PostgreSQL server | Prevents automated stops |
+| **Tag enforcement** | Azure Policy (Modify effect) at resource group scope | Re-applies tag if removed (~15 min evaluation cycle) |
 
-### How It Works
+These are defined in Bicep IaC (`infra/core/policy/cost-control-tag.bicep`) and deployed automatically.
 
-GitHub Actions cron job runs every 10 minutes with two responsibilities:
+Additionally, the CI/CD pipeline checks PostgreSQL state before every deploy and starts it if stopped (existing "Ensure PostgreSQL is running" step in `ci-cd.yml`).
 
-1. **DB Watchdog** — Checks PostgreSQL server state via Azure CLI. If the server is `Stopped`, it starts it automatically and waits for `Ready` state before proceeding.
-2. **Health Ping** — Pings the backend `/health` endpoint, which queries the database (`SELECT 1`), verifying end-to-end connectivity.
+### ACR Vulnerability Scanning
 
-### Defense in Depth
+Microsoft Defender for Containers is enabled at the subscription level. This provides:
+- Automatic scanning on every image push to ACR
+- Continuous rescanning of existing images
+- Vulnerability findings in Defender for Cloud recommendations
 
-Three layers prevent database outages:
+The CI/CD pipeline includes a non-blocking check step that queries Defender findings after image builds.
 
-| Layer | Mechanism | Prevents |
-|-------|-----------|----------|
-| `CostControl=Ignore` tag | Exempts PostgreSQL from MCAPS nightly shutdown | Automated stops |
-| Pre-deploy DB gate | CI/CD checks DB state and starts if stopped before deploying | Failed deploys |
-| Keep-alive watchdog | Cron checks DB every 10 min and auto-restarts if stopped | Runtime outages |
+### Private Networking
 
-### Cost
-
-Zero cost — GitHub Actions free tier covers scheduled workflows.
-
-### Container Apps Scale-to-Zero
-
-Production backend is configured with `minReplicas: 1` to prevent cold starts.
+PostgreSQL is accessed via private endpoint within a VNet. Public network access is disabled. See [`azure-hardening-runbook.md`](./azure-hardening-runbook.md) for one-time migration steps.
 
 ---
 

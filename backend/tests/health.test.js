@@ -52,6 +52,34 @@ describe('Health Endpoints', () => {
     });
   });
 
+  describe('GET /health/ready - schema error', () => {
+    test('should return 503 with schema_outdated when column is missing', async () => {
+      const pgError = new Error('column "parent_id" does not exist');
+      pgError.code = '42703'; // undefined_column
+      db.query.mockRejectedValue(pgError);
+
+      const response = await request(app).get('/health/ready');
+
+      expect(response.status).toBe(503);
+      expect(response.body.status).toBe('unavailable');
+      expect(response.body.database).toBe('schema_outdated');
+      expect(response.body.error).toBe('Schema migration required');
+    });
+
+    test('should return 503 with schema_outdated when table is missing', async () => {
+      const pgError = new Error('relation "skill_categories" does not exist');
+      pgError.code = '42P01'; // undefined_table
+      db.query.mockRejectedValue(pgError);
+
+      const response = await request(app).get('/health/ready');
+
+      expect(response.status).toBe(503);
+      expect(response.body.status).toBe('unavailable');
+      expect(response.body.database).toBe('schema_outdated');
+      expect(response.body.error).toBe('Schema migration required');
+    });
+  });
+
   describe('GET /health (legacy)', () => {
     test('should return 200 when database is connected', async () => {
       db.query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
