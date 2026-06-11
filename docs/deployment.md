@@ -22,18 +22,18 @@ The Team Skills Tracker uses a two-tier deployment architecture:
                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                          GitHub                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Push master  │  │ Cron 10min   │                             │
-│  └──────┬───────┘  └──────┬───────┘                             │
-└──────────┼──────────────────┼────────────────────────────────────┘
-           │                  │
-           │ ci-cd.yml        │ keep-alive.yml
-           ▼                  ▼
+│  ┌──────────────┐                                               │
+│  │ Push master  │                                               │
+│  └──────┬───────┘                                               │
+└──────────┼───────────────────────────────────────────────────────┘
+           │
+           │ ci-cd.yml
+           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      GitHub Actions                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Bicep deploy │  │  Lint + Test │  │  HTTP ping   │          │
-│  │ Docker build │  │  ACR build   │                            │
+│  │ Bicep deploy │  │  Lint + Test │  │ Defender     │          │
+│  │ Docker build │  │  ACR build   │  │ scan check   │          │
 │  │ Smoke test   │  │  az update   │                            │
 │  └──────┬───────┘  └──────┬───────┘                             │
 └─────────┼──────────────────┼──────────────────────────────────────┘
@@ -539,7 +539,7 @@ az postgres flexible-server start \
   --resource-group rg-teamskills-prod
 ```
 
-> **Note:** The keep-alive cron job (every 10 min) includes a DB watchdog that automatically starts the PostgreSQL server if stopped, then pings the backend health endpoint. Check keep-alive workflow runs for recent auto-restarts as an early warning of recurring stops.
+> **Note:** The `CostControl=Ignore` tag and Azure Policy enforcement prevent MCAPS from stopping the server. The CI/CD pipeline also checks PostgreSQL state before every deploy and starts it if stopped. See [Azure-Native Resilience](#6-azure-native-resilience) for details.
 
 #### 2. Container Crash Loop
 
