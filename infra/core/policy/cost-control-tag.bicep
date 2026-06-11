@@ -47,7 +47,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2021-06-01'
         effect: 'modify'
         details: {
           roleDefinitionIds: [
-            // Tag Contributor built-in role
             '/providers/Microsoft.Authorization/roleDefinitions/4a9ae827-6dc8-4573-8ac7-8239d42aa03f'
           ]
           operations: [
@@ -63,32 +62,18 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2021-06-01'
   }
 }
 
-// Policy assignment scoped to the resource group
-resource policyAssignment 'Microsoft.Authorization/policyAssignments@2022-06-01' = {
-  name: '${namePrefix}-costcontrol-assign'
-  location: location
+// Deploy assignment and role assignment at resource group scope via nested module
+module policyAssignmentModule 'cost-control-tag-assignment.bicep' = {
+  name: '${namePrefix}-costcontrol-assign-deploy'
   scope: resourceGroup(resourceGroupName)
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
+  params: {
+    namePrefix: namePrefix
     policyDefinitionId: policyDefinition.id
-    displayName: 'Enforce ${tagName}=${tagValue} on PostgreSQL'
-    description: 'Prevents MCAPS cost-control automation from stopping PostgreSQL by ensuring the ${tagName} tag is always present.'
-    enforcementMode: 'Default'
-  }
-}
-
-// Role assignment so the policy's managed identity can modify tags (at RG scope)
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(policyAssignment.id, 'tag-contributor')
-  scope: resourceGroup(resourceGroupName)
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4a9ae827-6dc8-4573-8ac7-8239d42aa03f')
-    principalId: policyAssignment.identity.principalId
-    principalType: 'ServicePrincipal'
+    tagName: tagName
+    tagValue: tagValue
+    location: location
   }
 }
 
 output policyDefinitionId string = policyDefinition.id
-output policyAssignmentId string = policyAssignment.id
+output policyAssignmentId string = policyAssignmentModule.outputs.policyAssignmentId
