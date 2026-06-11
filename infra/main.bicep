@@ -111,12 +111,13 @@ module postgresPrivateEndpoint './core/network/private-endpoint-postgres.bicep' 
   }
 }
 
-// Azure Policy: Enforce CostControl=Ignore tag on PostgreSQL
+// Azure Policy: Enforce CostControl=Ignore tag on PostgreSQL (subscription-scoped)
 module costControlPolicy './core/policy/cost-control-tag.bicep' = {
   name: 'cost-control-policy'
-  scope: rg
   params: {
     namePrefix: resourceToken
+    resourceGroupName: rg.name
+    location: location
   }
 }
 
