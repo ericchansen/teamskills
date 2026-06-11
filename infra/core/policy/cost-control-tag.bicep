@@ -1,5 +1,13 @@
+targetScope = 'subscription'
+
 @description('Name prefix for policy resources')
 param namePrefix string
+
+@description('Resource group name for the policy assignment scope')
+param resourceGroupName string
+
+@description('Resource group location for the managed identity')
+param location string
 
 @description('Tag name to enforce')
 param tagName string = 'CostControl'
@@ -10,7 +18,7 @@ param tagValue string = 'Ignore'
 @description('Resource type to target')
 param resourceType string = 'Microsoft.DBforPostgreSQL/flexibleServers'
 
-// Custom policy definition: Modify effect to add/replace CostControl tag
+// Custom policy definition at subscription scope
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2021-06-01' = {
   name: '${namePrefix}-costcontrol-tag'
   properties: {
@@ -55,10 +63,11 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2021-06-01'
   }
 }
 
-// Policy assignment at current scope (resource group)
+// Policy assignment scoped to the resource group
 resource policyAssignment 'Microsoft.Authorization/policyAssignments@2022-06-01' = {
   name: '${namePrefix}-costcontrol-assign'
-  location: resourceGroup().location
+  location: location
+  scope: resourceGroup(resourceGroupName)
   identity: {
     type: 'SystemAssigned'
   }
@@ -70,9 +79,10 @@ resource policyAssignment 'Microsoft.Authorization/policyAssignments@2022-06-01'
   }
 }
 
-// Role assignment so the policy's managed identity can modify tags
+// Role assignment so the policy's managed identity can modify tags (at RG scope)
 resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(policyAssignment.id, 'tag-contributor')
+  scope: resourceGroup(resourceGroupName)
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4a9ae827-6dc8-4573-8ac7-8239d42aa03f')
     principalId: policyAssignment.identity.principalId
