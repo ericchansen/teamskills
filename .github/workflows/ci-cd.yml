@@ -209,6 +209,7 @@ jobs:
           ACR="${{ vars.ACR_NAME || 'crgvojq4dgzbtk4' }}"
           IMAGES=("backend:${{ github.sha }}" "agent:${{ github.sha }}" "frontend:${{ github.sha }}")
           CRITICAL_FOUND=false
+          QUERY_FAILED=false
 
           echo "Querying Microsoft Defender for Containers scan results..."
           echo "(Note: Defender scans are async — results may not be immediate for new images)"
@@ -225,14 +226,23 @@ jobs:
               --assessed-resource-id "/subscriptions/${{ vars.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ vars.RESOURCE_GROUP || 'rg-teamskills-prod' }}/providers/Microsoft.ContainerRegistry/registries/${ACR}" \
               --assessment-name "dbd0cb49-b563-45e7-9724-889e799fa648" \
               --query "[?contains(properties.id, '${REPO}')].{severity: properties.status.severity, cve: properties.id}" \
-              -o json 2>/dev/null || echo "[]")
+              -o json) || {
+              echo "⚠️  WARNING: Defender query failed for $REPO — scan results unavailable"
+              echo "   Check AZURE_SUBSCRIPTION_ID variable and Security Reader role assignment"
+              QUERY_FAILED=true
+              continue
+            }
 
             CRITICAL_COUNT=$(echo "$FINDINGS" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
           criticals = [f for f in data if f.get('severity') in ('Critical', 'High')]
           print(len(criticals))
-          " 2>/dev/null || echo "0")
+          ") || {
+              echo "⚠️  WARNING: Failed to parse Defender results for $REPO"
+              QUERY_FAILED=true
+              continue
+            }
 
             if [ "$CRITICAL_COUNT" -gt "0" ]; then
               echo "⚠️  $REPO: $CRITICAL_COUNT Critical/High vulnerabilities found"
@@ -243,12 +253,16 @@ jobs:
           done
 
           echo ""
+          if [ "$QUERY_FAILED" = "true" ]; then
+            echo "⚠️  One or more Defender queries failed — results are incomplete"
+            echo "   Verify: vars.AZURE_SUBSCRIPTION_ID is set, runner has Security Reader role"
+          fi
           if [ "$CRITICAL_FOUND" = "true" ]; then
             echo "⚠️  CRITICAL/HIGH vulnerabilities detected — review in Microsoft Defender for Cloud"
             echo "   Portal: https://portal.azure.com/#view/Microsoft_Azure_Security/SecurityMenuBlade/~/recommendations"
             echo "   (Non-blocking for now — enable 'exit 1' once baseline is triaged)"
             # exit 1  # Uncomment to make this a blocking gate
-          else
+          elif [ "$QUERY_FAILED" != "true" ]; then
             echo "✅ All images pass Defender vulnerability check"
           fi
 
