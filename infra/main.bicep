@@ -50,6 +50,17 @@ resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   tags: tags
 }
 
+// Virtual Network for private networking
+module vnet './core/network/vnet.bicep' = {
+  name: 'vnet'
+  scope: rg
+  params: {
+    name: '${abbrs.networkVirtualNetworks}${resourceToken}'
+    location: location
+    tags: tags
+  }
+}
+
 // Container Apps Environment and supporting resources
 module containerApps './core/host/container-apps.bicep' = {
   name: 'container-apps'
@@ -61,6 +72,7 @@ module containerApps './core/host/container-apps.bicep' = {
     containerAppsEnvironmentName: '${abbrs.appManagedEnvironments}${resourceToken}'
     containerRegistryName: '${abbrs.containerRegistryRegistries}${resourceToken}'
     logAnalyticsWorkspaceName: '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
+    infrastructureSubnetId: vnet.outputs.containerAppsSubnetId
   }
 }
 
@@ -82,6 +94,29 @@ module postgres './core/database/postgresql.bicep' = {
     storage: {
       storageSizeGB: 32
     }
+  }
+}
+
+// Private endpoint for PostgreSQL (connects via VNet)
+module postgresPrivateEndpoint './core/network/private-endpoint-postgres.bicep' = {
+  name: 'postgres-private-endpoint'
+  scope: rg
+  params: {
+    name: '${abbrs.networkPrivateEndpoints}psql-${resourceToken}'
+    location: location
+    tags: tags
+    postgresServerId: postgres.outputs.id
+    subnetId: vnet.outputs.privateEndpointsSubnetId
+    vnetId: vnet.outputs.id
+  }
+}
+
+// Azure Policy: Enforce CostControl=Ignore tag on PostgreSQL
+module costControlPolicy './core/policy/cost-control-tag.bicep' = {
+  name: 'cost-control-policy'
+  scope: rg
+  params: {
+    namePrefix: resourceToken
   }
 }
 

@@ -16,6 +16,9 @@ param containerRegistryName string
 @description('Name of the Log Analytics Workspace')
 param logAnalyticsWorkspaceName string
 
+@description('Subnet ID for Container Apps infrastructure (VNet integration). Leave empty for managed networking.')
+param infrastructureSubnetId string = ''
+
 // Log Analytics Workspace
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsWorkspaceName
@@ -55,6 +58,10 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
         sharedKey: logAnalytics.listKeys().primarySharedKey
       }
     }
+    vnetConfiguration: !empty(infrastructureSubnetId) ? {
+      infrastructureSubnetId: infrastructureSubnetId
+      internal: false
+    } : null
   }
 }
 
