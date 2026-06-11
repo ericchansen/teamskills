@@ -35,7 +35,14 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
         name: containerAppsSubnetName
         properties: {
           addressPrefix: containerAppsSubnetPrefix
-          delegations: []
+          delegations: [
+            {
+              name: 'Microsoft.App.environments'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
         }
       }
       {
@@ -51,5 +58,5 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
 
 output id string = vnet.id
 output name string = vnet.name
-output containerAppsSubnetId string = vnet.properties.subnets[0].id
-output privateEndpointsSubnetId string = vnet.properties.subnets[1].id
+output containerAppsSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', name, containerAppsSubnetName)
+output privateEndpointsSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', name, privateEndpointsSubnetName)

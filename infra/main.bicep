@@ -39,6 +39,9 @@ param azureAdClientSecret string = ''
 @description('Email address for alert notifications (optional)')
 param alertEmailAddress string = ''
 
+@description('Enable private networking (VNet + private endpoints). Set to false for brownfield environments without VNet integration.')
+param enablePrivateNetworking bool = false
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
@@ -50,8 +53,8 @@ resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   tags: tags
 }
 
-// Virtual Network for private networking
-module vnet './core/network/vnet.bicep' = {
+// Virtual Network for private networking (only deployed for greenfield environments)
+module vnet './core/network/vnet.bicep' = if (enablePrivateNetworking) {
   name: 'vnet'
   scope: rg
   params: {
@@ -72,7 +75,7 @@ module containerApps './core/host/container-apps.bicep' = {
     containerAppsEnvironmentName: '${abbrs.appManagedEnvironments}${resourceToken}'
     containerRegistryName: '${abbrs.containerRegistryRegistries}${resourceToken}'
     logAnalyticsWorkspaceName: '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
-    infrastructureSubnetId: vnet.outputs.containerAppsSubnetId
+    infrastructureSubnetId: enablePrivateNetworking ? vnet.outputs.containerAppsSubnetId : ''
   }
 }
 
@@ -98,7 +101,7 @@ module postgres './core/database/postgresql.bicep' = {
 }
 
 // Private endpoint for PostgreSQL (connects via VNet)
-module postgresPrivateEndpoint './core/network/private-endpoint-postgres.bicep' = {
+module postgresPrivateEndpoint './core/network/private-endpoint-postgres.bicep' = if (enablePrivateNetworking) {
   name: 'postgres-private-endpoint'
   scope: rg
   params: {

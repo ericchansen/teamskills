@@ -58,10 +58,12 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
         sharedKey: logAnalytics.listKeys().primarySharedKey
       }
     }
-    vnetConfiguration: !empty(infrastructureSubnetId) ? {
-      infrastructureSubnetId: infrastructureSubnetId
-      internal: false
-    } : null
+    ...((!empty(infrastructureSubnetId)) ? {
+      vnetConfiguration: {
+        infrastructureSubnetId: infrastructureSubnetId
+        internal: false
+      }
+    } : {})
   }
 }
 

@@ -48,20 +48,20 @@ az postgres flexible-server show \
 
 ## Step 2: Deploy Azure Policy Assignment (Tag Enforcement)
 
-The Bicep at `infra/core/policy/cost-control-tag.bicep` creates a Modify-effect policy that re-applies the `CostControl=Ignore` tag if removed. Deploy via:
+The Bicep at `infra/core/policy/cost-control-tag.bicep` creates a Modify-effect policy that re-applies the `CostControl=Ignore` tag if removed. Deploy at subscription scope:
 
 ```bash
-az deployment group create \
-  --resource-group $RG \
+az deployment sub create \
+  --location centralus \
   --template-file infra/core/policy/cost-control-tag.bicep \
-  --parameters namePrefix=gvojq4dgzbtk4
+  --parameters namePrefix=gvojq4dgzbtk4 resourceGroupName=$RG location=centralus
 ```
 
 Then trigger a remediation task to backfill existing resources:
 
 ```bash
 ASSIGNMENT_ID=$(az policy assignment show \
-  --name "cost-control-tag-gvojq4dgzbtk4" \
+  --name "gvojq4dgzbtk4-costcontrol-assign" \
   --scope "/subscriptions/f7858112-5c13-46e5-8341-3851a12164fa/resourceGroups/$RG" \
   --query id -o tsv)
 
@@ -112,13 +112,15 @@ az network vnet subnet create \
   --resource-group $RG \
   --vnet-name $VNET_NAME \
   --name $SNET_CA \
-  --address-prefix 10.0.0.0/23
+  --address-prefix 10.0.0.0/23 \
+  --delegations Microsoft.App/environments
 
 az network vnet subnet create \
   --resource-group $RG \
   --vnet-name $VNET_NAME \
   --name $SNET_PE \
-  --address-prefix 10.0.2.0/24
+  --address-prefix 10.0.2.0/24 \
+  --disable-private-endpoint-network-policies
 ```
 
 ---
